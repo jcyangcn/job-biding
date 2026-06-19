@@ -3,3 +3,8 @@ generated_resumes/*.pdf
 
 # Backend secrets
 backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
