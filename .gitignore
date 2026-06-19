@@ -1,0 +1,5 @@
+# Generated resume PDFs
+generated_resumes/*.pdf
+
+# Backend secrets
+backend/.env
