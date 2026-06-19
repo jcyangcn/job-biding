@@ -1,4 +1,5 @@
 from typing import Literal
+from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -83,3 +84,12 @@ class GenerateResumeResponse(BaseModel):
     filename: str
     summary_chars: int
     provider: str
+    generation_id: int | None = None
+
+
+class ResumeGenerationRecord(BaseModel):
+    id: int
+    job_details: str
+    profile: dict
+    pdf_path: str
+    created_at: datetime

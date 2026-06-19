@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     cursor_model: str = "composer-2.5"
     host: str = "0.0.0.0"
     port: int = 8000
+    database_url: str
 
     def resolved_provider(self) -> str:
         provider = self.ai_provider.lower()
