@@ -15,8 +15,11 @@ class Base(DeclarativeBase):
 
 def init_db() -> None:
     from app import db_models  # noqa: F401
+    from app.auth import seed_default_users
 
     Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        seed_default_users(db)
 
 
 def get_db() -> Generator[Session, None, None]:

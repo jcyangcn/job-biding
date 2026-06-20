@@ -93,3 +93,38 @@ class ResumeGenerationRecord(BaseModel):
     profile: dict
     pdf_path: str
     created_at: datetime
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=255)
+
+
+class UserCreateRequest(BaseModel):
+    full_name: str = Field(min_length=1, max_length=255)
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=6, max_length=255)
+    role: str = Field(default="user", min_length=1, max_length=50)
+    description: str | None = None
+
+
+class UserUpdateRequest(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
+    username: str | None = Field(default=None, min_length=1, max_length=100)
+    password: str | None = Field(default=None, min_length=6, max_length=255)
+    role: str | None = Field(default=None, min_length=1, max_length=50)
+    description: str | None = None
+
+
+class UserResponse(BaseModel):
+    id: int
+    full_name: str
+    username: str
+    role: str
+    description: str | None = None
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

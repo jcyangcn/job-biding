@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     database_url: str
+    jwt_secret: str = "change-me-in-production"
+    jwt_expire_hours: int = 48
 
     def resolved_provider(self) -> str:
         provider = self.ai_provider.lower()

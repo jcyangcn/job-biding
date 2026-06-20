@@ -66,7 +66,7 @@ def main() -> int:
         print(f"ERROR: Database exists but table setup failed: {exc}", file=sys.stderr)
         return 1
 
-    print("Done. resume_generations table is ready.")
+    print("Done. users and resume_generations tables are ready.")
     return 0
 
 
