@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 
 import { Helmet } from 'react-helmet-async';
-import Footer from 'src/components/Footer';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 
 import { Grid } from '@mui/material';
@@ -64,7 +63,6 @@ function ManagementInvoicesView() {
           <InvoiceBody invoice={invoice} />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

@@ -1,5 +1,4 @@
 import PropTypes from 'prop-types';
-import Footer from 'src/components/Footer';
 import Sidebar from './Sidebar';
 import { Box, Card, Container, styled } from '@mui/material';
 import { Outlet } from 'react-router-dom';
@@ -41,7 +40,6 @@ const DocsLayout = ({ children }) => {
               {children || <Outlet />}
             </Card>
           </Container>
-          <Footer />
         </MainContent>
       </MainWrapper>
     </>

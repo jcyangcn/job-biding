@@ -1,6 +1,6 @@
-import { ListSubheader, alpha, Box, List, styled } from '@mui/material';
+import { alpha, Box, List, styled } from '@mui/material';
 import { useLocation, matchPath } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import useAuth from 'src/hooks/useAuth';
 import SidebarMenuItem from './item';
 import menuItems from './items';
 
@@ -13,15 +13,6 @@ const MenuWrapper = styled(Box)(
       padding: 0 ${theme.spacing(0)} ${theme.spacing(1)};
     }
   }
-
-    .MuiListSubheader-root {
-      text-transform: uppercase;
-      font-weight: bold;
-      font-size: ${theme.typography.pxToRem(12)};
-      color: ${theme.colors.alpha.trueWhite[50]};
-      padding: ${theme.spacing(0, 2.5)};
-      line-height: 1.4;
-    }
 `
 );
 
@@ -212,22 +203,37 @@ const reduceChildRoutes = ({ ev, path, item }) => {
   return ev;
 };
 
+const filterMenuItems = (items, isAdmin) =>
+  items
+    .filter((item) => !item.adminOnly || isAdmin)
+    .map((item) =>
+      item.items
+        ? {
+            ...item,
+            items: filterMenuItems(item.items, isAdmin)
+          }
+        : item
+    )
+    .filter((item) => !item.items || item.items.length > 0);
+
 function SidebarMenu() {
   const location = useLocation();
-  const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  const visibleMenuItems = menuItems
+    .filter((section) => !section.adminOnly || isAdmin)
+    .map((section) => ({
+      ...section,
+      items: filterMenuItems(section.items, isAdmin)
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <>
-      {menuItems.map((section) => (
+      {visibleMenuItems.map((section) => (
         <MenuWrapper key={section.heading}>
-          <List
-            component="div"
-            subheader={
-              <ListSubheader component="div" disableSticky>
-                {t(section.heading)}
-              </ListSubheader>
-            }
-          >
+          <List component="div">
             {renderSidebarMenuItems({
               items: section.items,
               path: location.pathname

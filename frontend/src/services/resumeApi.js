@@ -100,5 +100,7 @@ export async function generateResumePdf(body) {
   const blob = await res.blob();
   const filename = filenameFromDisposition(res.headers.get('Content-Disposition'));
   downloadBlob(blob, filename);
-  return filename;
+  const generationIdHeader = res.headers.get('X-Generation-Id');
+  const generationId = generationIdHeader ? Number(generationIdHeader) : null;
+  return { filename, generationId };
 }

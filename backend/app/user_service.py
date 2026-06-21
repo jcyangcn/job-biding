@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.auth import create_user, hash_password
 from app.db_models import User
 from app.models import UserCreateRequest, UserUpdateRequest
+from app.user_roles import UserRole
 
 
 def list_users(db: Session) -> list[User]:
@@ -24,7 +25,7 @@ def update_user(db: Session, user: User, data: UserUpdateRequest) -> User:
     if data.full_name is not None:
         user.full_name = data.full_name
     if data.role is not None:
-        user.role = data.role
+        user.role = UserRole(data.role)
     if data.description is not None:
         user.description = data.description or None
     if data.password:
@@ -46,6 +47,6 @@ def create_user_record(db: Session, data: UserCreateRequest) -> User:
         full_name=data.full_name,
         username=data.username,
         password=data.password,
-        role=data.role,
+        role=UserRole(data.role),
         description=data.description,
     )

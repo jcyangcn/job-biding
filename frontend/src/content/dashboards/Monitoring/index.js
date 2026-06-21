@@ -1,6 +1,5 @@
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 
 import { Grid } from '@mui/material';
@@ -73,8 +72,6 @@ function DashboardMonitoring() {
           </Grid>
         </Grid>
       </Grid>
-
-      <Footer />
     </>
   );
 }

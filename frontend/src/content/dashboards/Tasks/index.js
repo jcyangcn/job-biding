@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 import {
   Grid,
   Tab,
@@ -283,7 +282,6 @@ function DashboardTasks() {
           )}
         </Grid>
       </Card>
-      <Footer />
     </>
   );
 }

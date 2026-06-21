@@ -2,7 +2,6 @@ import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import { Grid } from '@mui/material';
-import Footer from 'src/components/Footer';
 
 import Steps from './Steps';
 import Energy from './Energy';
@@ -102,7 +101,6 @@ function DashboardFitness() {
           <Parameters />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

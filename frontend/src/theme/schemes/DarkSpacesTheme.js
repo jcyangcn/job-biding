@@ -974,6 +974,23 @@ export const DarkSpacesTheme = createTheme({
         }
       }
     },
+    MuiContainer: {
+      defaultProps: {
+        maxWidth: false
+      },
+      styleOverrides: {
+        root: {
+          marginLeft: 0,
+          marginRight: 0,
+          maxWidth: '100%'
+        },
+        maxWidthXs: { maxWidth: '100%' },
+        maxWidthSm: { maxWidth: '100%' },
+        maxWidthMd: { maxWidth: '100%' },
+        maxWidthLg: { maxWidth: '100%' },
+        maxWidthXl: { maxWidth: '100%' }
+      }
+    },
     MuiTableRow: {
       styleOverrides: {
         head: {
@@ -992,13 +1009,15 @@ export const DarkSpacesTheme = createTheme({
       styleOverrides: {
         root: {
           borderBottomColor: colors.alpha.black[10],
-          fontSize: 14
+          fontSize: 14,
+          padding: '8px 10px'
         },
         head: {
           textTransform: 'uppercase',
           fontSize: 13,
           fontWeight: 'bold',
-          color: colors.alpha.black[70]
+          color: colors.alpha.black[70],
+          padding: '8px 10px'
         }
       }
     },

@@ -1,5 +1,4 @@
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import { Helmet } from 'react-helmet-async';
 
@@ -88,7 +87,6 @@ function DashboardReports() {
           <Block13 />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

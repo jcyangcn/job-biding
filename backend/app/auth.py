@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db_models import User
 from app.models import UserResponse
+from app.user_roles import UserRole
 
 
 def hash_password(password: str) -> str:
@@ -38,7 +39,7 @@ def user_to_response(user: User) -> UserResponse:
         id=user.id,
         full_name=user.full_name,
         username=user.username,
-        role=user.role,
+        role=user.role.value,
         description=user.description,
     )
 
@@ -56,7 +57,7 @@ def create_user(
     full_name: str,
     username: str,
     password: str,
-    role: str = "user",
+    role: UserRole = UserRole.bidder,
     description: str | None = None,
 ) -> User:
     existing = db.scalar(select(User.id).where(User.username == username))
@@ -85,7 +86,7 @@ def seed_default_users(db: Session) -> None:
             full_name="Administrator",
             username="admin",
             password=hash_password("admin123"),
-            role="admin",
+            role=UserRole.admin,
             description="Default administrator account",
         )
     )

@@ -7,7 +7,6 @@ import { Grid } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import useRefMounted from 'src/hooks/useRefMounted';
 
-import Footer from 'src/components/Footer';
 import axios from 'src/utils/axios';
 import PageHeader from './PageHeader';
 import ProductBody from './ProductBody';
@@ -64,7 +63,6 @@ function ManagementProductSingle() {
           <ProductBody product={product} />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

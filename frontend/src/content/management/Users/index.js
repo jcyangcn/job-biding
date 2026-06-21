@@ -3,7 +3,6 @@ import axios from 'src/utils/axios';
 
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 
 import { Grid } from '@mui/material';
 import useRefMounted from 'src/hooks/useRefMounted';
@@ -55,7 +54,6 @@ function ManagementUsers() {
           <Results users={users} />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

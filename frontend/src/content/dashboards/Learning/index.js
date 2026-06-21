@@ -1,6 +1,5 @@
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 import { Grid } from '@mui/material';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 
@@ -46,8 +45,6 @@ function DashboardLearning() {
           <RecentCourses />
         </Grid>
       </Grid>
-
-      <Footer />
     </>
   );
 }

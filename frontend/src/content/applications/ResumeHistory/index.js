@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
-import Footer from 'src/components/Footer';
 import {
   Box,
   Button,
@@ -140,7 +139,6 @@ function ResumeHistory() {
             </TableContainer>
           </CardContent>
         </Card>
-        <Footer />
       </Container>
     </>
   );

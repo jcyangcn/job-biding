@@ -3,7 +3,6 @@ import axios from 'src/utils/axios';
 
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 
 import { Grid } from '@mui/material';
@@ -53,7 +52,6 @@ function ManagementProducts() {
           <Results products={products} />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

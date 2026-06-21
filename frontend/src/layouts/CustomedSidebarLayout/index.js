@@ -43,12 +43,19 @@ const CustomedSidebarLayout = () => {
       {isExtended ? <Sidebar isExtended={isExtended} setIsExtended={setIsExtended} />
         : <Sidebar1 isExtended={isExtended} setIsExtended={setIsExtended} />}
       <Box
+        className="main-container"
         sx={{
           position: 'relative',
           zIndex: 5,
           display: 'block',
           flex: 1,
           pt: `${theme.header.height}`,
+          mx: 0,
+          '& .MuiContainer-root': {
+            marginLeft: 0,
+            marginRight: 0,
+            maxWidth: '100%'
+          },
           [theme.breakpoints.up('lg')]: {
             ml: `${isExtended ? theme.sidebar.width : 110}`
           }

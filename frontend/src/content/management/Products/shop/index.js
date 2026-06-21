@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
 import { Helmet } from 'react-helmet-async';
-import Footer from 'src/components/Footer';
 import PageHeader from './PageHeader';
 import Sidebar from './Sidebar';
 
@@ -120,7 +119,6 @@ function ManagementProductsShop() {
           <Sidebar />
         </Scrollbar>
       </DrawerWrapperMobile>
-      <Footer />
     </>
   );
 }

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
-import Footer from 'src/components/Footer';
 import {
   Box,
   Button,
@@ -86,7 +85,7 @@ function ResumeBuilder() {
         profileMarkdown,
         profileJson
       });
-      const filename = await generateResumePdf(body);
+      const { filename } = await generateResumePdf(body);
       notify(`Done — downloaded ${filename}`, 'success');
     } catch (err) {
       notify(err.message || 'Something went wrong.', 'error');
@@ -208,7 +207,6 @@ function ResumeBuilder() {
             </Card>
           </Grid>
         </Grid>
-        <Footer />
       </Container>
     </>
   );

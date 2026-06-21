@@ -1,7 +1,6 @@
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
 import { Grid } from '@mui/material';
-import Footer from 'src/components/Footer';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 
 import Block1 from 'src/content/blocks/SparklinesLarge/Block7';
@@ -58,7 +57,6 @@ function DashboardExpenses() {
           <Block8 />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

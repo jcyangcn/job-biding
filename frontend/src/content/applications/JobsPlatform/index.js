@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 import Sidebar from './Sidebar';
 
 import {
@@ -220,7 +219,6 @@ function ApplicationsJobsPlatform() {
           <Sidebar />
         </Scrollbar>
       </DrawerWrapperMobile>
-      <Footer />
     </>
   );
 }

@@ -6,7 +6,6 @@ import Logo from 'src/components/LogoSign';
 import Hero from './Hero';
 import Highlights from './Highlights';
 import LanguageSwitcher from 'src/layouts/BoxedSidebarLayout/Header/Buttons/LanguageSwitcher';
-import Footer from 'src/components/Footer';
 
 const HeaderWrapper = styled(Card)(
   ({ theme }) => `
@@ -65,7 +64,6 @@ function Overview() {
       </HeaderWrapper>
       <Hero />
       <Highlights />
-      <Footer />
     </OverviewWrapper>
   );
 }

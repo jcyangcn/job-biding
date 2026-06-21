@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -311,7 +310,6 @@ function ApplicationsCalendar() {
           </Card>
         </Grid>
       </Grid>
-      <Footer />
       <Drawer
         variant="temporary"
         anchor={theme.direction === 'rtl' ? 'left' : 'right'}

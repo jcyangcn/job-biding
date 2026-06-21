@@ -3,7 +3,6 @@ import axios from 'src/utils/axios';
 
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 import Statistics from './Statistics';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 
@@ -57,7 +56,6 @@ function ManagementInvoices() {
           <Results invoices={invoices} />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

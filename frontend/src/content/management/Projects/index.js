@@ -3,7 +3,6 @@ import axios from 'src/utils/axios';
 
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
-import Footer from 'src/components/Footer';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 
 import { Grid } from '@mui/material';
@@ -54,7 +53,6 @@ function ManagementProjects() {
           <Results projects={projects} />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

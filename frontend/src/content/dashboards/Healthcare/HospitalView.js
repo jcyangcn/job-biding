@@ -1,6 +1,5 @@
 import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeaderHospital';
-import Footer from 'src/components/Footer';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 
 import { Typography, useTheme, Box, Grid, alpha, Card } from '@mui/material';
@@ -109,7 +108,6 @@ function DashboardHospitalView() {
           <UpcomingConsults />
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }

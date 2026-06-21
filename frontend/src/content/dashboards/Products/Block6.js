@@ -145,7 +145,7 @@ const TableHeadWrapper = styled(TableHead)(
           font-weight: normal;
           color: ${theme.colors.alpha.black[100]};
           font-size: ${theme.typography.pxToRem(16)};
-          padding: ${theme.spacing(2)};
+          padding: ${theme.spacing(1, 1.25)};
       }
 
       .MuiTableRow-root {

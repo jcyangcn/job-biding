@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
-import Footer from 'src/components/Footer';
 import {
   Box,
   Button,
@@ -15,6 +14,7 @@ import {
   DialogTitle,
   Grid,
   IconButton,
+  MenuItem,
   Table,
   TableBody,
   TableCell,
@@ -38,11 +38,17 @@ import {
   updateUser
 } from 'src/services/usersApi';
 
+const USER_ROLES = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'bidder', label: 'Bidder' },
+  { value: 'caller', label: 'Caller' }
+];
+
 const emptyForm = {
   full_name: '',
   username: '',
   password: '',
-  role: 'user',
+  role: 'bidder',
   description: ''
 };
 
@@ -108,7 +114,7 @@ function UserManagement() {
   };
 
   const handleSave = async () => {
-    if (!form.full_name.trim() || !form.username.trim() || !form.role.trim()) {
+    if (!form.full_name.trim() || !form.username.trim() || !form.role) {
       enqueueSnackbar('Full name, username, and role are required', { variant: 'warning' });
       return;
     }
@@ -123,7 +129,7 @@ function UserManagement() {
         const payload = {
           full_name: form.full_name.trim(),
           username: form.username.trim(),
-          role: form.role.trim(),
+          role: form.role,
           description: form.description.trim() || null
         };
         if (form.password.trim()) {
@@ -136,7 +142,7 @@ function UserManagement() {
           full_name: form.full_name.trim(),
           username: form.username.trim(),
           password: form.password,
-          role: form.role.trim() || 'user',
+          role: form.role || 'bidder',
           description: form.description.trim() || null
         });
         enqueueSnackbar('User created', { variant: 'success' });
@@ -240,7 +246,10 @@ function UserManagement() {
                         <TableCell>{row.id}</TableCell>
                         <TableCell>{row.full_name}</TableCell>
                         <TableCell>{row.username}</TableCell>
-                        <TableCell>{row.role}</TableCell>
+                        <TableCell>
+                          {USER_ROLES.find((option) => option.value === row.role)?.label ||
+                            row.role}
+                        </TableCell>
                         <TableCell sx={{ maxWidth: 280 }}>
                           <Typography noWrap title={row.description || ''}>
                             {row.description || '—'}
@@ -274,7 +283,6 @@ function UserManagement() {
             </TableContainer>
           </CardContent>
         </Card>
-        <Footer />
       </Container>
 
       <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="sm">
@@ -305,10 +313,17 @@ function UserManagement() {
           <TextField
             fullWidth
             margin="normal"
+            select
             label="Role"
             value={form.role}
             onChange={handleFormChange('role')}
-          />
+          >
+            {USER_ROLES.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             fullWidth
             margin="normal"

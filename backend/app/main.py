@@ -11,9 +11,36 @@ from app.ai_generator import generate_resume_content
 from app.config import GENERATED_DIR, INSTRUCTION_DIR, REPO_ROOT, settings
 from app.database import get_db, init_db
 from app.auth import authenticate_user, create_access_token, user_to_response
-from app.dependencies import get_current_user_response, require_admin
+from app.dependencies import get_current_user, get_current_user_response, require_admin
 from app.db_models import ResumeGeneration, User
 from app.history import save_resume_generation
+from app.identity_service import (
+    create_identity,
+    delete_identity,
+    get_identity,
+    identity_to_response,
+    list_identities,
+    update_identity,
+)
+from app.application_service import (
+    application_to_response,
+    create_application,
+    list_applications_for_profile,
+)
+from app.profile_service import (
+    create_profile,
+    delete_profile,
+    get_profile,
+    list_profiles_for_user,
+    profile_to_response,
+    update_profile,
+)
+from app.progression_email_service import (
+    create_progression_email,
+    list_progression_emails_for_profile,
+    preview_reference_no,
+    progression_email_to_response,
+)
 from app.models import (
     GenerateResumeRequest,
     GenerateResumeResponse,
@@ -24,6 +51,17 @@ from app.models import (
     UserCreateRequest,
     UserResponse,
     UserUpdateRequest,
+    JobIdentityCreateRequest,
+    JobIdentityResponse,
+    JobIdentityUpdateRequest,
+    JobProfileCreateRequest,
+    JobProfileResponse,
+    JobProfileUpdateRequest,
+    JobApplicationCreateRequest,
+    JobApplicationResponse,
+    JobProgressionEmailCreateRequest,
+    JobProgressionEmailReferencePreview,
+    JobProgressionEmailResponse,
 )
 from app.pdf_renderer import next_resume_path, render_resume_pdf
 from app.profile_parser import load_default_profile, parse_profile_markdown
@@ -61,6 +99,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Generation-Id", "Content-Disposition"],
 )
 
 if FRONTEND_BUILD_DIR.is_dir():
@@ -162,6 +201,183 @@ def delete_user_endpoint(
         raise HTTPException(status_code=400, detail="You cannot delete your own account")
     delete_user(db, user)
     return {"ok": True}
+
+
+@app.get("/api/job-identities", response_model=list[JobIdentityResponse])
+def get_job_identities(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    return [identity_to_response(row) for row in list_identities(db)]
+
+
+@app.post("/api/job-identities", response_model=JobIdentityResponse)
+def create_job_identity_endpoint(
+    request: JobIdentityCreateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = create_identity(db, request)
+    return identity_to_response(record)
+
+
+@app.put("/api/job-identities/{identity_id}", response_model=JobIdentityResponse)
+def update_job_identity_endpoint(
+    identity_id: int,
+    request: JobIdentityUpdateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_identity(db, identity_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Identity not found")
+    updated = update_identity(db, record, request)
+    return identity_to_response(updated)
+
+
+@app.delete("/api/job-identities/{identity_id}")
+def delete_job_identity_endpoint(
+    identity_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_identity(db, identity_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Identity not found")
+    delete_identity(db, record)
+    return {"ok": True}
+
+
+@app.get("/api/job-profiles", response_model=list[JobProfileResponse])
+def get_job_profiles(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return [profile_to_response(db, row) for row in list_profiles_for_user(db, user)]
+
+
+@app.post("/api/job-profiles", response_model=JobProfileResponse)
+def create_job_profile_endpoint(
+    request: JobProfileCreateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    try:
+        record = create_profile(db, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return profile_to_response(db, record)
+
+
+@app.put("/api/job-profiles/{profile_id}", response_model=JobProfileResponse)
+def update_job_profile_endpoint(
+    profile_id: int,
+    request: JobProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_profile(db, profile_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    try:
+        updated = update_profile(db, record, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return profile_to_response(db, updated)
+
+
+@app.delete("/api/job-profiles/{profile_id}")
+def delete_job_profile_endpoint(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_profile(db, profile_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    delete_profile(db, record)
+    return {"ok": True}
+
+
+@app.get("/api/job-applications", response_model=list[JobApplicationResponse])
+def list_job_applications_endpoint(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        rows = list_applications_for_profile(db, profile_id, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [application_to_response(db, row) for row in rows]
+
+
+@app.post("/api/job-applications", response_model=JobApplicationResponse)
+def create_job_application_endpoint(
+    request: JobApplicationCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        record = create_application(db, request, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return application_to_response(db, record)
+
+
+@app.get("/api/job-progression-emails", response_model=list[JobProgressionEmailResponse])
+def list_job_progression_emails_endpoint(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        rows = list_progression_emails_for_profile(db, profile_id, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [progression_email_to_response(db, row) for row in rows]
+
+
+@app.get(
+    "/api/job-progression-emails/next-reference",
+    response_model=JobProgressionEmailReferencePreview,
+)
+def preview_job_progression_email_reference_endpoint(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        reference_no = preview_reference_no(db, profile_id, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return JobProgressionEmailReferencePreview(
+        profile_id=profile_id,
+        reference_no=reference_no,
+    )
+
+
+@app.post("/api/job-progression-emails", response_model=JobProgressionEmailResponse)
+def create_job_progression_email_endpoint(
+    request: JobProgressionEmailCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        record = create_progression_email(db, request, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return progression_email_to_response(db, record)
 
 
 @app.get("/api/profile/default")

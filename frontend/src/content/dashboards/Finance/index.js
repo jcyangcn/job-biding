@@ -2,7 +2,6 @@ import { Helmet } from 'react-helmet-async';
 import PageHeader from './PageHeader';
 import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import { Grid } from '@mui/material';
-import Footer from 'src/components/Footer';
 
 import RecentTransactions from './RecentTransactions';
 import MyCards from './MyCards';
@@ -50,8 +49,6 @@ function DashboardFinance() {
           <AllExpenses />
         </Grid>
       </Grid>
-
-      <Footer />
     </>
   );
 }

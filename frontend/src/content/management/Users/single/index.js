@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 
 import { Helmet } from 'react-helmet-async';
-import Footer from 'src/components/Footer';
 
 import { Box, Tabs, Tab, Grid, styled } from '@mui/material';
 import { useParams } from 'react-router-dom';
@@ -135,7 +134,6 @@ function ManagementUsersView() {
           </Grid>
         </Grid>
       </Box>
-      <Footer />
     </>
   );
 }

@@ -1,32 +1,53 @@
-import DashboardTwoToneIcon from '@mui/icons-material/DashboardTwoTone';
-import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
-import HistoryTwoToneIcon from '@mui/icons-material/HistoryTwoTone';
-import PeopleTwoToneIcon from '@mui/icons-material/PeopleTwoTone';
-import { PROJECT_NAME } from 'src/config/app';
+import AdminPanelSettingsTwoToneIcon from '@mui/icons-material/AdminPanelSettingsTwoTone';
+import AssignmentIndTwoToneIcon from '@mui/icons-material/AssignmentIndTwoTone';
 
 const menuItems = [
   {
-    heading: PROJECT_NAME,
+    heading: 'Management',
+    adminOnly: true,
     items: [
       {
-        name: 'Dashboard',
-        icon: DashboardTwoToneIcon,
-        link: '/dashboards'
-      },
+        name: 'Management',
+        icon: AdminPanelSettingsTwoToneIcon,
+        link: '/applications',
+        items: [
+          {
+            name: 'User Management',
+            link: '/applications/user-management'
+          },
+          {
+            name: 'Identity Management',
+            link: '/applications/identity-management'
+          },
+          {
+            name: 'Profile Management',
+            link: '/applications/profile-management'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    heading: 'Job application',
+    items: [
       {
-        name: 'Resume Builder',
-        icon: DescriptionTwoToneIcon,
-        link: '/applications/resume-builder'
-      },
-      {
-        name: 'Generation History',
-        icon: HistoryTwoToneIcon,
-        link: '/applications/resume-history'
-      },
-      {
-        name: 'User Management',
-        icon: PeopleTwoToneIcon,
-        link: '/applications/user-management'
+        name: 'Job application',
+        icon: AssignmentIndTwoToneIcon,
+        link: '/applications/job-applications',
+        items: [
+          {
+            name: 'Applications',
+            link: '/applications/job-applications'
+          },
+          {
+            name: 'Progression Emails',
+            link: '/applications/progression-emails'
+          },
+          {
+            name: 'Resume Builder',
+            link: '/applications/resume-builder'
+          }
+        ]
       }
     ]
   }

@@ -4,7 +4,6 @@ import PageHeader from './PageHeader';
 
 import { Box, Drawer, Grid, useTheme, IconButton, styled } from '@mui/material';
 import Scrollbar from 'src/components/Scrollbar';
-import Footer from 'src/components/Footer';
 
 import HealthcareSidebar from './HealthcareSidebar';
 import AccountVerification from './AccountVerification';
@@ -127,7 +126,6 @@ function DashboardHealthcare() {
               <Cancelled />
             </Grid>
           </Grid>
-          <Footer />
         </MainContentWrapper>
         <DrawerWrapperMobile
           sx={{

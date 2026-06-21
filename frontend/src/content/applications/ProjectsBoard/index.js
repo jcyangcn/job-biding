@@ -3,7 +3,6 @@ import { DragDropContext } from 'react-beautiful-dnd';
 import { useDispatch, useSelector } from 'src/store';
 import { getBoard, moveTask } from 'src/slices/projects_board';
 import { Helmet } from 'react-helmet-async';
-import Footer from 'src/components/Footer';
 import PageHeader from './PageHeader';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
@@ -465,7 +464,6 @@ function ApplicationsProjectsBoard() {
           </TasksWrapperContent>
         </Grid>
       </Grid>
-      <Footer />
     </>
   );
 }
