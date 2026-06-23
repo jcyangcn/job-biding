@@ -135,25 +135,27 @@ class LoginResponse(BaseModel):
 class JobIdentityCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     country: str = Field(min_length=1, max_length=100)
-    address: str = Field(min_length=1)
+    address: str = Field(default="")
     city_state: str | None = Field(default=None, max_length=255)
     zipcode: str | None = Field(default=None, max_length=20)
     linkedin: str | None = Field(default=None, max_length=500)
     github: str | None = Field(default=None, max_length=500)
     dob: date | None = None
     ssn: str | None = Field(default=None, max_length=50)
+    answers: dict = Field(default_factory=dict)
 
 
 class JobIdentityUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     country: str | None = Field(default=None, min_length=1, max_length=100)
-    address: str | None = Field(default=None, min_length=1)
+    address: str | None = Field(default=None)
     city_state: str | None = Field(default=None, max_length=255)
     zipcode: str | None = Field(default=None, max_length=20)
     linkedin: str | None = Field(default=None, max_length=500)
     github: str | None = Field(default=None, max_length=500)
     dob: date | None = None
     ssn: str | None = Field(default=None, max_length=50)
+    answers: dict | None = None
 
 
 class JobIdentityResponse(BaseModel):
@@ -167,18 +169,18 @@ class JobIdentityResponse(BaseModel):
     github: str | None = None
     dob: date | None = None
     ssn: str | None = None
+    answers: dict
     created_at: datetime
 
 
 class JobProfileCreateRequest(BaseModel):
     identity_id: int
     bidder_user_id: int
-    caller_user_id: int
-    roles: str = Field(min_length=1, max_length=255)
+    caller_user_id: int | None = None
+    roles: str = Field(default="", max_length=255)
     email: str = Field(min_length=1, max_length=255)
     email_password: str = Field(min_length=1, max_length=255)
-    phone: str = Field(min_length=1, max_length=50)
-    answers: dict = Field(default_factory=dict)
+    phone: str = Field(default="", max_length=50)
     proxy: str | None = Field(default=None, max_length=500)
     reference_tag: str | None = Field(default=None, max_length=255)
     is_active: bool = True
@@ -188,11 +190,10 @@ class JobProfileUpdateRequest(BaseModel):
     identity_id: int | None = None
     bidder_user_id: int | None = None
     caller_user_id: int | None = None
-    roles: str | None = Field(default=None, min_length=1, max_length=255)
+    roles: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, min_length=1, max_length=255)
     email_password: str | None = Field(default=None, min_length=1, max_length=255)
-    phone: str | None = Field(default=None, min_length=1, max_length=50)
-    answers: dict | None = None
+    phone: str | None = Field(default=None, max_length=50)
     proxy: str | None = Field(default=None, max_length=500)
     reference_tag: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
@@ -204,13 +205,12 @@ class JobProfileResponse(BaseModel):
     identity_name: str
     bidder_user_id: int
     bidder_name: str
-    caller_user_id: int
+    caller_user_id: int | None = None
     caller_name: str
     roles: str
     email: str
     email_password: str
     phone: str
-    answers: dict
     proxy: str | None = None
     reference_tag: str | None = None
     is_active: bool
@@ -219,10 +219,19 @@ class JobProfileResponse(BaseModel):
 
 class JobApplicationCreateRequest(BaseModel):
     profile_id: int
-    role: str = Field(min_length=1, max_length=255)
-    company: str = Field(min_length=1, max_length=255)
+    role: str = Field(default="", max_length=255)
+    company: str = Field(default="", max_length=255)
     link: str = Field(min_length=1, max_length=1000)
-    job_description: str = Field(min_length=1)
+    job_description: str = Field(default="")
+    resume_generated_id: int | None = None
+    resume_online_link: str | None = Field(default=None, max_length=1000)
+
+
+class JobApplicationUpdateRequest(BaseModel):
+    role: str = Field(default="", max_length=255)
+    company: str = Field(default="", max_length=255)
+    link: str = Field(min_length=1, max_length=1000)
+    job_description: str = Field(default="")
     resume_generated_id: int | None = None
     resume_online_link: str | None = Field(default=None, max_length=1000)
 
@@ -243,6 +252,15 @@ class JobApplicationResponse(BaseModel):
 
 class JobProgressionEmailCreateRequest(BaseModel):
     profile_id: int
+    company: str = Field(min_length=1, max_length=255)
+    type: str = Field(min_length=1, max_length=50)
+    email_link: str = Field(min_length=1, max_length=1000)
+    email_date: datetime
+    status: str = Field(min_length=1, max_length=50)
+    log: str = ""
+
+
+class JobProgressionEmailUpdateRequest(BaseModel):
     company: str = Field(min_length=1, max_length=255)
     type: str = Field(min_length=1, max_length=50)
     email_link: str = Field(min_length=1, max_length=1000)

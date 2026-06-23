@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
-import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import {
   Autocomplete,
   Box,
@@ -26,12 +25,22 @@ import {
   Typography
 } from '@mui/material';
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
-import BadgeTwoToneIcon from '@mui/icons-material/BadgeTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
+import IdentityDetailDialog from './IdentityDetailDialog';
+import TableListFilters from 'src/components/TableListFilters';
+import { useDetailDialog } from 'src/components/DetailDialog';
+import useTableListFilters from 'src/hooks/useTableListFilters';
+import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import COUNTRIES from 'src/data/countries';
+import {
+  answersToItems,
+  buildEmptyAnswerItems,
+  getAnswerFieldPlaceholder,
+  itemsToAnswers
+} from 'src/data/profileAnswerFields';
 import {
   createIdentity,
   deleteIdentity,
@@ -48,8 +57,22 @@ const emptyForm = {
   linkedin: '',
   github: '',
   dob: '',
-  ssn: ''
+  ssn: '',
+  answerItems: buildEmptyAnswerItems()
 };
+
+const IDENTITY_SEARCH_FIELDS = [
+  'id',
+  'name',
+  'country',
+  'address',
+  'city_state',
+  'zipcode',
+  'linkedin',
+  'github',
+  'ssn',
+  'dob'
+];
 
 function formatDate(value) {
   if (!value) return '—';
@@ -58,6 +81,10 @@ function formatDate(value) {
 
 function IdentityManagement() {
   const { enqueueSnackbar } = useSnackbar();
+  useSetPageHeader(
+    'Identity Management',
+    'Manage job application identities stored in the database'
+  );
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -66,6 +93,27 @@ function IdentityManagement() {
   const [deletingRecord, setDeletingRecord] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [answerEditOpen, setAnswerEditOpen] = useState(false);
+  const [answerEditIndex, setAnswerEditIndex] = useState(null);
+  const [answerDraft, setAnswerDraft] = useState({ question: '', answer: '' });
+  const [answerDeleteIndex, setAnswerDeleteIndex] = useState(null);
+  const { open: detailOpen, selected: selectedIdentity, openDetail, closeDetail, stopPropagation } =
+    useDetailDialog();
+  const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    filteredRows,
+    clearFilters,
+    hasActiveFilters,
+    showDateRange
+  } = useTableListFilters(rows, {
+    searchFields: IDENTITY_SEARCH_FIELDS,
+    dateField: 'created_at'
+  });
 
   const dialogTitle = useMemo(
     () => (editingRecord ? 'Edit identity' : 'Add identity'),
@@ -94,6 +142,7 @@ function IdentityManagement() {
   };
 
   const openEditDialog = (record) => {
+    closeDetail();
     setEditingRecord(record);
     setForm({
       name: record.name,
@@ -104,7 +153,8 @@ function IdentityManagement() {
       linkedin: record.linkedin || '',
       github: record.github || '',
       dob: record.dob ? record.dob.slice(0, 10) : '',
-      ssn: record.ssn || ''
+      ssn: record.ssn || '',
+      answerItems: answersToItems(record.answers || {})
     });
     setDialogOpen(true);
   };
@@ -114,6 +164,9 @@ function IdentityManagement() {
       setDialogOpen(false);
       setEditingRecord(null);
       setForm(emptyForm);
+      setAnswerEditOpen(false);
+      setAnswerEditIndex(null);
+      setAnswerDeleteIndex(null);
     }
   };
 
@@ -123,6 +176,81 @@ function IdentityManagement() {
 
   const handleCountryChange = (_, value) => {
     setForm((current) => ({ ...current, country: value || '' }));
+  };
+
+  const handleAddQuestion = () => {
+    const newItem = {
+      id: `custom_${Date.now()}`,
+      key: '',
+      question: '',
+      answer: '',
+      predefined: false
+    };
+    setForm((current) => ({
+      ...current,
+      answerItems: [...current.answerItems, newItem]
+    }));
+    setAnswerEditIndex(form.answerItems.length);
+    setAnswerDraft({ question: '', answer: '' });
+    setAnswerEditOpen(true);
+  };
+
+  const openAnswerEdit = (index) => {
+    const item = form.answerItems[index];
+    setAnswerEditIndex(index);
+    setAnswerDraft({ question: item.question, answer: item.answer });
+    setAnswerEditOpen(true);
+  };
+
+  const closeAnswerEdit = () => {
+    if (!saving) {
+      if (answerEditIndex !== null) {
+        const item = form.answerItems[answerEditIndex];
+        if (item && !item.predefined && !item.question.trim() && !item.answer.trim()) {
+          setForm((current) => ({
+            ...current,
+            answerItems: current.answerItems.filter((_, index) => index !== answerEditIndex)
+          }));
+        }
+      }
+      setAnswerEditOpen(false);
+      setAnswerEditIndex(null);
+    }
+  };
+
+  const handleAnswerDraftChange = (field) => (event) => {
+    setAnswerDraft((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const handleSaveAnswerItem = () => {
+    if (!answerDraft.question.trim()) {
+      enqueueSnackbar('Question is required', { variant: 'warning' });
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      answerItems: current.answerItems.map((item, index) =>
+        index === answerEditIndex
+          ? { ...item, question: answerDraft.question.trim(), answer: answerDraft.answer }
+          : item
+      )
+    }));
+    setAnswerEditOpen(false);
+    setAnswerEditIndex(null);
+  };
+
+  const confirmAnswerDelete = (index) => {
+    setAnswerDeleteIndex(index);
+  };
+
+  const handleDeleteAnswerItem = () => {
+    if (answerDeleteIndex === null) return;
+    setForm((current) => ({
+      ...current,
+      answerItems: current.answerItems.filter((_, index) => index !== answerDeleteIndex)
+    }));
+    setAnswerDeleteIndex(null);
   };
 
   const countryOptions = useMemo(() => {
@@ -141,12 +269,13 @@ function IdentityManagement() {
     linkedin: form.linkedin.trim() || null,
     github: form.github.trim() || null,
     dob: form.dob || null,
-    ssn: form.ssn.trim() || null
+    ssn: form.ssn.trim() || null,
+    answers: itemsToAnswers(form.answerItems)
   });
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.country || !form.address.trim()) {
-      enqueueSnackbar('Name, country, and address are required', { variant: 'warning' });
+    if (!form.name.trim() || !form.country) {
+      enqueueSnackbar('Name and country are required', { variant: 'warning' });
       return;
     }
     if (!COUNTRIES.includes(form.country)) {
@@ -199,45 +328,47 @@ function IdentityManagement() {
       <Helmet>
         <title>Identity Management - {PROJECT_NAME}</title>
       </Helmet>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center" spacing={2}>
-          <Grid item>
-            <Typography component="h1" variant="h3" gutterBottom>
-              Identity Management
-            </Typography>
-            <Typography variant="subtitle2">
-              Manage job application identities stored in the database.
-            </Typography>
-          </Grid>
-          <Grid item>
-            <Box display="flex" gap={1}>
-              <Button
-                variant="outlined"
-                startIcon={<RefreshTwoToneIcon />}
-                onClick={loadIdentities}
-                disabled={loading || saving}
-              >
-                Refresh
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddTwoToneIcon />}
-                onClick={openCreateDialog}
-                disabled={saving}
-              >
-                Add identity
-              </Button>
-            </Box>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ pt: 3 }}>
+        <Box sx={{ mb: 2 }}>
+          <TableListFilters
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search name, country, address, links…"
+            showDateRange={showDateRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            dateFromLabel="Created from"
+            dateToLabel="Created to"
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            filteredCount={filteredRows.length}
+            totalCount={rows.length}
+            actions={
+              <>
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshTwoToneIcon />}
+                  onClick={loadIdentities}
+                  disabled={loading || saving}
+                >
+                  Refresh
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<AddTwoToneIcon />}
+                  onClick={openCreateDialog}
+                  disabled={saving}
+                >
+                  Add identity
+                </Button>
+              </>
+            }
+          />
+        </Box>
         <Card>
           <CardContent>
-            <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <BadgeTwoToneIcon color="primary" />
-              <Typography variant="h4">Job identities</Typography>
-            </Box>
             <TableContainer>
               <Table>
                 <TableHead>
@@ -262,9 +393,18 @@ function IdentityManagement() {
                         {loading ? 'Loading…' : 'No identities found.'}
                       </TableCell>
                     </TableRow>
+                  ) : filteredRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={11}>No identities match your filters.</TableCell>
+                    </TableRow>
                   ) : (
-                    rows.map((row) => (
-                      <TableRow key={row.id} hover>
+                    filteredRows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => openDetail(row)}
+                      >
                         <TableCell>{row.id}</TableCell>
                         <TableCell>{row.name}</TableCell>
                         <TableCell>{row.country}</TableCell>
@@ -287,7 +427,7 @@ function IdentityManagement() {
                         </TableCell>
                         <TableCell>{formatDate(row.dob)}</TableCell>
                         <TableCell>{row.ssn || '—'}</TableCell>
-                        <TableCell align="right">
+                        <TableCell align="right" onClick={stopPropagation}>
                           <Tooltip title="Edit">
                             <IconButton
                               color="primary"
@@ -317,7 +457,7 @@ function IdentityManagement() {
         </Card>
       </Container>
 
-      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="sm">
+      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="md">
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <TextField
@@ -354,7 +494,6 @@ function IdentityManagement() {
             minRows={2}
             value={form.address}
             onChange={handleFormChange('address')}
-            required
           />
           <Grid container spacing={2}>
             <Grid item xs={12} sm={8}>
@@ -406,6 +545,64 @@ function IdentityManagement() {
             value={form.ssn}
             onChange={handleFormChange('ssn')}
           />
+
+          <Box display="flex" alignItems="center" justifyContent="space-between" sx={{ mt: 3, mb: 1 }}>
+            <Typography variant="h5">Answers</Typography>
+            <Button
+              size="small"
+              startIcon={<AddTwoToneIcon />}
+              onClick={handleAddQuestion}
+              disabled={saving}
+            >
+              Add question
+            </Button>
+          </Box>
+          {form.answerItems.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+              No questions yet. Click &quot;Add question&quot; to create one.
+            </Typography>
+          ) : (
+            <Grid container spacing={1}>
+              {form.answerItems.map((item, index) => (
+                <Grid item xs={12} key={item.id}>
+                  <Grid container spacing={1} alignItems="center">
+                    <Grid item xs={12} md={5}>
+                      <Typography variant="body2" fontWeight={600} noWrap title={item.question}>
+                        {item.question || '—'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={5}>
+                      <Typography variant="body2" color="text.secondary" noWrap title={item.answer}>
+                        {item.answer || '—'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={2} sx={{ textAlign: { md: 'right' } }}>
+                      <Tooltip title="Edit">
+                        <IconButton
+                          color="primary"
+                          size="small"
+                          onClick={() => openAnswerEdit(index)}
+                          disabled={saving}
+                        >
+                          <EditTwoToneIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete">
+                        <IconButton
+                          color="error"
+                          size="small"
+                          onClick={() => confirmAnswerDelete(index)}
+                          disabled={saving}
+                        >
+                          <DeleteTwoToneIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Grid>
+                  </Grid>
+                </Grid>
+              ))}
+            </Grid>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={closeDialog} disabled={saving}>
@@ -413,6 +610,64 @@ function IdentityManagement() {
           </Button>
           <Button onClick={handleSave} variant="contained" disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={answerEditOpen} onClose={closeAnswerEdit} fullWidth maxWidth="sm">
+        <DialogTitle>
+          {answerEditIndex !== null && form.answerItems[answerEditIndex]?.question
+            ? 'Edit question'
+            : 'Add question'}
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Question"
+            value={answerDraft.question}
+            onChange={handleAnswerDraftChange('question')}
+            required
+            autoFocus
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Answer"
+            value={answerDraft.answer}
+            onChange={handleAnswerDraftChange('answer')}
+            placeholder={
+              answerEditIndex !== null
+                ? getAnswerFieldPlaceholder(form.answerItems[answerEditIndex]?.key)
+                : ''
+            }
+            multiline
+            minRows={2}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeAnswerEdit} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={handleSaveAnswerItem} variant="contained" disabled={saving}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={answerDeleteIndex !== null} onClose={() => setAnswerDeleteIndex(null)}>
+        <DialogTitle>Delete question</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Delete question <b>{form.answerItems[answerDeleteIndex]?.question || '—'}</b>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAnswerDeleteIndex(null)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteAnswerItem} color="error" variant="contained" disabled={saving}>
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
@@ -433,6 +688,12 @@ function IdentityManagement() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <IdentityDetailDialog
+        open={detailOpen}
+        identity={selectedIdentity}
+        onClose={closeDetail}
+      />
     </>
   );
 }

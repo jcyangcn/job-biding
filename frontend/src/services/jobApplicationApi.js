@@ -25,7 +25,11 @@ function authHeaders() {
 }
 
 export function listJobApplications(profileId) {
-  return fetch(`${API_BASE}/api/job-applications?profile_id=${profileId}`, {
+  const query =
+    profileId === undefined || profileId === null || profileId === ''
+      ? ''
+      : `?profile_id=${profileId}`;
+  return fetch(`${API_BASE}/api/job-applications${query}`, {
     headers: authHeaders()
   }).then(async (response) => {
     if (!response.ok) {
@@ -40,6 +44,31 @@ export function createJobApplication(payload) {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload)
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
+export function updateJobApplication(applicationId, payload) {
+  return fetch(`${API_BASE}/api/job-applications/${applicationId}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
+export function deleteJobApplication(applicationId) {
+  return fetch(`${API_BASE}/api/job-applications/${applicationId}`, {
+    method: 'DELETE',
+    headers: authHeaders()
   }).then(async (response) => {
     if (!response.ok) {
       throw new Error(await parseError(response));

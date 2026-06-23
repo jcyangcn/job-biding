@@ -55,6 +55,7 @@ class JobIdentity(Base):
     github: Mapped[str | None] = mapped_column(String(500), nullable=True)
     dob: Mapped[date | None] = mapped_column(Date, nullable=True)
     ssn: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    answers: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -72,14 +73,13 @@ class JobProfile(Base):
     bidder_user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    caller_user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    caller_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
     roles: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     email_password: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str] = mapped_column(String(50), nullable=False)
-    answers: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     proxy: Mapped[str | None] = mapped_column(String(500), nullable=True)
     reference_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

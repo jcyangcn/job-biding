@@ -96,7 +96,8 @@ function ProfileCard({ profile, onClick }) {
             <Box display="flex" alignItems="center" gap={1}>
               <WorkTwoToneIcon fontSize="small" color="action" />
               <Typography variant="body2" noWrap>
-                Bidder: {profile.bidder_name} · Caller: {profile.caller_name}
+                Bidder: {profile.bidder_name}
+                {profile.caller_name ? ` · Caller: ${profile.caller_name}` : ''}
               </Typography>
             </Box>
           </Box>

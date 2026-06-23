@@ -25,7 +25,11 @@ function authHeaders() {
 }
 
 export function listProgressionEmails(profileId) {
-  return fetch(`${API_BASE}/api/job-progression-emails?profile_id=${profileId}`, {
+  const query =
+    profileId === undefined || profileId === null || profileId === ''
+      ? ''
+      : `?profile_id=${profileId}`;
+  return fetch(`${API_BASE}/api/job-progression-emails${query}`, {
     headers: authHeaders()
   }).then(async (response) => {
     if (!response.ok) {
@@ -52,6 +56,31 @@ export function createProgressionEmail(payload) {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload)
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
+export function updateProgressionEmail(emailId, payload) {
+  return fetch(`${API_BASE}/api/job-progression-emails/${emailId}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
+export function deleteProgressionEmail(emailId) {
+  return fetch(`${API_BASE}/api/job-progression-emails/${emailId}`, {
+    method: 'DELETE',
+    headers: authHeaders()
   }).then(async (response) => {
     if (!response.ok) {
       throw new Error(await parseError(response));

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
-import PageTitleWrapper from 'src/components/PageTitleWrapper';
+import Label from 'src/components/Label';
 import {
   Autocomplete,
   Box,
@@ -14,7 +14,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
-  Grid,
   IconButton,
   Switch,
   Table,
@@ -30,11 +29,15 @@ import {
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
-import PersonPinTwoToneIcon from '@mui/icons-material/PersonPinTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
+import ProfileDetailDialog from './ProfileDetailDialog';
+import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
+import { useDetailDialog } from 'src/components/DetailDialog';
+import useTableListFilters from 'src/hooks/useTableListFilters';
+import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
+import { uniqueFieldValues } from 'src/utils/tableListFilters';
 import { formatIdentityLabel } from 'src/data/countryCodes';
-import PROFILE_ANSWER_FIELDS, { buildEmptyAnswers } from 'src/data/profileAnswerFields';
 import { listIdentities } from 'src/services/identityApi';
 import {
   createProfile,
@@ -54,12 +57,44 @@ const emptyForm = {
   email_password: '',
   phone: '',
   proxy: '',
-  is_active: true,
-  answers: buildEmptyAnswers()
+  is_active: true
 };
+
+const PROFILE_SEARCH_FIELDS = [
+  'id',
+  'identity_name',
+  'bidder_name',
+  'caller_name',
+  'roles',
+  'reference_tag',
+  'email',
+  'phone',
+  'proxy',
+  (row) => (row.is_active ? 'active' : 'inactive')
+];
+
+const PROFILE_EMPTY_ROLE = '__empty__';
+
+const PROFILE_SELECT_FILTERS = [
+  {
+    id: 'role',
+    getValue: (row) => row.roles?.trim() || PROFILE_EMPTY_ROLE,
+    emptyValue: PROFILE_EMPTY_ROLE
+  },
+  { id: 'active', getValue: (row) => String(row.is_active) }
+];
+
+const ACTIVE_FILTER_OPTIONS = [
+  { value: 'true', label: 'Active' },
+  { value: 'false', label: 'Inactive' }
+];
 
 function ProfileManagement() {
   const { enqueueSnackbar } = useSnackbar();
+  useSetPageHeader(
+    'Profile Management',
+    'Manage job profiles linked to identities, bidders, and callers'
+  );
   const [rows, setRows] = useState([]);
   const [identities, setIdentities] = useState([]);
   const [users, setUsers] = useState([]);
@@ -70,6 +105,35 @@ function ProfileManagement() {
   const [deletingRecord, setDeletingRecord] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const { open: detailOpen, selected: selectedProfile, openDetail, closeDetail, stopPropagation } =
+    useDetailDialog();
+  const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    selectValues,
+    setSelectValue,
+    filteredRows,
+    clearFilters,
+    hasActiveFilters,
+    showDateRange
+  } = useTableListFilters(rows, {
+    searchFields: PROFILE_SEARCH_FIELDS,
+    dateField: 'created_at',
+    selects: PROFILE_SELECT_FILTERS
+  });
+
+  const roleOptions = useMemo(
+    () =>
+      uniqueFieldValues(rows, 'roles', { emptyValue: PROFILE_EMPTY_ROLE }).map((value) => ({
+        value,
+        label: value === PROFILE_EMPTY_ROLE ? '(No role)' : value
+      })),
+    [rows]
+  );
 
   const selectedIdentity = useMemo(
     () => identities.find((item) => item.id === form.identity_id) || null,
@@ -119,19 +183,19 @@ function ProfileManagement() {
   };
 
   const openEditDialog = (record) => {
+    closeDetail();
     setEditingRecord(record);
     setForm({
       identity_id: record.identity_id,
       bidder_user_id: record.bidder_user_id,
-      caller_user_id: record.caller_user_id,
+      caller_user_id: record.caller_user_id || '',
       roles: record.roles,
       reference_tag: record.reference_tag || '',
       email: record.email,
       email_password: record.email_password,
       phone: record.phone,
       proxy: record.proxy || '',
-      is_active: record.is_active,
-      answers: { ...buildEmptyAnswers(), ...(record.answers || {}) }
+      is_active: record.is_active
     });
     setDialogOpen(true);
   };
@@ -150,39 +214,27 @@ function ProfileManagement() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const handleAnswerChange = (key) => (event) => {
-    const { value } = event.target;
-    setForm((current) => ({
-      ...current,
-      answers: { ...current.answers, [key]: value }
-    }));
-  };
-
   const buildPayload = () => ({
     identity_id: form.identity_id,
     bidder_user_id: form.bidder_user_id,
-    caller_user_id: form.caller_user_id,
+    caller_user_id: form.caller_user_id || null,
     roles: form.roles.trim(),
     reference_tag: form.reference_tag.trim() || null,
     email: form.email.trim(),
     email_password: form.email_password,
     phone: form.phone.trim(),
     proxy: form.proxy.trim() || null,
-    is_active: form.is_active,
-    answers: form.answers
+    is_active: form.is_active
   });
 
   const handleSave = async () => {
     if (
       !form.identity_id ||
       !form.bidder_user_id ||
-      !form.caller_user_id ||
-      !form.roles.trim() ||
       !form.email.trim() ||
-      !form.email_password ||
-      !form.phone.trim()
+      !form.email_password
     ) {
-      enqueueSnackbar('Identity, users, roles, email, email password, and phone are required', {
+      enqueueSnackbar('Identity, bidder, email, and email password are required', {
         variant: 'warning'
       });
       return;
@@ -233,45 +285,68 @@ function ProfileManagement() {
       <Helmet>
         <title>Profile Management - {PROJECT_NAME}</title>
       </Helmet>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center" spacing={2}>
-          <Grid item>
-            <Typography component="h1" variant="h3" gutterBottom>
-              Profile Management
-            </Typography>
-            <Typography variant="subtitle2">
-              Manage job profiles linked to identities, bidders, and callers.
-            </Typography>
-          </Grid>
-          <Grid item>
-            <Box display="flex" gap={1}>
-              <Button
-                variant="outlined"
-                startIcon={<RefreshTwoToneIcon />}
-                onClick={loadData}
-                disabled={loading || saving}
-              >
-                Refresh
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddTwoToneIcon />}
-                onClick={openCreateDialog}
-                disabled={saving}
-              >
-                Add profile
-              </Button>
-            </Box>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ pt: 3 }}>
+        <Box sx={{ mb: 2 }}>
+          <TableListFilters
+            singleLine
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search identity, bidder, email, roles…"
+            showDateRange={showDateRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            dateFromLabel="Created from"
+            dateToLabel="Created to"
+            selects={[
+              {
+                id: 'role',
+                label: 'Role',
+                value: selectValues.role,
+                onChange: (value) => setSelectValue('role', value),
+                options: roleOptions
+              },
+              {
+                id: 'active',
+                label: 'Active',
+                value: selectValues.active,
+                onChange: (value) => setSelectValue('active', value),
+                options: ACTIVE_FILTER_OPTIONS
+              }
+            ]}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            filteredCount={filteredRows.length}
+            totalCount={rows.length}
+            actions={
+              <>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<RefreshTwoToneIcon />}
+                  onClick={loadData}
+                  disabled={loading || saving}
+                  sx={compactButtonSx}
+                >
+                  Refresh
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<AddTwoToneIcon />}
+                  onClick={openCreateDialog}
+                  disabled={saving}
+                  sx={compactButtonSx}
+                >
+                  Add profile
+                </Button>
+              </>
+            }
+          />
+        </Box>
         <Card>
           <CardContent>
-            <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <PersonPinTwoToneIcon color="primary" />
-              <Typography variant="h4">Job profiles</Typography>
-            </Box>
             <TableContainer>
               <Table>
                 <TableHead>
@@ -295,19 +370,32 @@ function ProfileManagement() {
                         {loading ? 'Loading…' : 'No profiles found.'}
                       </TableCell>
                     </TableRow>
+                  ) : filteredRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10}>No profiles match your filters.</TableCell>
+                    </TableRow>
                   ) : (
-                    rows.map((row) => (
-                      <TableRow key={row.id} hover>
+                    filteredRows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => openDetail(row)}
+                      >
                         <TableCell>{row.id}</TableCell>
                         <TableCell>{row.identity_name}</TableCell>
                         <TableCell>{row.bidder_name}</TableCell>
-                        <TableCell>{row.caller_name}</TableCell>
+                        <TableCell>{row.caller_name || '—'}</TableCell>
                         <TableCell>{row.roles}</TableCell>
                         <TableCell>{row.reference_tag || '—'}</TableCell>
                         <TableCell>{row.email}</TableCell>
                         <TableCell>{row.phone}</TableCell>
-                        <TableCell>{row.is_active ? 'Yes' : 'No'}</TableCell>
-                        <TableCell align="right">
+                        <TableCell>
+                          <Label color={row.is_active ? 'success' : 'error'}>
+                            {row.is_active ? 'Active' : 'Inactive'}
+                          </Label>
+                        </TableCell>
+                        <TableCell align="right" onClick={stopPropagation}>
                           <Tooltip title="Edit">
                             <IconButton
                               color="primary"
@@ -385,7 +473,7 @@ function ProfileManagement() {
             openOnFocus
             disablePortal
             renderInput={(params) => (
-              <TextField {...params} margin="normal" label="Caller" required />
+              <TextField {...params} margin="normal" label="Caller" />
             )}
           />
           <TextField
@@ -394,7 +482,6 @@ function ProfileManagement() {
             label="Roles"
             value={form.roles}
             onChange={handleFormChange('roles')}
-            required
           />
           <TextField
             fullWidth
@@ -428,7 +515,6 @@ function ProfileManagement() {
             label="Phone"
             value={form.phone}
             onChange={handleFormChange('phone')}
-            required
           />
           <TextField
             fullWidth
@@ -448,30 +534,6 @@ function ProfileManagement() {
             }
             label="Active"
           />
-
-          <Typography variant="h5" sx={{ mt: 3, mb: 1 }}>
-            Answers
-          </Typography>
-          <Grid container spacing={2}>
-            {PROFILE_ANSWER_FIELDS.map((field) => (
-              <Grid item xs={12} key={field.key}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} md={5}>
-                    <Typography variant="body1">{field.label}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={7}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder={field.placeholder}
-                      value={form.answers[field.key] || ''}
-                      onChange={handleAnswerChange(field.key)}
-                    />
-                  </Grid>
-                </Grid>
-              </Grid>
-            ))}
-          </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={closeDialog} disabled={saving}>
@@ -499,6 +561,12 @@ function ProfileManagement() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ProfileDetailDialog
+        open={detailOpen}
+        profile={selectedProfile}
+        onClose={closeDetail}
+      />
     </>
   );
 }

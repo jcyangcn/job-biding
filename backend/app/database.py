@@ -176,6 +176,87 @@ def migrate_job_profile_columns() -> None:
                 )
             )
 
+        caller_nullable = conn.execute(
+            text(
+                """
+                SELECT is_nullable
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_profile'
+                  AND column_name = 'caller_user_id'
+                """
+            )
+        ).scalar()
+        if caller_nullable == "NO":
+            conn.execute(
+                text(
+                    "ALTER TABLE job_profile ALTER COLUMN caller_user_id DROP NOT NULL"
+                )
+            )
+
+
+def migrate_answers_to_identity() -> None:
+    with engine.begin() as conn:
+        identity_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_identity'
+                """
+            )
+        ).scalar()
+        if not identity_exists:
+            return
+
+        answers_on_identity = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_identity'
+                  AND column_name = 'answers'
+                """
+            )
+        ).scalar()
+        if not answers_on_identity:
+            conn.execute(
+                text(
+                    "ALTER TABLE job_identity ADD COLUMN answers JSONB NOT NULL DEFAULT '{}'"
+                )
+            )
+
+        profile_has_answers = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_profile'
+                  AND column_name = 'answers'
+                """
+            )
+        ).scalar()
+        if profile_has_answers:
+            conn.execute(
+                text(
+                    """
+                    UPDATE job_identity i
+                    SET answers = sub.answers
+                    FROM (
+                        SELECT DISTINCT ON (identity_id) identity_id, answers
+                        FROM job_profile
+                        WHERE answers IS NOT NULL AND answers <> '{}'::jsonb
+                        ORDER BY identity_id, id
+                    ) sub
+                    WHERE i.id = sub.identity_id
+                      AND (i.answers IS NULL OR i.answers = '{}'::jsonb)
+                    """
+                )
+            )
+            conn.execute(text("ALTER TABLE job_profile DROP COLUMN answers"))
+
 
 def init_db() -> None:
     from app import db_models  # noqa: F401
@@ -186,6 +267,7 @@ def init_db() -> None:
     migrate_job_identity_columns()
     migrate_job_application_columns()
     migrate_job_profile_columns()
+    migrate_answers_to_identity()
     with SessionLocal() as db:
         seed_default_users(db)
 

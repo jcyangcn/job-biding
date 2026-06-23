@@ -44,6 +44,12 @@ const IdentityManagement = Loader(
 const ProfileManagement = Loader(
   lazy(() => import('src/content/applications/ProfileManagement'))
 );
+const ApplicationManagement = Loader(
+  lazy(() => import('src/content/applications/ApplicationManagement'))
+);
+const EmailManagement = Loader(
+  lazy(() => import('src/content/applications/EmailManagement'))
+);
 const Applications = Loader(
   lazy(() => import('src/content/applications/Applications'))
 );
@@ -121,6 +127,22 @@ const applicationsRoutes = [
     element: (
       <RequireAdmin>
         <ProfileManagement />
+      </RequireAdmin>
+    )
+  },
+  {
+    path: 'application-management',
+    element: (
+      <RequireAdmin>
+        <ApplicationManagement />
+      </RequireAdmin>
+    )
+  },
+  {
+    path: 'email-management',
+    element: (
+      <RequireAdmin>
+        <EmailManagement />
       </RequireAdmin>
     )
   },

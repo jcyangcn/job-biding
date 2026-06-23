@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
-import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import {
   Box,
   Button,
@@ -27,11 +26,13 @@ import PersonTwoToneIcon from '@mui/icons-material/PersonTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import SendTwoToneIcon from '@mui/icons-material/SendTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
+import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { createJobApplication } from 'src/services/jobApplicationApi';
 import { listProfiles } from 'src/services/profileApi';
+import SaveResumeDialog from 'src/components/SaveResumeDialog';
 import {
   buildResumeRequest,
-  generateResumePdf,
+  fetchResumePdf,
   listResumeGenerations,
   loadDefaultProfileJson,
   loadDefaultProfileMarkdown
@@ -51,6 +52,8 @@ function ApplicationDetails() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [pendingResume, setPendingResume] = useState(null);
   const [resumeSource, setResumeSource] = useState('generated');
   const [profileMode, setProfileMode] = useState('markdown');
   const [profileMarkdown, setProfileMarkdown] = useState('');
@@ -66,6 +69,24 @@ function ApplicationDetails() {
 
   const selectedGeneration = resumeGenerations.find(
     (generation) => generation.id === form.resume_generated_id
+  );
+
+  const headerLeading = useMemo(
+    () => (
+      <IconButton
+        color="primary"
+        onClick={() => navigate(`/applications/job-applications/${profileId}`)}
+      >
+        <ArrowBackTwoToneIcon />
+      </IconButton>
+    ),
+    [navigate, profileId]
+  );
+
+  useSetPageHeader(
+    'New application',
+    profile ? `${profile.identity_name} · ${profile.email}` : '',
+    profile ? headerLeading : null
   );
 
   const loadData = useCallback(async () => {
@@ -153,14 +174,16 @@ function ApplicationDetails() {
         profileMarkdown,
         profileJson
       });
-      const { filename, generationId } = await generateResumePdf(body);
+      const { buffer, filename, generationId } = await fetchResumePdf(body);
       const generationRows = await listResumeGenerations();
       setResumeGenerations(generationRows);
       const selectedId = generationId || generationRows[0]?.id || '';
       if (selectedId) {
         setForm((current) => ({ ...current, resume_generated_id: selectedId }));
       }
-      enqueueSnackbar(`Done — downloaded ${filename}`, { variant: 'success' });
+      setPendingResume({ buffer, filename });
+      setSaveDialogOpen(true);
+      enqueueSnackbar('Resume generated. Choose where to save it.', { variant: 'success' });
     } catch (err) {
       enqueueSnackbar(err.message || 'Something went wrong.', { variant: 'error' });
     } finally {
@@ -168,22 +191,36 @@ function ApplicationDetails() {
     }
   };
 
+  const handleResumeSaved = (result) => {
+    if (result.error) {
+      enqueueSnackbar(result.error, { variant: 'error' });
+      return;
+    }
+    if (result.cancelled) {
+      enqueueSnackbar('Save cancelled — try Save PDF or Download PDF', { variant: 'info' });
+      return;
+    }
+    if (result.usedFallback) {
+      enqueueSnackbar(
+        `Save dialog failed — downloaded ${result.filename} instead. Enable “Ask where to save” in browser settings for Save As.`,
+        { variant: 'warning' }
+      );
+    } else {
+      enqueueSnackbar(`Done — saved ${result.filename}`, { variant: 'success' });
+    }
+    setSaveDialogOpen(false);
+    setPendingResume(null);
+  };
+
+  const handleCloseSaveDialog = () => {
+    setSaveDialogOpen(false);
+    setPendingResume(null);
+  };
+
   const handleSubmit = async () => {
     if (!profile) return;
-    if (!form.role.trim() || !form.company.trim() || !form.link.trim()) {
-      enqueueSnackbar('Role, company, and link are required', { variant: 'warning' });
-      return;
-    }
-    if (!form.job_description.trim()) {
-      enqueueSnackbar('Job description is required', { variant: 'warning' });
-      return;
-    }
-    if (resumeSource === 'generated' && !form.resume_generated_id) {
-      enqueueSnackbar('Generate a PDF resume first', { variant: 'warning' });
-      return;
-    }
-    if (resumeSource === 'online' && !form.resume_online_link.trim()) {
-      enqueueSnackbar('Enter a resume online link', { variant: 'warning' });
+    if (!form.link.trim()) {
+      enqueueSnackbar('Link is required', { variant: 'warning' });
       return;
     }
 
@@ -196,9 +233,13 @@ function ApplicationDetails() {
         link: form.link.trim(),
         job_description: form.job_description.trim(),
         resume_generated_id:
-          resumeSource === 'generated' ? form.resume_generated_id : null,
+          resumeSource === 'generated' && form.resume_generated_id
+            ? form.resume_generated_id
+            : null,
         resume_online_link:
-          resumeSource === 'online' ? form.resume_online_link.trim() : null
+          resumeSource === 'online' && form.resume_online_link.trim()
+            ? form.resume_online_link.trim()
+            : null
       });
       enqueueSnackbar('Application submitted', { variant: 'success' });
       navigate(`/applications/job-applications/${profile.id}`);
@@ -218,38 +259,11 @@ function ApplicationDetails() {
       <Helmet>
         <title>{profile.identity_name} - Application - {PROJECT_NAME}</title>
       </Helmet>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Box display="flex" alignItems="center" gap={1}>
-              <IconButton
-                color="primary"
-                onClick={() =>
-                  navigate(`/applications/job-applications/${profile.id}`)
-                }
-              >
-                <ArrowBackTwoToneIcon />
-              </IconButton>
-              <Box>
-                <Typography component="h1" variant="h3" gutterBottom sx={{ mb: 0 }}>
-                  New application
-                </Typography>
-                <Typography variant="subtitle2">
-                  {profile.identity_name} · {profile.email}
-                </Typography>
-              </Box>
-            </Box>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ pt: 3 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Card>
               <CardContent>
-                <Typography variant="h4" gutterBottom>
-                  Application details
-                </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={4}>
                     <TextField
@@ -257,7 +271,6 @@ function ApplicationDetails() {
                       label="Role"
                       value={form.role}
                       onChange={handleFormChange('role')}
-                      required
                     />
                   </Grid>
                   <Grid item xs={12} md={4}>
@@ -266,7 +279,6 @@ function ApplicationDetails() {
                       label="Company"
                       value={form.company}
                       onChange={handleFormChange('company')}
-                      required
                     />
                   </Grid>
                   <Grid item xs={12} md={4}>
@@ -289,7 +301,6 @@ function ApplicationDetails() {
                   minRows={10}
                   value={form.job_description}
                   onChange={handleFormChange('job_description')}
-                  required
                 />
 
                 <FormControl sx={{ mt: 3 }}>
@@ -388,7 +399,6 @@ function ApplicationDetails() {
                     placeholder="https://..."
                     value={form.resume_online_link}
                     onChange={handleFormChange('resume_online_link')}
-                    required
                   />
                 )}
 
@@ -407,6 +417,14 @@ function ApplicationDetails() {
           </Grid>
         </Grid>
       </Container>
+
+      <SaveResumeDialog
+        open={saveDialogOpen}
+        filename={pendingResume?.filename}
+        buffer={pendingResume?.buffer}
+        onClose={handleCloseSaveDialog}
+        onSaved={handleResumeSaved}
+      />
     </>
   );
 }

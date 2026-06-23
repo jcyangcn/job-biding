@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
-import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import {
   Box,
   CircularProgress,
@@ -12,12 +11,17 @@ import {
 } from '@mui/material';
 import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
+import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { listProfiles } from 'src/services/profileApi';
 import ProfileCard from './ProfileCard';
 
 function Applications() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  useSetPageHeader(
+    'Applications',
+    'Choose a profile to view and manage job applications'
+  );
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -53,19 +57,7 @@ function Applications() {
       <Helmet>
         <title>Applications - {PROJECT_NAME}</title>
       </Helmet>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography component="h1" variant="h3" gutterBottom>
-              Applications
-            </Typography>
-            <Typography variant="subtitle2">
-              Choose a profile to view and manage job applications.
-            </Typography>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ pt: 3 }}>
         {loading ? (
           <Box display="flex" justifyContent="center" py={8}>
             <CircularProgress />

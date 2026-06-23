@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db_models import JobApplication, JobIdentity, JobProfile, ResumeGeneration, User
-from app.models import JobApplicationCreateRequest
+from app.models import JobApplicationCreateRequest, JobApplicationUpdateRequest
 from app.profile_service import _format_identity_label, get_profile
 from app.user_roles import UserRole
 
@@ -37,13 +37,30 @@ def application_to_response(db: Session, record: JobApplication) -> dict:
     }
 
 
-def _validate_resume_source(data: JobApplicationCreateRequest) -> None:
-    has_generated = data.resume_generated_id is not None
-    has_online = bool(data.resume_online_link and data.resume_online_link.strip())
+def _validate_resume_source_fields(
+    resume_generated_id: int | None, resume_online_link: str | None
+) -> None:
+    has_generated = resume_generated_id is not None
+    has_online = bool(resume_online_link and resume_online_link.strip())
     if has_generated and has_online:
         raise ValueError("Provide only one of resume_generated_id or resume_online_link")
-    if not has_generated and not has_online:
-        raise ValueError("Provide either resume_generated_id or resume_online_link")
+
+
+def _validate_resume_source(data: JobApplicationCreateRequest) -> None:
+    _validate_resume_source_fields(data.resume_generated_id, data.resume_online_link)
+
+
+def get_application(db: Session, application_id: int) -> JobApplication | None:
+    return db.get(JobApplication, application_id)
+
+
+def _ensure_application_access(db: Session, record: JobApplication, user: User) -> JobProfile:
+    profile = get_profile(db, record.profile_id)
+    if not profile:
+        raise ValueError("Profile not found")
+    if not user_can_access_profile(user, profile):
+        raise PermissionError("Access denied")
+    return profile
 
 
 def create_application(
@@ -100,3 +117,55 @@ def list_applications_for_profile(
             .order_by(JobApplication.applied_at.desc(), JobApplication.id.desc())
         ).all()
     )
+
+
+def list_applications_admin(
+    db: Session, user: User, profile_id: int | None = None
+) -> list[JobApplication]:
+    if user.role != UserRole.admin:
+        raise PermissionError("Access denied")
+
+    query = select(JobApplication).order_by(
+        JobApplication.applied_at.desc(), JobApplication.id.desc()
+    )
+    if profile_id is not None:
+        query = query.where(JobApplication.profile_id == profile_id)
+
+    return list(db.scalars(query).all())
+
+
+def update_application(
+    db: Session, application_id: int, data: JobApplicationUpdateRequest, user: User
+) -> JobApplication:
+    record = get_application(db, application_id)
+    if not record:
+        raise ValueError("Application not found")
+
+    _ensure_application_access(db, record, user)
+    _validate_resume_source_fields(data.resume_generated_id, data.resume_online_link)
+
+    if data.resume_generated_id is not None:
+        generation = db.get(ResumeGeneration, data.resume_generated_id)
+        if not generation:
+            raise ValueError("Resume generation not found")
+
+    record.role = data.role.strip()
+    record.company = data.company.strip()
+    record.link = data.link.strip()
+    record.job_description = data.job_description.strip()
+    record.resume_generated_id = data.resume_generated_id
+    record.resume_online_link = (
+        data.resume_online_link.strip() if data.resume_online_link else None
+    )
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def delete_application(db: Session, application_id: int, user: User) -> None:
+    record = get_application(db, application_id)
+    if not record:
+        raise ValueError("Application not found")
+    _ensure_application_access(db, record, user)
+    db.delete(record)
+    db.commit()

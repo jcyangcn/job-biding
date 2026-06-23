@@ -41,6 +41,72 @@ const PROFILE_ANSWER_FIELDS = [
   }
 ];
 
+const PREDEFINED_FIELD_MAP = Object.fromEntries(
+  PROFILE_ANSWER_FIELDS.map((field) => [field.key, field])
+);
+
+export function getAnswerFieldLabel(key) {
+  return PREDEFINED_FIELD_MAP[key]?.label || key.replace(/_/g, ' ');
+}
+
+export function getAnswerFieldPlaceholder(key) {
+  return PREDEFINED_FIELD_MAP[key]?.placeholder || '';
+}
+
+function slugifyQuestion(text) {
+  const slug = text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w]+/g, '_')
+    .replace(/^_|_$/g, '');
+  return slug || `custom_${Date.now()}`;
+}
+
+export function buildEmptyAnswerItems() {
+  return PROFILE_ANSWER_FIELDS.map((field) => ({
+    id: field.key,
+    key: field.key,
+    question: field.label,
+    answer: '',
+    predefined: true
+  }));
+}
+
+export function answersToItems(answers = {}) {
+  const items = buildEmptyAnswerItems().map((item) => ({
+    ...item,
+    answer: answers[item.key] || ''
+  }));
+  const usedKeys = new Set(items.map((item) => item.key));
+
+  Object.entries(answers).forEach(([key, answer]) => {
+    if (usedKeys.has(key)) return;
+    items.push({
+      id: key,
+      key,
+      question: getAnswerFieldLabel(key),
+      answer: answer || '',
+      predefined: false
+    });
+  });
+
+  return items;
+}
+
+export function itemsToAnswers(items) {
+  return items.reduce((acc, item) => {
+    const question = item.question?.trim() || '';
+    const answer = item.answer?.trim() || '';
+    if (!question && !answer) return acc;
+
+    const key = item.predefined
+      ? item.key
+      : slugifyQuestion(question || item.key || item.id);
+    acc[key] = answer;
+    return acc;
+  }, {});
+}
+
 export function buildEmptyAnswers() {
   return PROFILE_ANSWER_FIELDS.reduce((acc, field) => {
     acc[field.key] = '';

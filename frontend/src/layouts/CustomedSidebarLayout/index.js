@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Box, alpha, lighten, useTheme } from '@mui/material';
+import { Box, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import ThemeSettings from 'src/components/ThemeSettings';
+import { PageHeaderProvider } from 'src/contexts/PageHeaderContext';
 
 import Sidebar from './Sidebar';
 import Sidebar1 from '../CollapsedSidebarLayout/Sidebar';
@@ -12,61 +13,42 @@ const CustomedSidebarLayout = () => {
   const [isExtended, setIsExtended] = useState(true);
 
   return (
-    <Box
-      sx={{
-        flex: 1,
-        height: '100%',
-
-        '.MuiPageTitle-wrapper': {
-          background:
-            theme.palette.mode === 'dark'
-              ? theme.colors.alpha.trueWhite[5]
-              : theme.colors.alpha.white[50],
-          marginBottom: `${theme.spacing(4)}`,
-          boxShadow:
-            theme.palette.mode === 'dark'
-              ? `0 1px 0 ${alpha(
-                lighten(theme.colors.primary.main, 0.7),
-                0.15
-              )}, 0px 2px 4px -3px rgba(0, 0, 0, 0.2), 0px 5px 12px -4px rgba(0, 0, 0, .1)`
-              : `0px 2px 4px -3px ${alpha(
-                theme.colors.alpha.black[100],
-                0.1
-              )}, 0px 5px 12px -4px ${alpha(
-                theme.colors.alpha.black[100],
-                0.05
-              )}`
-        }
-      }}
-    >
-      <Header />
-      {isExtended ? <Sidebar isExtended={isExtended} setIsExtended={setIsExtended} />
-        : <Sidebar1 isExtended={isExtended} setIsExtended={setIsExtended} />}
+    <PageHeaderProvider>
       <Box
-        className="main-container"
         sx={{
-          position: 'relative',
-          zIndex: 5,
-          display: 'block',
           flex: 1,
-          pt: `${theme.header.height}`,
-          mx: 0,
-          '& .MuiContainer-root': {
-            marginLeft: 0,
-            marginRight: 0,
-            maxWidth: '100%'
-          },
-          [theme.breakpoints.up('lg')]: {
-            ml: `${isExtended ? theme.sidebar.width : 110}`
-          }
+          height: '100%'
         }}
       >
-        <Box display="block">
-          <Outlet />
+        <Header />
+        {isExtended ? <Sidebar isExtended={isExtended} setIsExtended={setIsExtended} />
+          : <Sidebar1 isExtended={isExtended} setIsExtended={setIsExtended} />}
+        <Box
+          className="main-container"
+          sx={{
+            position: 'relative',
+            zIndex: 5,
+            display: 'block',
+            flex: 1,
+            pt: `${theme.header.height}`,
+            mx: 0,
+            '& .MuiContainer-root': {
+              marginLeft: 0,
+              marginRight: 0,
+              maxWidth: '100%'
+            },
+            [theme.breakpoints.up('lg')]: {
+              ml: `${isExtended ? theme.sidebar.width : 110}`
+            }
+          }}
+        >
+          <Box display="block">
+            <Outlet />
+          </Box>
+          <ThemeSettings />
         </Box>
-        <ThemeSettings />
       </Box>
-    </Box>
+    </PageHeaderProvider>
   );
 };
 

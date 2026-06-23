@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
-import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import {
   Box,
   Button,
@@ -17,22 +16,30 @@ import {
 import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
 import PersonTwoToneIcon from '@mui/icons-material/PersonTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
+import SaveResumeDialog from 'src/components/SaveResumeDialog';
 import {
   buildResumeRequest,
-  generateResumePdf,
+  fetchResumePdf,
   loadDefaultJd,
   loadDefaultProfileJson,
   loadDefaultProfileMarkdown
 } from 'src/services/resumeApi';
 import { PROJECT_NAME } from 'src/config/app';
+import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 
 function ResumeBuilder() {
   const { enqueueSnackbar } = useSnackbar();
+  useSetPageHeader(
+    'Resume Builder',
+    'Paste a job description, choose a profile, and generate a tailored PDF resume'
+  );
   const [jobDescription, setJobDescription] = useState('');
   const [profileMode, setProfileMode] = useState('markdown');
   const [profileMarkdown, setProfileMarkdown] = useState('');
   const [profileJson, setProfileJson] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [pendingResume, setPendingResume] = useState(null);
 
   useEffect(() => {
     loadDefaultProfileMarkdown()
@@ -85,8 +92,10 @@ function ResumeBuilder() {
         profileMarkdown,
         profileJson
       });
-      const { filename } = await generateResumePdf(body);
-      notify(`Done — downloaded ${filename}`, 'success');
+      const { buffer, filename } = await fetchResumePdf(body);
+      setPendingResume({ buffer, filename });
+      setSaveDialogOpen(true);
+      notify('Resume generated. Choose where to save it.', 'success');
     } catch (err) {
       notify(err.message || 'Something went wrong.', 'error');
     } finally {
@@ -94,24 +103,38 @@ function ResumeBuilder() {
     }
   };
 
+  const handleResumeSaved = (result) => {
+    if (result.error) {
+      notify(result.error, 'error');
+      return;
+    }
+    if (result.cancelled) {
+      notify('Save cancelled — try Save PDF or Download PDF', 'info');
+      return;
+    }
+    if (result.usedFallback) {
+      notify(
+        `Save dialog failed — downloaded ${result.filename} instead. Enable “Ask where to save” in browser settings for Save As.`,
+        'warning'
+      );
+    } else {
+      notify(`Done — saved ${result.filename}`, 'success');
+    }
+    setSaveDialogOpen(false);
+    setPendingResume(null);
+  };
+
+  const handleCloseSaveDialog = () => {
+    setSaveDialogOpen(false);
+    setPendingResume(null);
+  };
+
   return (
     <>
       <Helmet>
         <title>Resume Builder - {PROJECT_NAME}</title>
       </Helmet>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography component="h1" variant="h3" gutterBottom>
-              Resume Builder
-            </Typography>
-            <Typography variant="subtitle2">
-              Paste a job description, choose a profile, and generate a tailored PDF resume.
-            </Typography>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ pt: 3 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Card>
@@ -208,6 +231,14 @@ function ResumeBuilder() {
           </Grid>
         </Grid>
       </Container>
+
+      <SaveResumeDialog
+        open={saveDialogOpen}
+        filename={pendingResume?.filename}
+        buffer={pendingResume?.buffer}
+        onClose={handleCloseSaveDialog}
+        onSaved={handleResumeSaved}
+      />
     </>
   );
 }

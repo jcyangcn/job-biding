@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.application_service import user_can_access_profile
 from app.db_models import JobIdentity, JobProgressionEmail, JobProfile, User
-from app.models import JobProgressionEmailCreateRequest
+from app.user_roles import UserRole
+from app.models import JobProgressionEmailCreateRequest, JobProgressionEmailUpdateRequest
 from app.profile_service import _format_identity_label, get_profile
 from app.progression_email_enums import (
     PROGRESSION_EMAIL_STATUS_VALUES,
@@ -13,11 +14,17 @@ from app.progression_email_enums import (
 )
 
 
-def _validate_type_and_status(data: JobProgressionEmailCreateRequest) -> None:
-    if data.type not in PROGRESSION_EMAIL_TYPE_VALUES:
+def _validate_type_and_status_values(type_value: str, status_value: str) -> None:
+    if type_value not in PROGRESSION_EMAIL_TYPE_VALUES:
         raise ValueError("Invalid progression email type")
-    if data.status not in PROGRESSION_EMAIL_STATUS_VALUES:
+    if status_value not in PROGRESSION_EMAIL_STATUS_VALUES:
         raise ValueError("Invalid progression email status")
+
+
+def _validate_type_and_status(
+    data: JobProgressionEmailCreateRequest | JobProgressionEmailUpdateRequest,
+) -> None:
+    _validate_type_and_status_values(data.type, data.status)
 
 
 def _sanitize_reference_tag(reference_tag: str | None, profile_id: int) -> str:
@@ -80,6 +87,22 @@ def preview_reference_no(db: Session, profile_id: int, user: User) -> str:
     return generate_reference_no(db, profile)
 
 
+def list_progression_emails_admin(
+    db: Session, user: User, profile_id: int | None = None
+) -> list[JobProgressionEmail]:
+    if user.role != UserRole.admin:
+        raise PermissionError("Access denied")
+
+    query = select(JobProgressionEmail).order_by(
+        JobProgressionEmail.email_date.desc(),
+        JobProgressionEmail.id.desc(),
+    )
+    if profile_id is not None:
+        query = query.where(JobProgressionEmail.profile_id == profile_id)
+
+    return list(db.scalars(query).all())
+
+
 def list_progression_emails_for_profile(
     db: Session, profile_id: int, user: User
 ) -> list[JobProgressionEmail]:
@@ -130,3 +153,48 @@ def create_progression_email(
     db.commit()
     db.refresh(record)
     return record
+
+
+def get_progression_email(db: Session, email_id: int) -> JobProgressionEmail | None:
+    return db.get(JobProgressionEmail, email_id)
+
+
+def _ensure_progression_email_access(
+    db: Session, record: JobProgressionEmail, user: User
+) -> JobProfile:
+    profile = get_profile(db, record.profile_id)
+    if not profile:
+        raise ValueError("Profile not found")
+    if not user_can_access_profile(user, profile):
+        raise PermissionError("Access denied")
+    return profile
+
+
+def update_progression_email(
+    db: Session, email_id: int, data: JobProgressionEmailUpdateRequest, user: User
+) -> JobProgressionEmail:
+    record = get_progression_email(db, email_id)
+    if not record:
+        raise ValueError("Progression email not found")
+
+    _ensure_progression_email_access(db, record, user)
+    _validate_type_and_status(data)
+
+    record.company = data.company.strip()
+    record.type = data.type
+    record.email_link = data.email_link.strip()
+    record.email_date = data.email_date
+    record.status = data.status
+    record.log = data.log or ""
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def delete_progression_email(db: Session, email_id: int, user: User) -> None:
+    record = get_progression_email(db, email_id)
+    if not record:
+        raise ValueError("Progression email not found")
+    _ensure_progression_email_access(db, record, user)
+    db.delete(record)
+    db.commit()

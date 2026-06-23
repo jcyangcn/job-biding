@@ -22,6 +22,14 @@ const menuItems = [
           {
             name: 'Profile Management',
             link: '/applications/profile-management'
+          },
+          {
+            name: 'Application Management',
+            link: '/applications/application-management'
+          },
+          {
+            name: 'Email Management',
+            link: '/applications/email-management'
           }
         ]
       }

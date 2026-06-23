@@ -16,7 +16,7 @@ def _format_identity_label(identity: JobIdentity | None) -> str:
 def _related_names(db: Session, record: JobProfile) -> tuple[str, str, str]:
     identity = db.get(JobIdentity, record.identity_id)
     bidder = db.get(User, record.bidder_user_id)
-    caller = db.get(User, record.caller_user_id)
+    caller = db.get(User, record.caller_user_id) if record.caller_user_id else None
     return (
         _format_identity_label(identity),
         bidder.full_name if bidder else "",
@@ -38,7 +38,6 @@ def profile_to_response(db: Session, record: JobProfile) -> dict:
         "email": record.email,
         "email_password": record.email_password,
         "phone": record.phone,
-        "answers": record.answers or {},
         "proxy": record.proxy,
         "reference_tag": record.reference_tag,
         "is_active": record.is_active,
@@ -54,9 +53,10 @@ def _validate_refs(db: Session, data: JobProfileCreateRequest) -> None:
     if not bidder:
         raise ValueError("Bidder user not found")
 
-    caller = db.get(User, data.caller_user_id)
-    if not caller:
-        raise ValueError("Caller user not found")
+    if data.caller_user_id is not None:
+        caller = db.get(User, data.caller_user_id)
+        if not caller:
+            raise ValueError("Caller user not found")
 
 
 def _validate_ref_updates(db: Session, updates: dict) -> None:
@@ -104,7 +104,6 @@ def create_profile(db: Session, data: JobProfileCreateRequest) -> JobProfile:
         email=data.email,
         email_password=data.email_password,
         phone=data.phone,
-        answers=data.answers or {},
         proxy=data.proxy or None,
         reference_tag=(data.reference_tag.strip() if data.reference_tag else None),
         is_active=data.is_active,
@@ -125,8 +124,6 @@ def update_profile(
             value = None
         if field == "reference_tag" and value == "":
             value = None
-        if field == "answers" and value is None:
-            value = {}
         setattr(record, field, value)
 
     db.commit()

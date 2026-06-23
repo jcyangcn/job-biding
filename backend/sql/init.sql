@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS job_identity (
     github VARCHAR(500),
     dob DATE,
     ssn VARCHAR(50),
+    answers JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -44,12 +45,11 @@ CREATE TABLE IF NOT EXISTS job_profile (
     id SERIAL PRIMARY KEY,
     identity_id INTEGER NOT NULL REFERENCES job_identity(id) ON DELETE RESTRICT,
     bidder_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    caller_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    caller_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
     roles VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
     email_password VARCHAR(255) NOT NULL,
     phone VARCHAR(50) NOT NULL,
-    answers JSONB NOT NULL DEFAULT '{}',
     proxy VARCHAR(500),
     reference_tag VARCHAR(255),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,

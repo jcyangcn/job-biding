@@ -17,6 +17,7 @@ def identity_to_response(record: JobIdentity) -> dict:
         "github": record.github,
         "dob": record.dob,
         "ssn": record.ssn,
+        "answers": record.answers or {},
         "created_at": record.created_at,
     }
 
@@ -40,6 +41,7 @@ def create_identity(db: Session, data: JobIdentityCreateRequest) -> JobIdentity:
         github=data.github or None,
         dob=data.dob,
         ssn=data.ssn or None,
+        answers=data.answers or {},
     )
     db.add(record)
     db.commit()
@@ -54,6 +56,8 @@ def update_identity(
     for field, value in updates.items():
         if field in ("linkedin", "github", "ssn", "city_state", "zipcode") and value == "":
             value = None
+        if field == "answers" and value is None:
+            value = {}
         setattr(record, field, value)
 
     db.commit()

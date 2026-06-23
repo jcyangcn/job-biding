@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
-import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import {
   Box,
   Button,
@@ -12,7 +11,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Grid,
   IconButton,
   MenuItem,
   Table,
@@ -28,9 +26,13 @@ import {
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
-import PeopleTwoToneIcon from '@mui/icons-material/PeopleTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
+import UserDetailDialog from './UserDetailDialog';
+import TableListFilters from 'src/components/TableListFilters';
+import { useDetailDialog } from 'src/components/DetailDialog';
+import useTableListFilters from 'src/hooks/useTableListFilters';
+import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import {
   createUser,
   deleteUser,
@@ -52,8 +54,20 @@ const emptyForm = {
   description: ''
 };
 
+const USER_SEARCH_FIELDS = [
+  'id',
+  'full_name',
+  'username',
+  'role',
+  'description',
+  (row) => USER_ROLES.find((option) => option.value === row.role)?.label
+];
+
+const USER_SELECT_FILTERS = [{ id: 'role', field: 'role' }];
+
 function UserManagement() {
   const { enqueueSnackbar } = useSnackbar();
+  useSetPageHeader('User Management', 'Add, edit, and delete users');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -62,6 +76,26 @@ function UserManagement() {
   const [deletingUser, setDeletingUser] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const { open: detailOpen, selected: selectedUser, openDetail, closeDetail, stopPropagation } =
+    useDetailDialog();
+  const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    selectValues,
+    setSelectValue,
+    filteredRows,
+    clearFilters,
+    hasActiveFilters,
+    showDateRange
+  } = useTableListFilters(rows, {
+    searchFields: USER_SEARCH_FIELDS,
+    dateField: null,
+    selects: USER_SELECT_FILTERS
+  });
 
   const dialogTitle = useMemo(
     () => (editingUser ? 'Edit user' : 'Add user'),
@@ -90,6 +124,7 @@ function UserManagement() {
   };
 
   const openEditDialog = (user) => {
+    closeDetail();
     setEditingUser(user);
     setForm({
       full_name: user.full_name,
@@ -182,45 +217,54 @@ function UserManagement() {
       <Helmet>
         <title>User Management - {PROJECT_NAME}</title>
       </Helmet>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center" spacing={2}>
-          <Grid item>
-            <Typography component="h1" variant="h3" gutterBottom>
-              User Management
-            </Typography>
-            <Typography variant="subtitle2">
-              Add, edit, and delete users stored in the database.
-            </Typography>
-          </Grid>
-          <Grid item>
-            <Box display="flex" gap={1}>
-              <Button
-                variant="outlined"
-                startIcon={<RefreshTwoToneIcon />}
-                onClick={loadUsers}
-                disabled={loading || saving}
-              >
-                Refresh
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddTwoToneIcon />}
-                onClick={openCreateDialog}
-                disabled={saving}
-              >
-                Add user
-              </Button>
-            </Box>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ pt: 3 }}>
+        <Box sx={{ mb: 2 }}>
+          <TableListFilters
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search name, username, role, description…"
+            showDateRange={showDateRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            selects={[
+              {
+                id: 'role',
+                label: 'Role',
+                value: selectValues.role,
+                onChange: (value) => setSelectValue('role', value),
+                options: USER_ROLES
+              }
+            ]}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            filteredCount={filteredRows.length}
+            totalCount={rows.length}
+            actions={
+              <>
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshTwoToneIcon />}
+                  onClick={loadUsers}
+                  disabled={loading || saving}
+                >
+                  Refresh
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<AddTwoToneIcon />}
+                  onClick={openCreateDialog}
+                  disabled={saving}
+                >
+                  Add user
+                </Button>
+              </>
+            }
+          />
+        </Box>
         <Card>
           <CardContent>
-            <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <PeopleTwoToneIcon color="primary" />
-              <Typography variant="h4">Users</Typography>
-            </Box>
             <TableContainer>
               <Table>
                 <TableHead>
@@ -240,9 +284,18 @@ function UserManagement() {
                         {loading ? 'Loading…' : 'No users found.'}
                       </TableCell>
                     </TableRow>
+                  ) : filteredRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6}>No users match your filters.</TableCell>
+                    </TableRow>
                   ) : (
-                    rows.map((row) => (
-                      <TableRow key={row.id} hover>
+                    filteredRows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => openDetail(row)}
+                      >
                         <TableCell>{row.id}</TableCell>
                         <TableCell>{row.full_name}</TableCell>
                         <TableCell>{row.username}</TableCell>
@@ -255,7 +308,7 @@ function UserManagement() {
                             {row.description || '—'}
                           </Typography>
                         </TableCell>
-                        <TableCell align="right">
+                        <TableCell align="right" onClick={stopPropagation}>
                           <Tooltip title="Edit">
                             <IconButton
                               color="primary"
@@ -360,6 +413,12 @@ function UserManagement() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <UserDetailDialog
+        open={detailOpen}
+        user={selectedUser}
+        onClose={closeDetail}
+      />
     </>
   );
 }

@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Form, HTTPException
+from fastapi import Depends, FastAPI, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,7 +25,10 @@ from app.identity_service import (
 from app.application_service import (
     application_to_response,
     create_application,
+    delete_application,
+    list_applications_admin,
     list_applications_for_profile,
+    update_application,
 )
 from app.profile_service import (
     create_profile,
@@ -37,9 +40,12 @@ from app.profile_service import (
 )
 from app.progression_email_service import (
     create_progression_email,
+    delete_progression_email,
+    list_progression_emails_admin,
     list_progression_emails_for_profile,
     preview_reference_no,
     progression_email_to_response,
+    update_progression_email,
 )
 from app.models import (
     GenerateResumeRequest,
@@ -59,12 +65,15 @@ from app.models import (
     JobProfileUpdateRequest,
     JobApplicationCreateRequest,
     JobApplicationResponse,
+    JobApplicationUpdateRequest,
     JobProgressionEmailCreateRequest,
     JobProgressionEmailReferencePreview,
     JobProgressionEmailResponse,
+    JobProgressionEmailUpdateRequest,
 )
 from app.pdf_renderer import next_resume_path, render_resume_pdf
 from app.profile_parser import load_default_profile, parse_profile_markdown
+from app.user_roles import UserRole
 from app.user_service import (
     create_user_record,
     delete_user,
@@ -301,12 +310,17 @@ def delete_job_profile_endpoint(
 
 @app.get("/api/job-applications", response_model=list[JobApplicationResponse])
 def list_job_applications_endpoint(
-    profile_id: int,
+    profile_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     try:
-        rows = list_applications_for_profile(db, profile_id, user)
+        if profile_id is None:
+            rows = list_applications_admin(db, user)
+        elif user.role == UserRole.admin:
+            rows = list_applications_admin(db, user, profile_id=profile_id)
+        else:
+            rows = list_applications_for_profile(db, profile_id, user)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -329,14 +343,50 @@ def create_job_application_endpoint(
     return application_to_response(db, record)
 
 
-@app.get("/api/job-progression-emails", response_model=list[JobProgressionEmailResponse])
-def list_job_progression_emails_endpoint(
-    profile_id: int,
+@app.put("/api/job-applications/{application_id}", response_model=JobApplicationResponse)
+def update_job_application_endpoint(
+    application_id: int,
+    request: JobApplicationUpdateRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     try:
-        rows = list_progression_emails_for_profile(db, profile_id, user)
+        record = update_application(db, application_id, request, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return application_to_response(db, record)
+
+
+@app.delete("/api/job-applications/{application_id}")
+def delete_job_application_endpoint(
+    application_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        delete_application(db, application_id, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.get("/api/job-progression-emails", response_model=list[JobProgressionEmailResponse])
+def list_job_progression_emails_endpoint(
+    profile_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        if profile_id is None:
+            rows = list_progression_emails_admin(db, user)
+        elif user.role == UserRole.admin:
+            rows = list_progression_emails_admin(db, user, profile_id=profile_id)
+        else:
+            rows = list_progression_emails_for_profile(db, profile_id, user)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -378,6 +428,40 @@ def create_job_progression_email_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return progression_email_to_response(db, record)
+
+
+@app.put(
+    "/api/job-progression-emails/{email_id}",
+    response_model=JobProgressionEmailResponse,
+)
+def update_job_progression_email_endpoint(
+    email_id: int,
+    request: JobProgressionEmailUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        record = update_progression_email(db, email_id, request, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return progression_email_to_response(db, record)
+
+
+@app.delete("/api/job-progression-emails/{email_id}")
+def delete_job_progression_email_endpoint(
+    email_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        delete_progression_email(db, email_id, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True}
 
 
 @app.get("/api/profile/default")

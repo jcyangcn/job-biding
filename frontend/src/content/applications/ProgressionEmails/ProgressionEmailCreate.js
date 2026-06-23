@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
-import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import {
   Box,
   Button,
@@ -16,12 +15,12 @@ import {
   InputLabel,
   MenuItem,
   Select,
-  TextField,
-  Typography
+  TextField
 } from '@mui/material';
 import ArrowBackTwoToneIcon from '@mui/icons-material/ArrowBackTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
+import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import {
   PROGRESSION_EMAIL_STATUSES,
   PROGRESSION_EMAIL_TYPES
@@ -53,6 +52,24 @@ function ProgressionEmailCreate() {
     status: 'received',
     log: ''
   });
+
+  const headerLeading = useMemo(
+    () => (
+      <IconButton
+        color="primary"
+        onClick={() => navigate(`/applications/progression-emails/${profileId}`)}
+      >
+        <ArrowBackTwoToneIcon />
+      </IconButton>
+    ),
+    [navigate, profileId]
+  );
+
+  useSetPageHeader(
+    'Add progression email',
+    profile ? `${profile.identity_name} · ${profile.email}` : '',
+    profile ? headerLeading : null
+  );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -128,31 +145,7 @@ function ProgressionEmailCreate() {
       <Helmet>
         <title>New progression email - {PROJECT_NAME}</title>
       </Helmet>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Box display="flex" alignItems="center" gap={1}>
-              <IconButton
-                color="primary"
-                onClick={() =>
-                  navigate(`/applications/progression-emails/${profile.id}`)
-                }
-              >
-                <ArrowBackTwoToneIcon />
-              </IconButton>
-              <Box>
-                <Typography component="h1" variant="h3" gutterBottom sx={{ mb: 0 }}>
-                  Add progression email
-                </Typography>
-                <Typography variant="subtitle2">
-                  {profile.identity_name} · {profile.email}
-                </Typography>
-              </Box>
-            </Box>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="md">
+      <Container maxWidth="md" sx={{ pt: 3 }}>
         <Card>
           <CardContent>
             <Grid container spacing={2}>

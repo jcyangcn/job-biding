@@ -3,28 +3,25 @@ import { useContext } from 'react';
 import {
   Box,
   alpha,
-  Stack,
   lighten,
-  Divider,
   IconButton,
   Tooltip,
+  Typography,
   styled,
   useTheme
 } from '@mui/material';
 import MenuTwoToneIcon from '@mui/icons-material/MenuTwoTone';
 import { SidebarContext } from 'src/contexts/SidebarContext';
+import { usePageHeader } from 'src/contexts/PageHeaderContext';
 import CloseTwoToneIcon from '@mui/icons-material/CloseTwoTone';
 
-import HeaderButtons from './Buttons';
 import HeaderUserbox from './Userbox';
-import HeaderSearch from './Search';
-import HeaderMenu from './Menu';
 
 const HeaderWrapper = styled(Box)(
   ({ theme }) => `
-        height: ${theme.header.height};
+        min-height: ${theme.header.height};
         color: ${theme.header.textColor};
-        padding: ${theme.spacing(0, 2)};
+        padding: ${theme.spacing(1, 2)};
         right: 0;
         z-index: 6;
         background-color: ${alpha(theme.header.background, 0.95)};
@@ -41,6 +38,7 @@ const HeaderWrapper = styled(Box)(
 
 function Header() {
   const { sidebarToggle, toggleSidebar } = useContext(SidebarContext);
+  const { pageHeader } = usePageHeader();
   const theme = useTheme();
 
   return (
@@ -63,22 +61,42 @@ function Header() {
             )}`
       }}
     >
-      <Stack
-        direction="row"
-        divider={<Divider orientation="vertical" flexItem />}
+      <Box
+        display="flex"
         alignItems="center"
-        spacing={2}
+        gap={1}
+        sx={{ flex: 1, minWidth: 0, pr: 2 }}
       >
-        <HeaderSearch />
-        <HeaderMenu />
-      </Stack>
-      <Box display="flex" alignItems="center">
-        <HeaderButtons />
+        {pageHeader.leading}
+        {pageHeader.title ? (
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              component="h1"
+              variant="h4"
+              noWrap
+              sx={{ lineHeight: 1.2, fontWeight: 700 }}
+            >
+              {pageHeader.title}
+            </Typography>
+            {pageHeader.description ? (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                noWrap
+                sx={{ lineHeight: 1.3 }}
+              >
+                {pageHeader.description}
+              </Typography>
+            ) : null}
+          </Box>
+        ) : null}
+      </Box>
+      <Box display="flex" alignItems="center" flexShrink={0}>
         <HeaderUserbox />
         <Box
           component="span"
           sx={{
-            ml: 2,
+            ml: 1,
             display: { lg: 'none', xs: 'inline-block' }
           }}
         >

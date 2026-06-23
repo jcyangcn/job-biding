@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
-import PageTitleWrapper from 'src/components/PageTitleWrapper';
 import {
   Box,
   Button,
@@ -9,7 +8,6 @@ import {
   CardContent,
   Chip,
   Container,
-  Grid,
   Table,
   TableBody,
   TableCell,
@@ -18,10 +16,14 @@ import {
   TableRow,
   Typography
 } from '@mui/material';
-import HistoryTwoToneIcon from '@mui/icons-material/HistoryTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
-import { fetchHealth, listResumeGenerations } from 'src/services/resumeApi';
+import { useDetailDialog } from 'src/components/DetailDialog';
+import TableListFilters from 'src/components/TableListFilters';
+import useTableListFilters from 'src/hooks/useTableListFilters';
+import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { PROJECT_NAME } from 'src/config/app';
+import { fetchHealth, listResumeGenerations } from 'src/services/resumeApi';
+import ResumeGenerationDetailDialog from './ResumeGenerationDetailDialog';
 
 function formatDate(value) {
   if (!value) return '—';
@@ -33,11 +35,43 @@ function profileName(profile) {
   return profile.name || '—';
 }
 
+const RESUME_HISTORY_SEARCH_FIELDS = [
+  'id',
+  'job_details',
+  'pdf_path',
+  (row) => profileName(row.profile)
+];
+
 function ResumeHistory() {
   const { enqueueSnackbar } = useSnackbar();
+  useSetPageHeader(
+    'Generation History',
+    'Recent resume generations saved by the backend'
+  );
   const [rows, setRows] = useState([]);
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
+  const {
+    open: detailOpen,
+    selected: selectedGeneration,
+    openDetail,
+    closeDetail
+  } = useDetailDialog();
+  const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    filteredRows,
+    clearFilters,
+    hasActiveFilters,
+    showDateRange
+  } = useTableListFilters(rows, {
+    searchFields: RESUME_HISTORY_SEARCH_FIELDS,
+    dateField: 'created_at'
+  });
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -64,29 +98,35 @@ function ResumeHistory() {
       <Helmet>
         <title>Generation History - {PROJECT_NAME}</title>
       </Helmet>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography component="h1" variant="h3" gutterBottom>
-              Generation History
-            </Typography>
-            <Typography variant="subtitle2">
-              Recent resume generations saved by the backend.
-            </Typography>
-          </Grid>
-          <Grid item>
-            <Button
-              variant="outlined"
-              startIcon={<RefreshTwoToneIcon />}
-              onClick={loadData}
-              disabled={loading}
-            >
-              Refresh
-            </Button>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ pt: 3 }}>
+        <Box sx={{ mb: 2 }}>
+          <TableListFilters
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search candidate, job details, PDF…"
+            showDateRange={showDateRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            dateFromLabel="Created from"
+            dateToLabel="Created to"
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            filteredCount={filteredRows.length}
+            totalCount={rows.length}
+            actions={
+              <Button
+                variant="outlined"
+                startIcon={<RefreshTwoToneIcon />}
+                onClick={loadData}
+                disabled={loading}
+              >
+                Refresh
+              </Button>
+            }
+          />
+        </Box>
         {health && (
           <Box mb={3} display="flex" gap={1} flexWrap="wrap">
             <Chip label={`API: ${health.status}`} color="primary" variant="outlined" />
@@ -97,10 +137,6 @@ function ResumeHistory() {
 
         <Card>
           <CardContent>
-            <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <HistoryTwoToneIcon color="primary" />
-              <Typography variant="h4">Recent generations</Typography>
-            </Box>
             <TableContainer>
               <Table>
                 <TableHead>
@@ -119,9 +155,18 @@ function ResumeHistory() {
                         {loading ? 'Loading…' : 'No generations yet.'}
                       </TableCell>
                     </TableRow>
+                  ) : filteredRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>No generations match your filters.</TableCell>
+                    </TableRow>
                   ) : (
-                    rows.map((row) => (
-                      <TableRow key={row.id} hover>
+                    filteredRows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => openDetail(row)}
+                      >
                         <TableCell>{row.id}</TableCell>
                         <TableCell>{profileName(row.profile)}</TableCell>
                         <TableCell sx={{ maxWidth: 360 }}>
@@ -140,6 +185,12 @@ function ResumeHistory() {
           </CardContent>
         </Card>
       </Container>
+
+      <ResumeGenerationDetailDialog
+        open={detailOpen}
+        generation={selectedGeneration}
+        onClose={closeDetail}
+      />
     </>
   );
 }
