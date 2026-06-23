@@ -13,8 +13,7 @@ import {
   ListItemAvatar,
   ListItemButton,
   ListItemText,
-  Tab,
-  Tabs,
+  Switch,
   TextField,
   Typography,
   styled,
@@ -25,8 +24,6 @@ import SearchTwoToneIcon from '@mui/icons-material/SearchTwoTone';
 import Label from 'src/components/Label';
 import Scrollbar from 'src/components/Scrollbar';
 import { matchesSearch } from 'src/utils/tableListFilters';
-
-const ALL_PROFILES = 'all';
 
 const SidebarRoot = styled(Card)(
   ({ theme }) => `
@@ -54,30 +51,41 @@ const SidebarRoot = styled(Card)(
 `
 );
 
-const TabsContainerWrapper = styled(Box)(
-  ({ theme }) => `
-    padding: 0 ${theme.spacing(2)};
+const ALL_PROFILES = 'all';
 
-    .MuiTabs-indicator {
-      min-height: 3px;
-      height: 3px;
-    }
-
-    .MuiTab-root {
-      min-height: 36px;
-      padding: 0;
-      margin-right: ${theme.spacing(2)};
-      font-size: ${theme.typography.pxToRem(13)};
-      font-weight: 600;
-      text-transform: none;
-      color: ${theme.colors.alpha.black[50]};
-
-      &.Mui-selected {
-        color: ${theme.colors.primary.main};
+const InactiveSwitch = styled(Switch)(({ theme }) => ({
+  width: 32,
+  height: 18,
+  padding: 0,
+  overflow: 'visible',
+  '& .MuiSwitch-switchBase': {
+    padding: 0,
+    top: '50%',
+    left: 1,
+    transform: 'translateY(-50%)',
+    transition: theme.transitions.create(['transform'], {
+      duration: theme.transitions.duration.shortest
+    }),
+    '&.Mui-checked': {
+      transform: 'translate(14px, -50%)',
+      '& + .MuiSwitch-track': {
+        opacity: 0.35
       }
     }
-`
-);
+  },
+  '& .MuiSwitch-thumb': {
+    width: 14,
+    height: 14,
+    boxShadow: `0 1px 3px ${theme.colors.alpha.black[20]}`
+  },
+  '& .MuiSwitch-track': {
+    width: 32,
+    height: 16,
+    borderRadius: 8,
+    opacity: 1,
+    backgroundColor: theme.colors.alpha.black[10]
+  }
+}));
 
 const PROFILE_SEARCH_FIELDS = [
   'identity_name',
@@ -105,19 +113,16 @@ function ProfileSidebar({
 }) {
   const theme = useTheme();
   const [search, setSearch] = useState('');
-  const [statusTab, setStatusTab] = useState('all');
+  const [showInactive, setShowInactive] = useState(false);
 
   const filteredProfiles = useMemo(
     () =>
       profiles.filter((profile) => {
-        const matchesStatus =
-          statusTab === 'all' ||
-          (statusTab === 'active' && profile.is_active) ||
-          (statusTab === 'inactive' && !profile.is_active);
+        const matchesStatus = showInactive ? !profile.is_active : profile.is_active;
 
         return matchesStatus && matchesSearch(profile, search, PROFILE_SEARCH_FIELDS);
       }),
-    [profiles, search, statusTab]
+    [profiles, search, showInactive]
   );
 
   const renderCount = (count) => (
@@ -162,20 +167,32 @@ function ProfileSidebar({
           />
         </Box>
 
-        <TabsContainerWrapper>
-          <Tabs
-            value={statusTab}
-            onChange={(_event, value) => setStatusTab(value)}
-            variant="scrollable"
-            scrollButtons="auto"
-            textColor="primary"
-            indicatorColor="primary"
+        <Box px={2} pb={0.75} flexShrink={0} display="flex" justifyContent="flex-end">
+          <Box
+            component="label"
+            htmlFor="profile-show-inactive"
+            display="inline-flex"
+            alignItems="center"
+            gap={0.25}
+            sx={{ cursor: 'pointer', userSelect: 'none' }}
           >
-            <Tab label="All" value="all" />
-            <Tab label="Active" value="active" />
-            <Tab label="Inactive" value="inactive" />
-          </Tabs>
-        </TabsContainerWrapper>
+            <Typography
+              variant="caption"
+              fontWeight={600}
+              color="text.secondary"
+              lineHeight={1}
+              sx={{ fontSize: theme.typography.pxToRem(11) }}
+            >
+              Show inactive
+            </Typography>
+            <InactiveSwitch
+              id="profile-show-inactive"
+              checked={showInactive}
+              onChange={(event) => setShowInactive(event.target.checked)}
+              color="primary"
+            />
+          </Box>
+        </Box>
 
         <Divider sx={{ mx: 2, my: 1 }} />
 

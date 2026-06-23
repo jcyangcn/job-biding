@@ -6,14 +6,16 @@ import {
   Box,
   CircularProgress,
   Container,
-  Grid,
+  Stack,
   Typography
 } from '@mui/material';
 import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
+import ApplicationProfileRow from './ApplicationProfileRow';
+import IdentityQADialog from './IdentityQADialog';
+import { listIdentities } from 'src/services/identityApi';
 import { listProfiles } from 'src/services/profileApi';
-import ProfileCard from './ProfileCard';
 
 function Applications() {
   const navigate = useNavigate();
@@ -23,18 +25,30 @@ function Applications() {
     'Choose a profile to view and manage job applications'
   );
   const [profiles, setProfiles] = useState([]);
+  const [identities, setIdentities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [qaOpen, setQaOpen] = useState(false);
+  const [qaIdentity, setQaIdentity] = useState(null);
 
   const activeProfiles = useMemo(
     () => profiles.filter((profile) => profile.is_active),
     [profiles]
   );
 
+  const identityById = useMemo(
+    () => Object.fromEntries(identities.map((identity) => [identity.id, identity])),
+    [identities]
+  );
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const profileRows = await listProfiles();
+      const [profileRows, identityRows] = await Promise.all([
+        listProfiles(),
+        listIdentities()
+      ]);
       setProfiles(profileRows);
+      setIdentities(identityRows);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load profiles', {
         variant: 'error'
@@ -48,8 +62,23 @@ function Applications() {
     loadData();
   }, [loadData]);
 
-  const handleProfileClick = (profile) => {
+  const handleViewProfile = (profile) => {
     navigate(`/applications/job-applications/${profile.id}`);
+  };
+
+  const handleOpenQa = (profile) => {
+    const identity = identityById[profile.identity_id];
+    if (!identity) {
+      enqueueSnackbar('Identity not found for this profile', { variant: 'warning' });
+      return;
+    }
+    setQaIdentity(identity);
+    setQaOpen(true);
+  };
+
+  const handleCloseQa = () => {
+    setQaOpen(false);
+    setQaIdentity(null);
   };
 
   return (
@@ -80,18 +109,20 @@ function Applications() {
             </Typography>
           </Box>
         ) : (
-          <Grid container spacing={3}>
+          <Stack spacing={1.5}>
             {activeProfiles.map((profile) => (
-              <Grid item xs={12} sm={6} md={4} key={profile.id}>
-                <ProfileCard
-                  profile={profile}
-                  onClick={() => handleProfileClick(profile)}
-                />
-              </Grid>
+              <ApplicationProfileRow
+                key={profile.id}
+                profile={profile}
+                onQaClick={() => handleOpenQa(profile)}
+                onViewClick={() => handleViewProfile(profile)}
+              />
             ))}
-          </Grid>
+          </Stack>
         )}
       </Container>
+
+      <IdentityQADialog open={qaOpen} identity={qaIdentity} onClose={handleCloseQa} />
     </>
   );
 }

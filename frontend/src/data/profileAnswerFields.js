@@ -72,6 +72,16 @@ export function buildEmptyAnswerItems() {
   }));
 }
 
+export function buildSampleAnswerItems() {
+  return PROFILE_ANSWER_FIELDS.map((field) => ({
+    id: field.key,
+    key: field.key,
+    question: field.label,
+    answer: field.placeholder || '',
+    predefined: true
+  }));
+}
+
 export function answersToItems(answers = {}) {
   const items = buildEmptyAnswerItems().map((item) => ({
     ...item,

@@ -26,6 +26,7 @@ import PersonTwoToneIcon from '@mui/icons-material/PersonTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import SendTwoToneIcon from '@mui/icons-material/SendTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
+import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { createJobApplication } from 'src/services/jobApplicationApi';
 import { listProfiles } from 'src/services/profileApi';
@@ -261,13 +262,10 @@ function ApplicationDetails() {
                   </Grid>
                 </Grid>
 
-                <TextField
-                  fullWidth
+                <FixedHeightMultilineField
                   sx={{ mt: 2 }}
                   label="Job description"
                   placeholder="Paste the full job posting here…"
-                  multiline
-                  minRows={10}
                   value={form.job_description}
                   onChange={handleFormChange('job_description')}
                 />
@@ -305,10 +303,7 @@ function ApplicationDetails() {
 
                     {profileMode === 'markdown' ? (
                       <>
-                        <TextField
-                          fullWidth
-                          multiline
-                          minRows={14}
+                        <FixedHeightMultilineField
                           placeholder="Same format as profiles.md…"
                           value={profileMarkdown}
                           onChange={(e) => setProfileMarkdown(e.target.value)}
@@ -321,14 +316,11 @@ function ApplicationDetails() {
                       </>
                     ) : (
                       <>
-                        <TextField
-                          fullWidth
-                          multiline
-                          minRows={14}
+                        <FixedHeightMultilineField
+                          monospace
                           placeholder='{ "name": "…", "experience": […] }'
                           value={profileJson}
                           onChange={(e) => setProfileJson(e.target.value)}
-                          inputProps={{ style: { fontFamily: 'monospace' } }}
                         />
                         <Box mt={2}>
                           <Button variant="outlined" onClick={handleLoadProfileJson}>

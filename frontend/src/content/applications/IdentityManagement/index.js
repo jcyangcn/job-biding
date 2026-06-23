@@ -37,7 +37,7 @@ import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import COUNTRIES from 'src/data/countries';
 import {
   answersToItems,
-  buildEmptyAnswerItems,
+  buildSampleAnswerItems,
   getAnswerFieldPlaceholder,
   itemsToAnswers
 } from 'src/data/profileAnswerFields';
@@ -58,7 +58,7 @@ const emptyForm = {
   github: '',
   dob: '',
   ssn: '',
-  answerItems: buildEmptyAnswerItems()
+  answerItems: buildSampleAnswerItems()
 };
 
 const IDENTITY_SEARCH_FIELDS = [
@@ -93,9 +93,6 @@ function IdentityManagement() {
   const [deletingRecord, setDeletingRecord] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [answerEditOpen, setAnswerEditOpen] = useState(false);
-  const [answerEditIndex, setAnswerEditIndex] = useState(null);
-  const [answerDraft, setAnswerDraft] = useState({ question: '', answer: '' });
   const [answerDeleteIndex, setAnswerDeleteIndex] = useState(null);
   const { open: detailOpen, selected: selectedIdentity, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
@@ -164,8 +161,6 @@ function IdentityManagement() {
       setDialogOpen(false);
       setEditingRecord(null);
       setForm(emptyForm);
-      setAnswerEditOpen(false);
-      setAnswerEditIndex(null);
       setAnswerDeleteIndex(null);
     }
   };
@@ -179,65 +174,29 @@ function IdentityManagement() {
   };
 
   const handleAddQuestion = () => {
-    const newItem = {
-      id: `custom_${Date.now()}`,
-      key: '',
-      question: '',
-      answer: '',
-      predefined: false
-    };
     setForm((current) => ({
       ...current,
-      answerItems: [...current.answerItems, newItem]
-    }));
-    setAnswerEditIndex(form.answerItems.length);
-    setAnswerDraft({ question: '', answer: '' });
-    setAnswerEditOpen(true);
-  };
-
-  const openAnswerEdit = (index) => {
-    const item = form.answerItems[index];
-    setAnswerEditIndex(index);
-    setAnswerDraft({ question: item.question, answer: item.answer });
-    setAnswerEditOpen(true);
-  };
-
-  const closeAnswerEdit = () => {
-    if (!saving) {
-      if (answerEditIndex !== null) {
-        const item = form.answerItems[answerEditIndex];
-        if (item && !item.predefined && !item.question.trim() && !item.answer.trim()) {
-          setForm((current) => ({
-            ...current,
-            answerItems: current.answerItems.filter((_, index) => index !== answerEditIndex)
-          }));
+      answerItems: [
+        ...current.answerItems,
+        {
+          id: `custom_${Date.now()}`,
+          key: '',
+          question: '',
+          answer: '',
+          predefined: false
         }
-      }
-      setAnswerEditOpen(false);
-      setAnswerEditIndex(null);
-    }
+      ]
+    }));
   };
 
-  const handleAnswerDraftChange = (field) => (event) => {
-    setAnswerDraft((current) => ({ ...current, [field]: event.target.value }));
-  };
-
-  const handleSaveAnswerItem = () => {
-    if (!answerDraft.question.trim()) {
-      enqueueSnackbar('Question is required', { variant: 'warning' });
-      return;
-    }
-
+  const handleAnswerItemChange = (index, field) => (event) => {
+    const { value } = event.target;
     setForm((current) => ({
       ...current,
-      answerItems: current.answerItems.map((item, index) =>
-        index === answerEditIndex
-          ? { ...item, question: answerDraft.question.trim(), answer: answerDraft.answer }
-          : item
+      answerItems: current.answerItems.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item
       )
     }));
-    setAnswerEditOpen(false);
-    setAnswerEditIndex(null);
   };
 
   const confirmAnswerDelete = (index) => {
@@ -280,6 +239,10 @@ function IdentityManagement() {
     }
     if (!COUNTRIES.includes(form.country)) {
       enqueueSnackbar('Please select a country from the list', { variant: 'warning' });
+      return;
+    }
+    if (form.answerItems.some((item) => !item.predefined && !item.question.trim())) {
+      enqueueSnackbar('Each custom question must have a question label', { variant: 'warning' });
       return;
     }
 
@@ -562,31 +525,35 @@ function IdentityManagement() {
               No questions yet. Click &quot;Add question&quot; to create one.
             </Typography>
           ) : (
-            <Grid container spacing={1}>
+            <Grid container spacing={2}>
               {form.answerItems.map((item, index) => (
                 <Grid item xs={12} key={item.id}>
-                  <Grid container spacing={1} alignItems="center">
+                  <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={5}>
-                      <Typography variant="body2" fontWeight={600} noWrap title={item.question}>
-                        {item.question || '—'}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} md={5}>
-                      <Typography variant="body2" color="text.secondary" noWrap title={item.answer}>
-                        {item.answer || '—'}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} md={2} sx={{ textAlign: { md: 'right' } }}>
-                      <Tooltip title="Edit">
-                        <IconButton
-                          color="primary"
+                      {item.predefined ? (
+                        <Typography variant="body1">{item.question}</Typography>
+                      ) : (
+                        <TextField
+                          fullWidth
                           size="small"
-                          onClick={() => openAnswerEdit(index)}
-                          disabled={saving}
-                        >
-                          <EditTwoToneIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                          label="Question"
+                          value={item.question}
+                          onChange={handleAnswerItemChange(index, 'question')}
+                          required
+                        />
+                      )}
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Answer"
+                        value={item.answer}
+                        onChange={handleAnswerItemChange(index, 'answer')}
+                        placeholder={getAnswerFieldPlaceholder(item.key)}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={1} sx={{ textAlign: { md: 'right' } }}>
                       <Tooltip title="Delete">
                         <IconButton
                           color="error"
@@ -610,47 +577,6 @@ function IdentityManagement() {
           </Button>
           <Button onClick={handleSave} variant="contained" disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={answerEditOpen} onClose={closeAnswerEdit} fullWidth maxWidth="sm">
-        <DialogTitle>
-          {answerEditIndex !== null && form.answerItems[answerEditIndex]?.question
-            ? 'Edit question'
-            : 'Add question'}
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Question"
-            value={answerDraft.question}
-            onChange={handleAnswerDraftChange('question')}
-            required
-            autoFocus
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Answer"
-            value={answerDraft.answer}
-            onChange={handleAnswerDraftChange('answer')}
-            placeholder={
-              answerEditIndex !== null
-                ? getAnswerFieldPlaceholder(form.answerItems[answerEditIndex]?.key)
-                : ''
-            }
-            multiline
-            minRows={2}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeAnswerEdit} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSaveAnswerItem} variant="contained" disabled={saving}>
-            Save
           </Button>
         </DialogActions>
       </Dialog>
