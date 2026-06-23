@@ -25,6 +25,8 @@ import {
   PROGRESSION_EMAIL_STATUSES,
   PROGRESSION_EMAIL_TYPES
 } from 'src/data/progressionEmailOptions';
+import ProgressionEmailStatusLabel from './ProgressionEmailStatusLabel';
+import ProgressionEmailTypeLabel from './ProgressionEmailTypeLabel';
 import {
   createProgressionEmail,
   previewProgressionEmailReference
@@ -182,10 +184,11 @@ function ProgressionEmailCreate() {
                     label="Type"
                     value={form.type}
                     onChange={handleFormChange('type')}
+                    renderValue={(value) => <ProgressionEmailTypeLabel type={value} />}
                   >
                     {PROGRESSION_EMAIL_TYPES.map((option) => (
                       <MenuItem key={option.value} value={option.value}>
-                        {option.label}
+                        <ProgressionEmailTypeLabel type={option.value} />
                       </MenuItem>
                     ))}
                   </Select>
@@ -198,10 +201,11 @@ function ProgressionEmailCreate() {
                     label="Status"
                     value={form.status}
                     onChange={handleFormChange('status')}
+                    renderValue={(value) => <ProgressionEmailStatusLabel status={value} />}
                   >
                     {PROGRESSION_EMAIL_STATUSES.map((option) => (
                       <MenuItem key={option.value} value={option.value}>
-                        {option.label}
+                        <ProgressionEmailStatusLabel status={option.value} />
                       </MenuItem>
                     ))}
                   </Select>
