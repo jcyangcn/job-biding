@@ -37,11 +37,7 @@ import {
   loadDefaultProfileJson,
   loadDefaultProfileMarkdown
 } from 'src/services/resumeApi';
-
-function formatDate(value) {
-  if (!value) return '';
-  return new Date(value).toLocaleString();
-}
+import { formatDateTime } from 'src/utils/dateFormat';
 
 function ApplicationDetails() {
   const { profileId } = useParams();
@@ -345,7 +341,7 @@ function ApplicationDetails() {
                           variant="outlined"
                           label={
                             selectedGeneration
-                              ? `Resume #${selectedGeneration.id} · ${formatDate(selectedGeneration.created_at)}`
+                              ? `Resume #${selectedGeneration.id} · ${formatDateTime(selectedGeneration.created_at)}`
                               : `Resume #${form.resume_generated_id} selected`
                           }
                         />

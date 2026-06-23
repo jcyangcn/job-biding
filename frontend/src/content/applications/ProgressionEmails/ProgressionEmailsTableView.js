@@ -42,11 +42,7 @@ import {
   PROGRESSION_EMAIL_TYPES
 } from 'src/data/progressionEmailOptions';
 import { deleteProgressionEmail } from 'src/services/progressionEmailApi';
-
-function formatDate(value) {
-  if (!value) return '';
-  return new Date(value).toLocaleString();
-}
+import { formatDateTime } from 'src/utils/dateFormat';
 
 const BASE_SEARCH_FIELDS = [
   'id',
@@ -284,7 +280,7 @@ function ProgressionEmailsTableView({
                     <TableCell onClick={stopPropagation}>
                       <EmailLinkInfo value={row.email_link} maxWidth={180} />
                     </TableCell>
-                    <TableCell>{formatDate(row.email_date)}</TableCell>
+                    <TableCell>{formatDateTime(row.email_date)}</TableCell>
                     <TableCell>
                       <ProgressionEmailStatusLabel status={row.status} />
                     </TableCell>

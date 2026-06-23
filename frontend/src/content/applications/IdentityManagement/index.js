@@ -31,6 +31,7 @@ import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import IdentityDetailDialog from './IdentityDetailDialog';
 import TableListFilters from 'src/components/TableListFilters';
+import DateField from 'src/components/DateField';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
@@ -47,6 +48,7 @@ import {
   listIdentities,
   updateIdentity
 } from 'src/services/identityApi';
+import { formatDate } from 'src/utils/dateFormat';
 
 const emptyForm = {
   name: '',
@@ -73,11 +75,6 @@ const IDENTITY_SEARCH_FIELDS = [
   'ssn',
   'dob'
 ];
-
-function formatDate(value) {
-  if (!value) return '—';
-  return value.slice(0, 10);
-}
 
 function IdentityManagement() {
   const { enqueueSnackbar } = useSnackbar();
@@ -492,14 +489,12 @@ function IdentityManagement() {
             value={form.github}
             onChange={handleFormChange('github')}
           />
-          <TextField
+          <DateField
             fullWidth
             margin="normal"
             label="DOB"
-            type="date"
-            InputLabelProps={{ shrink: true }}
             value={form.dob}
-            onChange={handleFormChange('dob')}
+            onChange={(value) => setForm((current) => ({ ...current, dob: value }))}
           />
           <TextField
             fullWidth

@@ -16,6 +16,7 @@ import {
   useTheme
 } from '@mui/material';
 import CloseTwoToneIcon from '@mui/icons-material/CloseTwoTone';
+import { formatDateValue, formatDateTimeValue } from 'src/utils/dateFormat';
 
 export const DetailItem = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(2),
@@ -29,13 +30,11 @@ export const DetailItem = styled(Paper)(({ theme }) => ({
 }));
 
 export function formatDetailDate(value) {
-  if (!value) return '';
-  return new Date(value).toLocaleString();
+  return formatDateTimeValue(value);
 }
 
 export function formatDetailDateOnly(value) {
-  if (!value) return '';
-  return String(value).slice(0, 10);
+  return formatDateValue(value);
 }
 
 export function useDetailDialog() {

@@ -24,11 +24,7 @@ import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { PROJECT_NAME } from 'src/config/app';
 import { fetchHealth, listResumeGenerations } from 'src/services/resumeApi';
 import ResumeGenerationDetailDialog from './ResumeGenerationDetailDialog';
-
-function formatDate(value) {
-  if (!value) return '—';
-  return new Date(value).toLocaleString();
-}
+import { formatDateTime } from 'src/utils/dateFormat';
 
 function profileName(profile) {
   if (!profile || typeof profile !== 'object') return '—';
@@ -175,7 +171,7 @@ function ResumeHistory() {
                           </Typography>
                         </TableCell>
                         <TableCell>{row.pdf_path || '—'}</TableCell>
-                        <TableCell>{formatDate(row.created_at)}</TableCell>
+                        <TableCell>{formatDateTime(row.created_at)}</TableCell>
                       </TableRow>
                     ))
                   )}

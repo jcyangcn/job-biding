@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import ClearAllTwoToneIcon from '@mui/icons-material/ClearAllTwoTone';
 import SearchTwoToneIcon from '@mui/icons-material/SearchTwoTone';
+import DateField from 'src/components/DateField';
 import { EMPTY_FILTER_VALUE } from 'src/utils/tableListFilters';
 
 const compactInputSx = {
@@ -136,40 +137,34 @@ function TableListFilters({
       ))}
       {showDateRange ? (
         <>
-          <TextField
-            size="small"
+          <DateField
             label={dateFromLabel}
-            type="date"
             value={dateFrom}
-            onChange={(event) => onDateFromChange(event.target.value)}
-            InputLabelProps={{ shrink: true }}
+            onChange={onDateFromChange}
             sx={
               singleLine
                 ? {
                     ...compactInputSx,
-                    flex: '0 0 118px',
-                    width: 118,
-                    minWidth: 118
+                    flex: '0 0 132px',
+                    width: 132,
+                    minWidth: 132
                   }
-                : { flex: '0 1 150px', minWidth: 140 }
+                : { flex: '0 1 160px', minWidth: 150 }
             }
           />
-          <TextField
-            size="small"
+          <DateField
             label={dateToLabel}
-            type="date"
             value={dateTo}
-            onChange={(event) => onDateToChange(event.target.value)}
-            InputLabelProps={{ shrink: true }}
+            onChange={onDateToChange}
             sx={
               singleLine
                 ? {
                     ...compactInputSx,
-                    flex: '0 0 118px',
-                    width: 118,
-                    minWidth: 118
+                    flex: '0 0 132px',
+                    width: 132,
+                    minWidth: 132
                   }
-                : { flex: '0 1 150px', minWidth: 140 }
+                : { flex: '0 1 160px', minWidth: 150 }
             }
           />
         </>

@@ -33,11 +33,7 @@ import TableListFilters from 'src/components/TableListFilters';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import { deleteJobApplication } from 'src/services/jobApplicationApi';
-
-function formatDate(value) {
-  if (!value) return '';
-  return new Date(value).toLocaleString();
-}
+import { formatDateTime } from 'src/utils/dateFormat';
 
 function formatResumeSource(row) {
   if (row.resume_generated_id) {
@@ -269,7 +265,7 @@ function ApplicationsTableView({
                           formatResumeSource(row)
                         )}
                       </TableCell>
-                      <TableCell>{formatDate(row.applied_at)}</TableCell>
+                      <TableCell>{formatDateTime(row.applied_at)}</TableCell>
                       <TableCell align="right" onClick={stopPropagation}>
                         <Tooltip title="Edit">
                           <IconButton
