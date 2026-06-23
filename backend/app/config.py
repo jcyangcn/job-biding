@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
-GENERATED_DIR = REPO_ROOT / "generated_resumes"
 INSTRUCTION_DIR = REPO_ROOT / "instruction"
 
 
@@ -25,6 +24,7 @@ class Settings(BaseSettings):
     database_url: str
     jwt_secret: str = "change-me-in-production"
     jwt_expire_hours: int = 48
+    generated_resumes_dir: str = ""
 
     def resolved_provider(self) -> str:
         provider = self.ai_provider.lower()
@@ -42,5 +42,16 @@ class Settings(BaseSettings):
             raise ValueError("AI_PROVIDER=cursor but CURSOR_API_KEY is not set.")
         return provider
 
+    @property
+    def generated_dir(self) -> Path:
+        raw = self.generated_resumes_dir.strip()
+        if not raw:
+            return REPO_ROOT / "generated_resumes"
+        path = Path(raw)
+        if not path.is_absolute():
+            path = REPO_ROOT / path
+        return path
+
 
 settings = Settings()
+GENERATED_DIR = settings.generated_dir

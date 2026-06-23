@@ -29,10 +29,9 @@ import { PROJECT_NAME } from 'src/config/app';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { createJobApplication } from 'src/services/jobApplicationApi';
 import { listProfiles } from 'src/services/profileApi';
-import SaveResumeDialog from 'src/components/SaveResumeDialog';
 import {
   buildResumeRequest,
-  fetchResumePdf,
+  generateResumePdf,
   listResumeGenerations,
   loadDefaultProfileJson,
   loadDefaultProfileMarkdown
@@ -52,8 +51,6 @@ function ApplicationDetails() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [pendingResume, setPendingResume] = useState(null);
   const [resumeSource, setResumeSource] = useState('generated');
   const [profileMode, setProfileMode] = useState('markdown');
   const [profileMarkdown, setProfileMarkdown] = useState('');
@@ -174,47 +171,19 @@ function ApplicationDetails() {
         profileMarkdown,
         profileJson
       });
-      const { buffer, filename, generationId } = await fetchResumePdf(body);
+      const { filename, generationId } = await generateResumePdf(body);
       const generationRows = await listResumeGenerations();
       setResumeGenerations(generationRows);
       const selectedId = generationId || generationRows[0]?.id || '';
       if (selectedId) {
         setForm((current) => ({ ...current, resume_generated_id: selectedId }));
       }
-      setPendingResume({ buffer, filename });
-      setSaveDialogOpen(true);
-      enqueueSnackbar('Resume generated. Choose where to save it.', { variant: 'success' });
+      enqueueSnackbar(`Done — downloaded ${filename}`, { variant: 'success' });
     } catch (err) {
       enqueueSnackbar(err.message || 'Something went wrong.', { variant: 'error' });
     } finally {
       setGenerating(false);
     }
-  };
-
-  const handleResumeSaved = (result) => {
-    if (result.error) {
-      enqueueSnackbar(result.error, { variant: 'error' });
-      return;
-    }
-    if (result.cancelled) {
-      enqueueSnackbar('Save cancelled — try Save PDF or Download PDF', { variant: 'info' });
-      return;
-    }
-    if (result.usedFallback) {
-      enqueueSnackbar(
-        `Save dialog failed — downloaded ${result.filename} instead. Enable “Ask where to save” in browser settings for Save As.`,
-        { variant: 'warning' }
-      );
-    } else {
-      enqueueSnackbar(`Done — saved ${result.filename}`, { variant: 'success' });
-    }
-    setSaveDialogOpen(false);
-    setPendingResume(null);
-  };
-
-  const handleCloseSaveDialog = () => {
-    setSaveDialogOpen(false);
-    setPendingResume(null);
   };
 
   const handleSubmit = async () => {
@@ -417,14 +386,6 @@ function ApplicationDetails() {
           </Grid>
         </Grid>
       </Container>
-
-      <SaveResumeDialog
-        open={saveDialogOpen}
-        filename={pendingResume?.filename}
-        buffer={pendingResume?.buffer}
-        onClose={handleCloseSaveDialog}
-        onSaved={handleResumeSaved}
-      />
     </>
   );
 }

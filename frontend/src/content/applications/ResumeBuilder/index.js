@@ -16,10 +16,9 @@ import {
 import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
 import PersonTwoToneIcon from '@mui/icons-material/PersonTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
-import SaveResumeDialog from 'src/components/SaveResumeDialog';
 import {
   buildResumeRequest,
-  fetchResumePdf,
+  generateResumePdf,
   loadDefaultJd,
   loadDefaultProfileJson,
   loadDefaultProfileMarkdown
@@ -38,8 +37,6 @@ function ResumeBuilder() {
   const [profileMarkdown, setProfileMarkdown] = useState('');
   const [profileJson, setProfileJson] = useState('');
   const [generating, setGenerating] = useState(false);
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [pendingResume, setPendingResume] = useState(null);
 
   useEffect(() => {
     loadDefaultProfileMarkdown()
@@ -92,41 +89,13 @@ function ResumeBuilder() {
         profileMarkdown,
         profileJson
       });
-      const { buffer, filename } = await fetchResumePdf(body);
-      setPendingResume({ buffer, filename });
-      setSaveDialogOpen(true);
-      notify('Resume generated. Choose where to save it.', 'success');
+      const { filename } = await generateResumePdf(body);
+      notify(`Done — downloaded ${filename}`, 'success');
     } catch (err) {
       notify(err.message || 'Something went wrong.', 'error');
     } finally {
       setGenerating(false);
     }
-  };
-
-  const handleResumeSaved = (result) => {
-    if (result.error) {
-      notify(result.error, 'error');
-      return;
-    }
-    if (result.cancelled) {
-      notify('Save cancelled — try Save PDF or Download PDF', 'info');
-      return;
-    }
-    if (result.usedFallback) {
-      notify(
-        `Save dialog failed — downloaded ${result.filename} instead. Enable “Ask where to save” in browser settings for Save As.`,
-        'warning'
-      );
-    } else {
-      notify(`Done — saved ${result.filename}`, 'success');
-    }
-    setSaveDialogOpen(false);
-    setPendingResume(null);
-  };
-
-  const handleCloseSaveDialog = () => {
-    setSaveDialogOpen(false);
-    setPendingResume(null);
   };
 
   return (
@@ -231,14 +200,6 @@ function ResumeBuilder() {
           </Grid>
         </Grid>
       </Container>
-
-      <SaveResumeDialog
-        open={saveDialogOpen}
-        filename={pendingResume?.filename}
-        buffer={pendingResume?.buffer}
-        onClose={handleCloseSaveDialog}
-        onSaved={handleResumeSaved}
-      />
     </>
   );
 }
