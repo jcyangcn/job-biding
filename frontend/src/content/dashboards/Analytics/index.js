@@ -9,7 +9,6 @@ import ActiveReferrals from './ActiveReferrals';
 import PendingInvitations from './PendingInvitations';
 import BounceRate from './BounceRate';
 import ConversionsAlt from './ConversionsAlt';
-import SessionsByCountry from './SessionsByCountry';
 import TrafficSources from './TrafficSources';
 import { Grid } from '@mui/material';
 
@@ -32,7 +31,7 @@ function DashboardAnalytics() {
         alignItems="stretch"
         spacing={4}
       >
-        <Grid item lg={8} md={6} xs={12}>
+        <Grid item xs={12}>
           <Grid
             container
             spacing={4}
@@ -40,22 +39,19 @@ function DashboardAnalytics() {
             justifyContent="center"
             alignItems="stretch"
           >
-            <Grid item sm={6} xs={12}>
+            <Grid item sm={6} md={3} xs={12}>
               <ActiveReferrals />
             </Grid>
-            <Grid item sm={6} xs={12}>
+            <Grid item sm={6} md={3} xs={12}>
               <PendingInvitations />
             </Grid>
-            <Grid item sm={6} xs={12}>
+            <Grid item sm={6} md={3} xs={12}>
               <BounceRate />
             </Grid>
-            <Grid item sm={6} xs={12}>
+            <Grid item sm={6} md={3} xs={12}>
               <ConversionsAlt />
             </Grid>
           </Grid>
-        </Grid>
-        <Grid item lg={4} md={6} xs={12}>
-          <SessionsByCountry />
         </Grid>
         <Grid item xs={12}>
           <AudienceOverview />

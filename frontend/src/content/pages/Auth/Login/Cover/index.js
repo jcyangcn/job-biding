@@ -3,7 +3,6 @@ import {
   Card,
   Typography,
   Container,
-  Alert,
   styled
 } from '@mui/material';
 import { Helmet } from 'react-helmet-async';
@@ -113,9 +112,6 @@ function LoginCover() {
                 </Typography>
               </Box>
               <JWTLogin />
-              <Alert severity="info" sx={{ mt: 3 }}>
-                Default login: <b>admin</b> / <b>admin123</b>
-              </Alert>
             </Card>
           </Container>
         </MainContent>

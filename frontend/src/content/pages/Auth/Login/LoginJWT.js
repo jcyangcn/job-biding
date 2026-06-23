@@ -25,8 +25,8 @@ const LoginJWT = () => {
   return (
     <Formik
       initialValues={{
-        username: 'admin',
-        password: 'admin123',
+        username: '',
+        password: '',
         terms: true,
         submit: null
       }}

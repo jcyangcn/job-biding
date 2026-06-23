@@ -6,13 +6,13 @@ import {
   Box,
   CircularProgress,
   Container,
-  Grid,
+  Stack,
   Typography
 } from '@mui/material';
 import EmailTwoToneIcon from '@mui/icons-material/EmailTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
-import ProfileCard from 'src/content/applications/Applications/ProfileCard';
+import ProgressionEmailProfileRow from './ProgressionEmailProfileRow';
 import { listProfiles } from 'src/services/profileApi';
 
 function ProgressionEmails() {
@@ -80,16 +80,15 @@ function ProgressionEmails() {
             </Typography>
           </Box>
         ) : (
-          <Grid container spacing={3}>
+          <Stack spacing={1.5}>
             {activeProfiles.map((profile) => (
-              <Grid item xs={12} sm={6} md={4} key={profile.id}>
-                <ProfileCard
-                  profile={profile}
-                  onClick={() => handleProfileClick(profile)}
-                />
-              </Grid>
+              <ProgressionEmailProfileRow
+                key={profile.id}
+                profile={profile}
+                onViewClick={() => handleProfileClick(profile)}
+              />
             ))}
-          </Grid>
+          </Stack>
         )}
       </Container>
     </>
