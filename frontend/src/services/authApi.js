@@ -40,7 +40,8 @@ export function setStoredAccessToken(token) {
 }
 
 export async function loginRequest(username, password) {
-  const response = await fetch(`${getApiBase()}/api/auth/login`, {
+  const apiBase = getApiBase();
+  const response = await fetch(`${apiBase}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
@@ -54,7 +55,8 @@ export async function loginRequest(username, password) {
 }
 
 export async function fetchCurrentUser(accessToken) {
-  const response = await fetch(`${getApiBase()}/api/auth/me`, {
+  const apiBase = getApiBase();
+  const response = await fetch(`${apiBase}/api/auth/me`, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
 

@@ -24,7 +24,8 @@ function authHeaders() {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${getApiBase()}${path}`, {
+  const apiBase = getApiBase();
+  const response = await fetch(`${apiBase}${path}`, {
     ...options,
     headers: {
       ...authHeaders(),
