@@ -8,23 +8,32 @@ function parseProfileDate(value) {
   return isValid(parsed) ? parsed : null;
 }
 
-function formatMonthYearSlash(value) {
+function formatMonthYearComma(value) {
   const date = parseProfileDate(value);
   if (!date) return '';
-  return format(date, 'MMM/yyyy');
+  return format(date, 'MMM, yyyy');
 }
 
 function formatExperiencePeriod(startDate, endDate) {
-  const start = formatMonthYearSlash(startDate);
-  const end = formatMonthYearSlash(endDate);
+  const start = formatMonthYearComma(startDate);
+  const end = formatMonthYearComma(endDate);
   if (!start && !end) return '';
   if (start && end) return `${start} - ${end}`;
   return start || end;
 }
 
+function formatYearOnly(value) {
+  if (!value) return '';
+  const text = String(value).trim();
+  if (/^\d{4}$/.test(text)) return text;
+  if (/^\d{4}-\d{2}/.test(text)) return text.slice(0, 4);
+  const date = parseProfileDate(value);
+  return date ? format(date, 'yyyy') : '';
+}
+
 function formatEducationPeriod(startDate, endDate) {
-  const start = formatMonthYearSlash(startDate);
-  const end = formatMonthYearSlash(endDate);
+  const start = formatYearOnly(startDate);
+  const end = formatYearOnly(endDate);
   if (!start && !end) return '';
   if (start && end) return `${start}-${end}`;
   return start || end;

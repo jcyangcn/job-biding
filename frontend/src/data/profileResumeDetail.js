@@ -54,10 +54,25 @@ function normalizeMonthYear(value) {
   return '';
 }
 
+function normalizeYear(value) {
+  if (!value) return '';
+  const text = String(value).trim();
+  if (/^\d{4}$/.test(text)) return text;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text.slice(0, 4);
+  if (/^\d{4}-\d{2}$/.test(text)) return text.slice(0, 4);
+  return '';
+}
+
 function toApiMonthYearDate(value) {
   if (!value) return null;
   const monthYear = normalizeMonthYear(value);
   return monthYear ? `${monthYear}-01` : null;
+}
+
+function toApiYearDate(value) {
+  if (!value) return null;
+  const year = normalizeYear(value);
+  return year ? `${year}-01-01` : null;
 }
 
 export function normalizeResumeDetail(value) {
@@ -77,8 +92,8 @@ export function normalizeResumeDetail(value) {
   const education = Array.isArray(source.education)
     ? source.education.map((item) => ({
         university_name: item?.university_name || '',
-        start_date: normalizeMonthYear(item?.start_date),
-        end_date: normalizeMonthYear(item?.end_date),
+        start_date: normalizeYear(item?.start_date),
+        end_date: normalizeYear(item?.end_date),
         degree: item?.degree || ''
       }))
     : [];
@@ -107,6 +122,14 @@ export function formatMonthYearRange(startDate, endDate) {
   const end = endDate ? formatMonthYear(endDate) : '—';
   if (start === '—' && end === '—') return '—';
   return `${start} – ${end}`;
+}
+
+export function formatYearRange(startDate, endDate) {
+  const start = normalizeYear(startDate);
+  const end = normalizeYear(endDate);
+  if (!start && !end) return '—';
+  if (start && end) return `${start} – ${end}`;
+  return start || end || '—';
 }
 
 export function formatResumeDetailSections(resumeDetail) {
@@ -139,7 +162,7 @@ export function formatResumeDetailSections(resumeDetail) {
       [
         `${index + 1}. ${item.university_name || 'University'}`,
         item.degree ? `Degree: ${item.degree}` : null,
-        `Dates: ${formatMonthYearRange(item.start_date, item.end_date)}`
+        `Dates: ${formatYearRange(item.start_date, item.end_date)}`
       ]
         .filter(Boolean)
         .join('\n')
@@ -174,8 +197,8 @@ export function serializeResumeDetailForApi(resumeDetail) {
     })),
     education: normalized.education.map((item) => ({
       university_name: item.university_name.trim(),
-      start_date: toApiMonthYearDate(item.start_date),
-      end_date: toApiMonthYearDate(item.end_date),
+      start_date: toApiYearDate(item.start_date),
+      end_date: toApiYearDate(item.end_date),
       degree: item.degree.trim()
     })),
     certifications: normalized.certifications

@@ -15,6 +15,7 @@ import {
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import MonthYearField from 'src/components/MonthYearField';
+import YearField from 'src/components/YearField';
 import {
   emptyEducation,
   emptyProject,
@@ -292,7 +293,7 @@ function ResumeDetailForm({ value, onChange, disabled = false }) {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <MonthYearField
+              <YearField
                 label="Start date"
                 value={item.start_date}
                 onChange={(dateValue) => updateEducation(index, 'start_date', dateValue)}
@@ -300,7 +301,7 @@ function ResumeDetailForm({ value, onChange, disabled = false }) {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <MonthYearField
+              <YearField
                 label="End date"
                 value={item.end_date}
                 onChange={(dateValue) => updateEducation(index, 'end_date', dateValue)}
