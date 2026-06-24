@@ -46,6 +46,12 @@ import {
   updateProfile
 } from 'src/services/profileApi';
 import { listUsers } from 'src/services/usersApi';
+import ResumeDetailForm from './ResumeDetailForm';
+import {
+  emptyResumeDetail,
+  normalizeResumeDetail,
+  serializeResumeDetailForApi
+} from 'src/data/profileResumeDetail';
 
 const emptyForm = {
   identity_id: '',
@@ -57,7 +63,8 @@ const emptyForm = {
   email_password: '',
   phone: '',
   proxy: '',
-  is_active: true
+  is_active: true,
+  resume_detail: emptyResumeDetail()
 };
 
 const PROFILE_SEARCH_FIELDS = [
@@ -195,7 +202,8 @@ function ProfileManagement() {
       email_password: record.email_password,
       phone: record.phone,
       proxy: record.proxy || '',
-      is_active: record.is_active
+      is_active: record.is_active,
+      resume_detail: normalizeResumeDetail(record.resume_detail)
     });
     setDialogOpen(true);
   };
@@ -224,7 +232,8 @@ function ProfileManagement() {
     email_password: form.email_password,
     phone: form.phone.trim(),
     proxy: form.proxy.trim() || null,
-    is_active: form.is_active
+    is_active: form.is_active,
+    resume_detail: serializeResumeDetailForApi(form.resume_detail)
   });
 
   const handleSave = async () => {
@@ -425,9 +434,9 @@ function ProfileManagement() {
         </Card>
       </Container>
 
-      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="md">
+      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="lg">
         <DialogTitle>{dialogTitle}</DialogTitle>
-        <DialogContent>
+        <DialogContent dividers sx={{ maxHeight: '75vh' }}>
           <Autocomplete
             fullWidth
             options={identities}
@@ -504,7 +513,6 @@ function ProfileManagement() {
             fullWidth
             margin="normal"
             label="Email password"
-            type="password"
             value={form.email_password}
             onChange={handleFormChange('email_password')}
             required
@@ -524,7 +532,7 @@ function ProfileManagement() {
             onChange={handleFormChange('proxy')}
           />
           <FormControlLabel
-            sx={{ mt: 1 }}
+            sx={{ mt: 1, mb: 0.5, display: 'block' }}
             control={
               <Switch
                 checked={form.is_active}
@@ -533,6 +541,13 @@ function ProfileManagement() {
               />
             }
             label="Active"
+          />
+          <ResumeDetailForm
+            value={form.resume_detail}
+            onChange={(resumeDetail) =>
+              setForm((current) => ({ ...current, resume_detail: resumeDetail }))
+            }
+            disabled={saving}
           />
         </DialogContent>
         <DialogActions>

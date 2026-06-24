@@ -38,7 +38,11 @@ function ApplicationDetailDialog({ open, application, onClose }) {
         />
         <DetailField label="Role" value={application.role?.trim() || '—'} icon={WorkTwoToneIcon} />
         <DetailField label="Applied" icon={CalendarTodayTwoToneIcon}>
-          <Typography variant="body1">{formatDetailDate(application.applied_at) || '—'}</Typography>
+          <Typography variant="body1">
+            {application.applied
+              ? formatDetailDate(application.applied_at) || '—'
+              : 'Not applied'}
+          </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
             Created {formatDetailDate(application.created_at) || '—'}
           </Typography>

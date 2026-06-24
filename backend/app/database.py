@@ -114,7 +114,7 @@ def migrate_job_application_columns() -> None:
         if not table_exists:
             return
 
-        exists = conn.execute(
+        job_description_exists = conn.execute(
             text(
                 """
                 SELECT 1
@@ -125,22 +125,67 @@ def migrate_job_application_columns() -> None:
                 """
             )
         ).scalar()
-        if exists:
-            return
+        if not job_description_exists:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN job_description TEXT NOT NULL DEFAULT ''
+                    """
+                )
+            )
 
-        conn.execute(
+        applied_exists = conn.execute(
             text(
                 """
-                ALTER TABLE job_application
-                ADD COLUMN job_description TEXT NOT NULL DEFAULT ''
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'applied'
                 """
             )
-        )
+        ).scalar()
+        if not applied_exists:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN applied BOOLEAN NOT NULL DEFAULT FALSE
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE job_application
+                    SET applied = TRUE
+                    WHERE applied_at IS NOT NULL
+                    """
+                )
+            )
+
+        applied_at_nullable = conn.execute(
+            text(
+                """
+                SELECT is_nullable
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'applied_at'
+                """
+            )
+        ).scalar()
+        if applied_at_nullable == "NO":
+            conn.execute(
+                text("ALTER TABLE job_application ALTER COLUMN applied_at DROP NOT NULL")
+            )
 
 
 def migrate_job_profile_columns() -> None:
     columns = {
         "reference_tag": "VARCHAR(255)",
+        "resume_detail": "JSONB NOT NULL DEFAULT '{}'",
     }
     with engine.begin() as conn:
         table_exists = conn.execute(

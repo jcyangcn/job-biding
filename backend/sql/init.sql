@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS job_profile (
     proxy VARCHAR(500),
     reference_tag VARCHAR(255),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    resume_detail JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -65,7 +66,8 @@ CREATE TABLE IF NOT EXISTS job_application (
     job_description TEXT NOT NULL DEFAULT '',
     resume_generated_id INTEGER REFERENCES resume_generations(id) ON DELETE SET NULL,
     resume_online_link VARCHAR(1000),
-    applied_at TIMESTAMPTZ NOT NULL,
+    applied BOOLEAN NOT NULL DEFAULT FALSE,
+    applied_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

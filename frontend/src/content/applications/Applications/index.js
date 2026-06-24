@@ -114,6 +114,7 @@ function Applications() {
               <ApplicationProfileRow
                 key={profile.id}
                 profile={profile}
+                identity={identityById[profile.identity_id]}
                 onQaClick={() => handleOpenQa(profile)}
                 onViewClick={() => handleViewProfile(profile)}
               />

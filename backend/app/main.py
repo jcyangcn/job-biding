@@ -556,7 +556,10 @@ def create_resume_pdf(request: GenerateResumeRequest, db: Session = Depends(get_
         path,
         media_type="application/pdf",
         filename=meta.filename,
-        headers={"X-Generation-Id": str(meta.generation_id or "")},
+        headers={
+            "X-Generation-Id": str(meta.generation_id or ""),
+            "Content-Disposition": f'attachment; filename="{meta.filename}"',
+        },
     )
 
 

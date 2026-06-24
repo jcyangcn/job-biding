@@ -173,6 +173,48 @@ class JobIdentityResponse(BaseModel):
     created_at: datetime
 
 
+class ResumeWorkExperienceItem(BaseModel):
+    company_name: str = ""
+    location: str = ""
+    role: str = ""
+    start_date: date | None = None
+    end_date: date | None = None
+    method: str = ""
+
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def empty_date_to_none(cls, value):
+        if value == "" or value is None:
+            return None
+        return value
+
+
+class ResumeEducationItem(BaseModel):
+    university_name: str = ""
+    start_date: date | None = None
+    end_date: date | None = None
+    degree: str = ""
+
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def empty_date_to_none(cls, value):
+        if value == "" or value is None:
+            return None
+        return value
+
+
+class ResumeProjectItem(BaseModel):
+    project_name: str = ""
+    stack: str = ""
+
+
+class ResumeDetail(BaseModel):
+    work_experience: list[ResumeWorkExperienceItem] = Field(default_factory=list)
+    education: list[ResumeEducationItem] = Field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
+    projects: list[ResumeProjectItem] = Field(default_factory=list)
+
+
 class JobProfileCreateRequest(BaseModel):
     identity_id: int
     bidder_user_id: int
@@ -184,6 +226,7 @@ class JobProfileCreateRequest(BaseModel):
     proxy: str | None = Field(default=None, max_length=500)
     reference_tag: str | None = Field(default=None, max_length=255)
     is_active: bool = True
+    resume_detail: ResumeDetail = Field(default_factory=ResumeDetail)
 
 
 class JobProfileUpdateRequest(BaseModel):
@@ -197,6 +240,7 @@ class JobProfileUpdateRequest(BaseModel):
     proxy: str | None = Field(default=None, max_length=500)
     reference_tag: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
+    resume_detail: ResumeDetail | None = None
 
 
 class JobProfileResponse(BaseModel):
@@ -214,6 +258,7 @@ class JobProfileResponse(BaseModel):
     proxy: str | None = None
     reference_tag: str | None = None
     is_active: bool
+    resume_detail: ResumeDetail
     created_at: datetime
 
 
@@ -225,6 +270,8 @@ class JobApplicationCreateRequest(BaseModel):
     job_description: str = Field(default="")
     resume_generated_id: int | None = None
     resume_online_link: str | None = Field(default=None, max_length=1000)
+    applied: bool = False
+    applied_at: datetime | None = None
 
 
 class JobApplicationUpdateRequest(BaseModel):
@@ -234,6 +281,8 @@ class JobApplicationUpdateRequest(BaseModel):
     job_description: str = Field(default="")
     resume_generated_id: int | None = None
     resume_online_link: str | None = Field(default=None, max_length=1000)
+    applied: bool | None = None
+    applied_at: datetime | None = None
 
 
 class JobApplicationResponse(BaseModel):
@@ -246,7 +295,8 @@ class JobApplicationResponse(BaseModel):
     job_description: str
     resume_generated_id: int | None = None
     resume_online_link: str | None = None
-    applied_at: datetime
+    applied: bool
+    applied_at: datetime | None = None
     created_at: datetime
 
 

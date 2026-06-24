@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.country_codes import format_identity_label
 from app.db_models import JobIdentity, JobProfile, User
-from app.models import JobProfileCreateRequest, JobProfileUpdateRequest
+from app.models import JobProfileCreateRequest, JobProfileUpdateRequest, ResumeDetail
 from app.user_roles import UserRole
 
 
@@ -24,6 +24,18 @@ def _related_names(db: Session, record: JobProfile) -> tuple[str, str, str]:
     )
 
 
+def _parse_resume_detail(raw: dict | None) -> ResumeDetail:
+    if not raw:
+        return ResumeDetail()
+    return ResumeDetail.model_validate(raw)
+
+
+def _serialize_resume_detail(detail: ResumeDetail | dict) -> dict:
+    if isinstance(detail, dict):
+        return ResumeDetail.model_validate(detail).model_dump(mode="json")
+    return detail.model_dump(mode="json")
+
+
 def profile_to_response(db: Session, record: JobProfile) -> dict:
     identity_name, bidder_name, caller_name = _related_names(db, record)
     return {
@@ -41,6 +53,7 @@ def profile_to_response(db: Session, record: JobProfile) -> dict:
         "proxy": record.proxy,
         "reference_tag": record.reference_tag,
         "is_active": record.is_active,
+        "resume_detail": _parse_resume_detail(record.resume_detail).model_dump(mode="json"),
         "created_at": record.created_at,
     }
 
@@ -107,6 +120,7 @@ def create_profile(db: Session, data: JobProfileCreateRequest) -> JobProfile:
         proxy=data.proxy or None,
         reference_tag=(data.reference_tag.strip() if data.reference_tag else None),
         is_active=data.is_active,
+        resume_detail=_serialize_resume_detail(data.resume_detail),
     )
     db.add(record)
     db.commit()
@@ -124,6 +138,8 @@ def update_profile(
             value = None
         if field == "reference_tag" and value == "":
             value = None
+        if field == "resume_detail" and value is not None:
+            value = _serialize_resume_detail(value)
         setattr(record, field, value)
 
     db.commit()

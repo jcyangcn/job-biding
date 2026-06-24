@@ -8,7 +8,7 @@ import {
   Card,
   CardContent,
   Chip,
-  Container,
+  Divider,
   FormControl,
   FormControlLabel,
   FormLabel,
@@ -16,34 +16,67 @@ import {
   IconButton,
   Radio,
   RadioGroup,
+  Stack,
+  Switch,
   Tab,
   Tabs,
   TextField,
-  Typography
+  Typography,
+  useTheme
 } from '@mui/material';
+import { format } from 'date-fns';
+import DateField from 'src/components/DateField';
 import ArrowBackTwoToneIcon from '@mui/icons-material/ArrowBackTwoTone';
-import PersonTwoToneIcon from '@mui/icons-material/PersonTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import SendTwoToneIcon from '@mui/icons-material/SendTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { createJobApplication } from 'src/services/jobApplicationApi';
+import { listIdentities } from 'src/services/identityApi';
 import { listProfiles } from 'src/services/profileApi';
+import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
 import {
   buildResumeRequest,
   generateResumePdf,
-  listResumeGenerations,
-  loadDefaultProfileJson,
-  loadDefaultProfileMarkdown
+  listResumeGenerations
 } from 'src/services/resumeApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 
+const compactButtonSx = {
+  py: 0.25,
+  px: 1,
+  minHeight: 26,
+  fontSize: '0.75rem',
+  lineHeight: 1.2,
+  '& .MuiButton-startIcon': {
+    mr: 0.4,
+    '& > svg': { fontSize: '0.95rem' }
+  }
+};
+
+const compactTabSx = {
+  minHeight: 26,
+  '& .MuiTabs-flexContainer': { gap: 0.25 },
+  '& .MuiTab-root': {
+    minHeight: 26,
+    minWidth: 'auto',
+    py: 0,
+    px: 0.75,
+    fontSize: '0.75rem',
+    textTransform: 'none',
+    fontWeight: 600
+  },
+  '& .MuiTabs-indicator': { height: 2 }
+};
+
 function ApplicationDetails() {
+  const theme = useTheme();
   const { profileId } = useParams();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const [profile, setProfile] = useState(null);
+  const [identity, setIdentity] = useState(null);
   const [resumeGenerations, setResumeGenerations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -58,7 +91,9 @@ function ApplicationDetails() {
     link: '',
     job_description: '',
     resume_generated_id: '',
-    resume_online_link: ''
+    resume_online_link: '',
+    applied: false,
+    applied_at: format(new Date(), 'yyyy-MM-dd')
   });
 
   const selectedGeneration = resumeGenerations.find(
@@ -83,12 +118,19 @@ function ApplicationDetails() {
     profile ? headerLeading : null
   );
 
+  const applyProfileResumeContent = useCallback((profileRow, identityRow) => {
+    const { markdown, json } = buildProfileContentFromJobProfile(profileRow, identityRow);
+    setProfileMarkdown(markdown);
+    setProfileJson(json);
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [profileRows, generationRows] = await Promise.all([
+      const [profileRows, generationRows, identityRows] = await Promise.all([
         listProfiles(),
-        listResumeGenerations()
+        listResumeGenerations(),
+        listIdentities()
       ]);
       const numericId = Number(profileId);
       const match = profileRows.find(
@@ -99,7 +141,11 @@ function ApplicationDetails() {
         navigate('/applications/job-applications', { replace: true });
         return;
       }
+      const matchedIdentity =
+        identityRows.find((row) => row.id === match.identity_id) || null;
       setProfile(match);
+      setIdentity(matchedIdentity);
+      applyProfileResumeContent(match, matchedIdentity);
       setResumeGenerations(generationRows);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load application data', {
@@ -108,20 +154,23 @@ function ApplicationDetails() {
     } finally {
       setLoading(false);
     }
-  }, [enqueueSnackbar, navigate, profileId]);
+  }, [applyProfileResumeContent, enqueueSnackbar, navigate, profileId]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    loadDefaultProfileMarkdown()
-      .then(setProfileMarkdown)
-      .catch(() => {});
-  }, []);
-
   const handleFormChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const handleAppliedChange = (event) => {
+    const checked = event.target.checked;
+    setForm((current) => ({
+      ...current,
+      applied: checked,
+      applied_at: checked && !current.applied_at ? format(new Date(), 'yyyy-MM-dd') : current.applied_at
+    }));
   };
 
   const handleResumeSourceChange = (event) => {
@@ -132,27 +181,15 @@ function ApplicationDetails() {
       resume_generated_id: value === 'generated' ? current.resume_generated_id : '',
       resume_online_link: value === 'online' ? current.resume_online_link : ''
     }));
-  };
-
-  const handleLoadProfileMarkdown = async () => {
-    try {
-      setProfileMarkdown(await loadDefaultProfileMarkdown());
-      setProfileMode('markdown');
-      enqueueSnackbar('Loaded default profile markdown', { variant: 'success' });
-    } catch (err) {
-      enqueueSnackbar(err.message, { variant: 'error' });
+    if (value === 'generated' && profile) {
+      applyProfileResumeContent(profile, identity);
     }
   };
 
-  const handleLoadProfileJson = async () => {
-    try {
-      const profileData = await loadDefaultProfileJson();
-      setProfileJson(JSON.stringify(profileData, null, 2));
-      setProfileMode('json');
-      enqueueSnackbar('Loaded default profile as JSON', { variant: 'success' });
-    } catch (err) {
-      enqueueSnackbar(err.message, { variant: 'error' });
-    }
+  const handleReloadProfileContent = () => {
+    if (!profile) return;
+    applyProfileResumeContent(profile, identity);
+    enqueueSnackbar('Reloaded profile resume data', { variant: 'success' });
   };
 
   const handleGenerateResume = async () => {
@@ -189,6 +226,10 @@ function ApplicationDetails() {
       enqueueSnackbar('Link is required', { variant: 'warning' });
       return;
     }
+    if (form.applied && !form.applied_at) {
+      enqueueSnackbar('Applied at is required when applied is enabled', { variant: 'warning' });
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -205,7 +246,9 @@ function ApplicationDetails() {
         resume_online_link:
           resumeSource === 'online' && form.resume_online_link.trim()
             ? form.resume_online_link.trim()
-            : null
+            : null,
+        applied: form.applied,
+        applied_at: form.applied ? new Date(form.applied_at).toISOString() : null
       });
       enqueueSnackbar('Application submitted', { variant: 'success' });
       navigate(`/applications/job-applications/${profile.id}`);
@@ -225,155 +268,280 @@ function ApplicationDetails() {
       <Helmet>
         <title>{profile.identity_name} - Application - {PROJECT_NAME}</title>
       </Helmet>
-      <Container maxWidth="lg" sx={{ pt: 3 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={4}>
+      <Box
+        sx={{
+          height: `calc(100vh - ${theme.header.height})`,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          px: { xs: 2, md: 3 },
+          py: 1.5,
+          boxSizing: 'border-box'
+        }}
+      >
+        <Card
+          variant="outlined"
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}
+        >
+          <CardContent
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              py: 1.5,
+              px: 2,
+              '&:last-child': { pb: 1.5 }
+            }}
+          >
+            <Grid container spacing={3} sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <Grid
+                item
+                xs={12}
+                md={6}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                  height: '100%',
+                  pr: { md: 1 }
+                }}
+              >
+                <Stack spacing={2.5} sx={{ flex: 1, minHeight: 0, height: '100%' }}>
+                  <Stack spacing={1.5} sx={{ flexShrink: 0 }}>
                     <TextField
                       fullWidth
+                      size="small"
                       label="Role"
                       value={form.role}
                       onChange={handleFormChange('role')}
                     />
-                  </Grid>
-                  <Grid item xs={12} md={4}>
                     <TextField
                       fullWidth
+                      size="small"
                       label="Company"
                       value={form.company}
                       onChange={handleFormChange('company')}
                     />
-                  </Grid>
-                  <Grid item xs={12} md={4}>
                     <TextField
                       fullWidth
+                      size="small"
                       label="Link"
                       value={form.link}
                       onChange={handleFormChange('link')}
                       required
                     />
-                  </Grid>
-                </Grid>
+                  </Stack>
 
-                <FixedHeightMultilineField
-                  sx={{ mt: 2 }}
-                  label="Job description"
-                  placeholder="Paste the full job posting here…"
-                  value={form.job_description}
-                  onChange={handleFormChange('job_description')}
-                />
+                  <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <FixedHeightMultilineField
+                      fillHeight
+                      label="Job description"
+                      placeholder="Paste the full job posting here…"
+                      value={form.job_description}
+                      onChange={handleFormChange('job_description')}
+                    />
+                  </Box>
 
-                <FormControl sx={{ mt: 3 }}>
-                  <FormLabel>Resume source</FormLabel>
+                  <Stack spacing={1.5} sx={{ flexShrink: 0, pt: 0.5 }}>
+                    <FormLabel sx={{ fontSize: theme.typography.pxToRem(12), lineHeight: 1.2 }}>
+                      Applied
+                    </FormLabel>
+                    <Box
+                      display="flex"
+                      alignItems={{ xs: 'stretch', sm: 'center' }}
+                      gap={2}
+                      flexWrap="wrap"
+                    >
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={form.applied}
+                            onChange={handleAppliedChange}
+                            color="primary"
+                            size="small"
+                          />
+                        }
+                        label="Mark as applied"
+                        sx={{ mr: 0 }}
+                      />
+                      {form.applied ? (
+                        <Box sx={{ flex: 1, minWidth: 180 }}>
+                          <DateField
+                            fullWidth
+                            size="small"
+                            label="Applied at"
+                            value={form.applied_at}
+                            onChange={(value) =>
+                              setForm((current) => ({ ...current, applied_at: value }))
+                            }
+                            required
+                          />
+                        </Box>
+                      ) : null}
+                    </Box>
+                  </Stack>
+                </Stack>
+              </Grid>
+
+              <Grid
+                item
+                xs={12}
+                md={6}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                  height: '100%',
+                  pl: { md: 1 },
+                  borderLeft: { md: `1px solid ${theme.colors.alpha.black[10]}` }
+                }}
+              >
+                <FormControl size="small" sx={{ flexShrink: 0, mb: 2 }}>
+                  <FormLabel sx={{ fontSize: theme.typography.pxToRem(12), mb: 0.75 }}>
+                    Resume source
+                  </FormLabel>
                   <RadioGroup row value={resumeSource} onChange={handleResumeSourceChange}>
                     <FormControlLabel
                       value="generated"
-                      control={<Radio />}
-                      label="Generated resume"
+                      control={<Radio size="small" sx={{ py: 0.25 }} />}
+                      label={<Typography variant="caption">Generated resume</Typography>}
+                      sx={{ mr: 1.5 }}
                     />
                     <FormControlLabel
                       value="online"
-                      control={<Radio />}
-                      label="Resume online link"
+                      control={<Radio size="small" sx={{ py: 0.25 }} />}
+                      label={<Typography variant="caption">Resume online link</Typography>}
                     />
                   </RadioGroup>
                 </FormControl>
 
                 {resumeSource === 'generated' ? (
-                  <Box sx={{ mt: 2 }}>
-                    <Box display="flex" alignItems="center" gap={1} mb={2}>
-                      <PersonTwoToneIcon color="primary" />
-                      <Typography variant="h5">Profile source</Typography>
-                    </Box>
-                    <Tabs
-                      value={profileMode}
-                      onChange={(_e, value) => setProfileMode(value)}
-                      sx={{ mb: 2 }}
+                  <Box
+                    sx={{
+                      flex: 1,
+                      minHeight: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <Box
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="space-between"
+                      gap={0.75}
+                      sx={{ flexShrink: 0, mb: 1.5 }}
                     >
-                      <Tab label="Custom markdown" value="markdown" />
-                      <Tab label="Custom JSON" value="json" />
-                    </Tabs>
+                      <Tabs
+                        value={profileMode}
+                        onChange={(_e, value) => setProfileMode(value)}
+                        sx={compactTabSx}
+                      >
+                        <Tab label="Markdown" value="markdown" />
+                        <Tab label="JSON" value="json" />
+                      </Tabs>
+                      <Button
+                        size="small"
+                        variant="text"
+                        sx={compactButtonSx}
+                        onClick={handleReloadProfileContent}
+                      >
+                        Reload profile
+                      </Button>
+                    </Box>
 
                     {profileMode === 'markdown' ? (
-                      <>
-                        <FixedHeightMultilineField
-                          placeholder="Same format as profiles.md…"
-                          value={profileMarkdown}
-                          onChange={(e) => setProfileMarkdown(e.target.value)}
-                        />
-                        <Box mt={2}>
-                          <Button variant="outlined" onClick={handleLoadProfileMarkdown}>
-                            Load default template
-                          </Button>
-                        </Box>
-                      </>
+                      <FixedHeightMultilineField
+                        fillHeight
+                        placeholder="Same format as profiles.md…"
+                        value={profileMarkdown}
+                        onChange={(e) => setProfileMarkdown(e.target.value)}
+                      />
                     ) : (
-                      <>
-                        <FixedHeightMultilineField
-                          monospace
-                          placeholder='{ "name": "…", "experience": […] }'
-                          value={profileJson}
-                          onChange={(e) => setProfileJson(e.target.value)}
-                        />
-                        <Box mt={2}>
-                          <Button variant="outlined" onClick={handleLoadProfileJson}>
-                            Load default as JSON
-                          </Button>
-                        </Box>
-                      </>
+                      <FixedHeightMultilineField
+                        fillHeight
+                        monospace
+                        placeholder='{ "name": "…", "experience": […] }'
+                        value={profileJson}
+                        onChange={(e) => setProfileJson(e.target.value)}
+                      />
                     )}
 
-                    <Box mt={3} display="flex" alignItems="center" gap={2} flexWrap="wrap">
+                    <Box
+                      mt={1.5}
+                      display="flex"
+                      alignItems="center"
+                      gap={0.75}
+                      flexWrap="wrap"
+                      sx={{ flexShrink: 0 }}
+                    >
                       <Button
+                        size="small"
                         variant="contained"
                         startIcon={<PictureAsPdfTwoToneIcon />}
                         disabled={generating}
                         onClick={handleGenerateResume}
+                        sx={compactButtonSx}
                       >
-                        {generating ? 'Generating…' : 'Generate PDF resume'}
+                        {generating ? 'Generating…' : 'Generate PDF'}
                       </Button>
                       {form.resume_generated_id ? (
                         <Chip
+                          size="small"
                           color="success"
                           variant="outlined"
+                          sx={{ height: 24, fontSize: '0.7rem' }}
                           label={
                             selectedGeneration
-                              ? `Resume #${selectedGeneration.id} · ${formatDateTime(selectedGeneration.created_at)}`
-                              : `Resume #${form.resume_generated_id} selected`
+                              ? `#${selectedGeneration.id} · ${formatDateTime(selectedGeneration.created_at)}`
+                              : `#${form.resume_generated_id} selected`
                           }
                         />
                       ) : null}
                     </Box>
                   </Box>
                 ) : (
-                  <TextField
-                    fullWidth
-                    sx={{ mt: 1 }}
-                    label="Resume online link"
-                    placeholder="https://..."
-                    value={form.resume_online_link}
-                    onChange={handleFormChange('resume_online_link')}
-                  />
+                  <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Resume online link"
+                      placeholder="https://..."
+                      value={form.resume_online_link}
+                      onChange={handleFormChange('resume_online_link')}
+                      sx={{ flexShrink: 0 }}
+                    />
+                    <Box flex={1} minHeight={0} />
+                  </Box>
                 )}
 
-                <Box display="flex" justifyContent="flex-end" mt={3}>
+                <Divider sx={{ my: 1, flexShrink: 0 }} />
+
+                <Box display="flex" justifyContent="flex-end" sx={{ flexShrink: 0 }}>
                   <Button
+                    size="small"
                     variant="contained"
                     startIcon={<SendTwoToneIcon />}
                     onClick={handleSubmit}
                     disabled={submitting || generating}
+                    sx={compactButtonSx}
                   >
                     {submitting ? 'Submitting…' : 'Submit application'}
                   </Button>
                 </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Container>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      </Box>
     </>
   );
 }

@@ -27,16 +27,13 @@ import {
 } from 'src/data/progressionEmailOptions';
 import ProgressionEmailStatusLabel from './ProgressionEmailStatusLabel';
 import ProgressionEmailTypeLabel from './ProgressionEmailTypeLabel';
+import { format } from 'date-fns';
+import DateField from 'src/components/DateField';
 import {
   createProgressionEmail,
   previewProgressionEmailReference
 } from 'src/services/progressionEmailApi';
 import { listProfiles } from 'src/services/profileApi';
-
-function toDateTimeLocalValue(date) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 function ProgressionEmailCreate() {
   const { profileId } = useParams();
@@ -50,7 +47,7 @@ function ProgressionEmailCreate() {
     company: '',
     type: 'human_interview',
     email_link: '',
-    email_date: toDateTimeLocalValue(new Date()),
+    email_date: format(new Date(), 'yyyy-MM-dd'),
     status: 'received',
     log: ''
   });
@@ -222,13 +219,13 @@ function ProgressionEmailCreate() {
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <TextField
+                <DateField
                   fullWidth
                   label="Email date"
-                  type="datetime-local"
                   value={form.email_date}
-                  onChange={handleFormChange('email_date')}
-                  InputLabelProps={{ shrink: true }}
+                  onChange={(value) =>
+                    setForm((current) => ({ ...current, email_date: value }))
+                  }
                   required
                 />
               </Grid>

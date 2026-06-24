@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -32,6 +32,7 @@ def application_to_response(db: Session, record: JobApplication) -> dict:
         "job_description": record.job_description,
         "resume_generated_id": record.resume_generated_id,
         "resume_online_link": record.resume_online_link,
+        "applied": record.applied,
         "applied_at": record.applied_at,
         "created_at": record.created_at,
     }
@@ -63,6 +64,14 @@ def _ensure_application_access(db: Session, record: JobApplication, user: User) 
     return profile
 
 
+def _resolve_applied_fields(applied: bool, applied_at: datetime | None) -> datetime | None:
+    if applied:
+        if applied_at is None:
+            raise ValueError("applied_at is required when applied is true")
+        return applied_at
+    return None
+
+
 def create_application(
     db: Session, data: JobApplicationCreateRequest, user: User
 ) -> JobApplication:
@@ -91,7 +100,8 @@ def create_application(
         resume_online_link=(
             data.resume_online_link.strip() if data.resume_online_link else None
         ),
-        applied_at=datetime.now(UTC),
+        applied=data.applied,
+        applied_at=_resolve_applied_fields(data.applied, data.applied_at),
     )
     db.add(record)
     db.commit()
@@ -114,7 +124,10 @@ def list_applications_for_profile(
         db.scalars(
             select(JobApplication)
             .where(JobApplication.profile_id == profile_id)
-            .order_by(JobApplication.applied_at.desc(), JobApplication.id.desc())
+            .order_by(
+                JobApplication.applied_at.desc().nullslast(),
+                JobApplication.id.desc(),
+            )
         ).all()
     )
 
@@ -126,7 +139,8 @@ def list_applications_admin(
         raise PermissionError("Access denied")
 
     query = select(JobApplication).order_by(
-        JobApplication.applied_at.desc(), JobApplication.id.desc()
+        JobApplication.applied_at.desc().nullslast(),
+        JobApplication.id.desc(),
     )
     if profile_id is not None:
         query = query.where(JobApplication.profile_id == profile_id)
@@ -157,6 +171,13 @@ def update_application(
     record.resume_online_link = (
         data.resume_online_link.strip() if data.resume_online_link else None
     )
+    if data.applied is not None:
+        record.applied = data.applied
+        if data.applied:
+            applied_at = data.applied_at if data.applied_at is not None else record.applied_at
+            record.applied_at = _resolve_applied_fields(True, applied_at)
+        else:
+            record.applied_at = None
     db.commit()
     db.refresh(record)
     return record

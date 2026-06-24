@@ -1,4 +1,15 @@
+import { getStoredAccessToken } from 'src/services/authApi';
+
 const API_BASE = process.env.REACT_APP_API_URL || '';
+
+function authHeaders(extra = {}) {
+  const headers = { ...extra };
+  const token = getStoredAccessToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 async function fetchText(path) {
   const res = await fetch(`${API_BASE}${path}`);
@@ -18,17 +29,43 @@ async function fetchJson(path) {
 
 function filenameFromDisposition(header) {
   if (!header) return 'resume.pdf';
-  const match = /filename="?([^";\n]+)"?/.exec(header);
-  return match ? match[1] : 'resume.pdf';
+
+  const utf8Match = /filename\*=UTF-8''([^;\n]+)/i.exec(header);
+  if (utf8Match) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const quotedMatch = /filename="([^"]+)"/i.exec(header);
+  if (quotedMatch) return quotedMatch[1];
+
+  const plainMatch = /filename=([^;\n]+)/i.exec(header);
+  if (plainMatch) return plainMatch[1].trim();
+
+  return 'resume.pdf';
 }
 
 function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
+  const safeName = (filename || 'resume.pdf').replace(/[\\/:*?"<>|]+/g, '_');
+  const pdfBlob =
+    blob.type === 'application/pdf'
+      ? blob
+      : new Blob([blob], { type: 'application/pdf' });
+
+  const url = URL.createObjectURL(pdfBlob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = filename;
+  anchor.download = safeName;
+  anchor.rel = 'noopener';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(anchor);
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function loadDefaultJd() {
@@ -79,7 +116,7 @@ export function buildResumeRequest({ jobDescription, profileMode, profileMarkdow
 export async function generateResumePdf(body) {
   const res = await fetch(`${API_BASE}/api/resumes/pdf`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body)
   });
 
@@ -97,7 +134,8 @@ export async function generateResumePdf(body) {
     throw new Error(detail);
   }
 
-  const blob = await res.blob();
+  const buffer = await res.arrayBuffer();
+  const blob = new Blob([buffer], { type: 'application/pdf' });
   const filename = filenameFromDisposition(res.headers.get('Content-Disposition'));
   downloadBlob(blob, filename);
   const generationIdHeader = res.headers.get('X-Generation-Id');

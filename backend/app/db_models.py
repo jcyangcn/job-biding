@@ -83,6 +83,7 @@ class JobProfile(Base):
     proxy: Mapped[str | None] = mapped_column(String(500), nullable=True)
     reference_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    resume_detail: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -126,7 +127,8 @@ class JobApplication(Base):
         Integer, ForeignKey("resume_generations.id", ondelete="SET NULL"), nullable=True
     )
     resume_online_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    applied: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

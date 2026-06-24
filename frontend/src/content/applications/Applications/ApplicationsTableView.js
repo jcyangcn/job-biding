@@ -265,7 +265,9 @@ function ApplicationsTableView({
                           formatResumeSource(row)
                         )}
                       </TableCell>
-                      <TableCell>{formatDateTime(row.applied_at)}</TableCell>
+                      <TableCell>
+                        {row.applied ? formatDateTime(row.applied_at) : 'Not applied'}
+                      </TableCell>
                       <TableCell align="right" onClick={stopPropagation}>
                         <Tooltip title="Edit">
                           <IconButton

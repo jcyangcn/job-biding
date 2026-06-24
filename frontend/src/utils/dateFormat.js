@@ -45,3 +45,14 @@ export function formatDateTimeValue(value) {
   const formatted = formatDateTime(value);
   return formatted === '—' ? '' : formatted;
 }
+
+export function formatMonthYear(value) {
+  if (!value) return '—';
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}$/.test(text)) {
+    return text;
+  }
+  const date = parseDateValue(value);
+  if (!date) return '—';
+  return format(date, 'yyyy-MM');
+}
