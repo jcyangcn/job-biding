@@ -1,4 +1,5 @@
-const API_BASE = process.env.REACT_APP_API_URL || '';
+import { getApiBase } from 'src/config/api';
+
 const ACCESS_TOKEN_KEY = 'accessToken';
 
 async function parseError(response) {
@@ -39,7 +40,7 @@ export function setStoredAccessToken(token) {
 }
 
 export async function loginRequest(username, password) {
-  const response = await fetch(`${API_BASE}/api/auth/login`, {
+  const response = await fetch(`${getApiBase()}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
@@ -53,7 +54,7 @@ export async function loginRequest(username, password) {
 }
 
 export async function fetchCurrentUser(accessToken) {
-  const response = await fetch(`${API_BASE}/api/auth/me`, {
+  const response = await fetch(`${getApiBase()}/api/auth/me`, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
 

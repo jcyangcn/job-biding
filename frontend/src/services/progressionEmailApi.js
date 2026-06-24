@@ -1,6 +1,5 @@
+import { getApiBase } from 'src/config/api';
 import { getStoredAccessToken } from 'src/services/authApi';
-
-const API_BASE = process.env.REACT_APP_API_URL || '';
 
 async function parseError(response) {
   let detail = `Request failed (${response.status})`;
@@ -29,7 +28,7 @@ export function listProgressionEmails(profileId) {
     profileId === undefined || profileId === null || profileId === ''
       ? ''
       : `?profile_id=${profileId}`;
-  return fetch(`${API_BASE}/api/job-progression-emails${query}`, {
+  return fetch(`${getApiBase()}/api/job-progression-emails${query}`, {
     headers: authHeaders()
   }).then(async (response) => {
     if (!response.ok) {
@@ -41,7 +40,7 @@ export function listProgressionEmails(profileId) {
 
 export function previewProgressionEmailReference(profileId) {
   return fetch(
-    `${API_BASE}/api/job-progression-emails/next-reference?profile_id=${profileId}`,
+    `${getApiBase()}/api/job-progression-emails/next-reference?profile_id=${profileId}`,
     { headers: authHeaders() }
   ).then(async (response) => {
     if (!response.ok) {
@@ -52,7 +51,7 @@ export function previewProgressionEmailReference(profileId) {
 }
 
 export function createProgressionEmail(payload) {
-  return fetch(`${API_BASE}/api/job-progression-emails`, {
+  return fetch(`${getApiBase()}/api/job-progression-emails`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload)
@@ -65,7 +64,7 @@ export function createProgressionEmail(payload) {
 }
 
 export function updateProgressionEmail(emailId, payload) {
-  return fetch(`${API_BASE}/api/job-progression-emails/${emailId}`, {
+  return fetch(`${getApiBase()}/api/job-progression-emails/${emailId}`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify(payload)
@@ -78,7 +77,7 @@ export function updateProgressionEmail(emailId, payload) {
 }
 
 export function deleteProgressionEmail(emailId) {
-  return fetch(`${API_BASE}/api/job-progression-emails/${emailId}`, {
+  return fetch(`${getApiBase()}/api/job-progression-emails/${emailId}`, {
     method: 'DELETE',
     headers: authHeaders()
   }).then(async (response) => {

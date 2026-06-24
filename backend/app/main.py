@@ -101,10 +101,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=settings.cors_origin_list,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -556,10 +554,7 @@ def create_resume_pdf(request: GenerateResumeRequest, db: Session = Depends(get_
         path,
         media_type="application/pdf",
         filename=meta.filename,
-        headers={
-            "X-Generation-Id": str(meta.generation_id or ""),
-            "Content-Disposition": f'attachment; filename="{meta.filename}"',
-        },
+        headers={"X-Generation-Id": str(meta.generation_id or "")},
     )
 
 

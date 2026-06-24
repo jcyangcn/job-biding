@@ -206,13 +206,20 @@ function ApplicationDetails() {
         profileJson
       });
       const { filename, generationId } = await generateResumePdf(body);
-      const generationRows = await listResumeGenerations();
-      setResumeGenerations(generationRows);
-      const selectedId = generationId || generationRows[0]?.id || '';
-      if (selectedId) {
-        setForm((current) => ({ ...current, resume_generated_id: selectedId }));
-      }
       enqueueSnackbar(`Done — downloaded ${filename}`, { variant: 'success' });
+
+      try {
+        const generationRows = await listResumeGenerations();
+        setResumeGenerations(generationRows);
+        const selectedId = generationId || generationRows[0]?.id || '';
+        if (selectedId) {
+          setForm((current) => ({ ...current, resume_generated_id: selectedId }));
+        }
+      } catch {
+        if (generationId) {
+          setForm((current) => ({ ...current, resume_generated_id: generationId }));
+        }
+      }
     } catch (err) {
       enqueueSnackbar(err.message || 'Something went wrong.', { variant: 'error' });
     } finally {

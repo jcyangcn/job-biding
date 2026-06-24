@@ -1,6 +1,5 @@
+import { getApiBase } from 'src/config/api';
 import { getStoredAccessToken } from 'src/services/authApi';
-
-const API_BASE = process.env.REACT_APP_API_URL || '';
 
 async function parseError(response) {
   let detail = `Request failed (${response.status})`;
@@ -25,7 +24,7 @@ function authHeaders() {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     ...options,
     headers: {
       ...authHeaders(),

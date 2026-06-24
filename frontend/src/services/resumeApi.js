@@ -1,6 +1,5 @@
+import { getApiBase } from 'src/config/api';
 import { getStoredAccessToken } from 'src/services/authApi';
-
-const API_BASE = process.env.REACT_APP_API_URL || '';
 
 function authHeaders(extra = {}) {
   const headers = { ...extra };
@@ -12,7 +11,9 @@ function authHeaders(extra = {}) {
 }
 
 async function fetchText(path) {
-  const res = await fetch(`${API_BASE}${path}`);
+  const res = await fetch(`${getApiBase()}${path}`, {
+    headers: authHeaders()
+  });
   if (!res.ok) {
     throw new Error(`Failed to load ${path}`);
   }
@@ -20,7 +21,9 @@ async function fetchText(path) {
 }
 
 async function fetchJson(path) {
-  const res = await fetch(`${API_BASE}${path}`);
+  const res = await fetch(`${getApiBase()}${path}`, {
+    headers: authHeaders()
+  });
   if (!res.ok) {
     throw new Error(`Failed to load ${path}`);
   }
@@ -48,12 +51,47 @@ function filenameFromDisposition(header) {
   return 'resume.pdf';
 }
 
+function isPdfBuffer(buffer) {
+  if (!buffer || buffer.byteLength < 4) return false;
+  const header = new TextDecoder().decode(buffer.slice(0, 4));
+  return header === '%PDF';
+}
+
+async function readErrorDetail(res) {
+  let detail = `Request failed (${res.status})`;
+  try {
+    const contentType = res.headers.get('Content-Type') || '';
+    if (contentType.includes('application/json')) {
+      const err = await res.json();
+      if (err.detail) {
+        detail = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+      }
+    } else {
+      const text = (await res.text()).trim();
+      if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+        detail =
+          'API request returned HTML instead of a PDF. Check REACT_APP_API_URL or public/api-config.js points to the FastAPI backend.';
+      } else if (text) {
+        detail = text.slice(0, 240);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return detail;
+}
+
 function downloadBlob(blob, filename) {
   const safeName = (filename || 'resume.pdf').replace(/[\\/:*?"<>|]+/g, '_');
   const pdfBlob =
     blob.type === 'application/pdf'
       ? blob
       : new Blob([blob], { type: 'application/pdf' });
+
+  if (typeof navigator !== 'undefined' && navigator.msSaveOrOpenBlob) {
+    navigator.msSaveOrOpenBlob(pdfBlob, safeName);
+    return;
+  }
 
   const url = URL.createObjectURL(pdfBlob);
   const anchor = document.createElement('a');
@@ -62,10 +100,12 @@ function downloadBlob(blob, filename) {
   anchor.rel = 'noopener';
   anchor.style.display = 'none';
   document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
 
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  requestAnimationFrame(() => {
+    anchor.click();
+    document.body.removeChild(anchor);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  });
 }
 
 export async function loadDefaultJd() {
@@ -114,27 +154,23 @@ export function buildResumeRequest({ jobDescription, profileMode, profileMarkdow
 }
 
 export async function generateResumePdf(body) {
-  const res = await fetch(`${API_BASE}/api/resumes/pdf`, {
+  const res = await fetch(`${getApiBase()}/api/resumes/pdf`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body)
   });
 
   if (!res.ok) {
-    let detail = `Request failed (${res.status})`;
-    try {
-      const err = await res.json();
-      if (err.detail) {
-        detail =
-          typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
-      }
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
+    throw new Error(await readErrorDetail(res));
   }
 
   const buffer = await res.arrayBuffer();
+  if (!isPdfBuffer(buffer)) {
+    throw new Error(
+      'Server response was not a PDF. In production builds, set REACT_APP_API_URL or edit public/api-config.js so API calls reach the FastAPI backend.'
+    );
+  }
+
   const blob = new Blob([buffer], { type: 'application/pdf' });
   const filename = filenameFromDisposition(res.headers.get('Content-Disposition'));
   downloadBlob(blob, filename);

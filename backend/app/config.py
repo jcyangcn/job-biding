@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_expire_hours: int = 48
     generated_resumes_dir: str = ""
+    cors_origins: str = ""
 
     def resolved_provider(self) -> str:
         provider = self.ai_provider.lower()
@@ -51,6 +52,17 @@ class Settings(BaseSettings):
         if not path.is_absolute():
             path = REPO_ROOT / path
         return path
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        defaults = [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:8001",
+            "http://127.0.0.1:8001",
+        ]
+        extra = [item.strip() for item in self.cors_origins.split(",") if item.strip()]
+        return list(dict.fromkeys(defaults + extra))
 
 
 settings = Settings()

@@ -1,6 +1,5 @@
+import { getApiBase } from 'src/config/api';
 import { getStoredAccessToken } from 'src/services/authApi';
-
-const API_BASE = process.env.REACT_APP_API_URL || '';
 
 async function parseError(response) {
   let detail = `Request failed (${response.status})`;
@@ -29,7 +28,7 @@ export function listJobApplications(profileId) {
     profileId === undefined || profileId === null || profileId === ''
       ? ''
       : `?profile_id=${profileId}`;
-  return fetch(`${API_BASE}/api/job-applications${query}`, {
+  return fetch(`${getApiBase()}/api/job-applications${query}`, {
     headers: authHeaders()
   }).then(async (response) => {
     if (!response.ok) {
@@ -40,7 +39,7 @@ export function listJobApplications(profileId) {
 }
 
 export function createJobApplication(payload) {
-  return fetch(`${API_BASE}/api/job-applications`, {
+  return fetch(`${getApiBase()}/api/job-applications`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload)
@@ -53,7 +52,7 @@ export function createJobApplication(payload) {
 }
 
 export function updateJobApplication(applicationId, payload) {
-  return fetch(`${API_BASE}/api/job-applications/${applicationId}`, {
+  return fetch(`${getApiBase()}/api/job-applications/${applicationId}`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify(payload)
@@ -66,7 +65,7 @@ export function updateJobApplication(applicationId, payload) {
 }
 
 export function deleteJobApplication(applicationId) {
-  return fetch(`${API_BASE}/api/job-applications/${applicationId}`, {
+  return fetch(`${getApiBase()}/api/job-applications/${applicationId}`, {
     method: 'DELETE',
     headers: authHeaders()
   }).then(async (response) => {
