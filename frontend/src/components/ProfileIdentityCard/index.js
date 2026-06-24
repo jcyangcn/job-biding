@@ -25,7 +25,6 @@ import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
 import Label from 'src/components/Label';
 import {
   DetailItem,
-  formatDetailDate,
   formatDetailDateOnly
 } from 'src/components/DetailDialog';
 
@@ -263,12 +262,6 @@ function ProfileIdentityCard({ profile, identity, actions }) {
               />
               <InfoTile icon={PhoneTwoToneIcon} label="Phone" value={profile.phone} iconColor="success.main" />
               <InfoTile icon={VpnKeyTwoToneIcon} label="Proxy" value={profile.proxy} iconColor="secondary.main" />
-              <InfoTile
-                icon={CalendarTodayTwoToneIcon}
-                label="Created"
-                value={formatDetailDate(profile.created_at)}
-                iconColor="text.secondary"
-              />
             </Grid>
           </Grid>
 
@@ -332,12 +325,6 @@ function ProfileIdentityCard({ profile, identity, actions }) {
                       </Link>
                     ) : null}
                   </InfoTile>
-                  <InfoTile
-                    icon={CalendarTodayTwoToneIcon}
-                    label="Created"
-                    value={formatDetailDate(identity.created_at)}
-                    iconColor="text.secondary"
-                  />
                 </Grid>
               </>
             ) : (
