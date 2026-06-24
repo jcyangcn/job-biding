@@ -206,7 +206,9 @@ function ApplicationDetails() {
         profileJson
       });
       const { filename, generationId } = await generateResumePdf(body);
-      enqueueSnackbar(`Done — downloaded ${filename}`, { variant: 'success' });
+      enqueueSnackbar(`Downloaded ${filename} to your browser downloads folder`, {
+        variant: 'success'
+      });
 
       try {
         const generationRows = await listResumeGenerations();

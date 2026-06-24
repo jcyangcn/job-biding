@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -545,6 +546,32 @@ def create_resume(request: GenerateResumeRequest, db: Session = Depends(get_db))
     )
 
 
+def _resolve_generated_pdf(filename: str) -> Path:
+    safe_name = Path(filename).name
+    if safe_name != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    pdf_path = (GENERATED_DIR / safe_name).resolve()
+    generated_root = GENERATED_DIR.resolve()
+    if pdf_path.parent != generated_root:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not pdf_path.is_file():
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return pdf_path
+
+
+@app.get("/api/resumes/download/{filename}")
+def download_resume_pdf(filename: str):
+    """Return a generated PDF as a browser download (no client-side Save As)."""
+    pdf_path = _resolve_generated_pdf(filename)
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=pdf_path.name,
+        headers={"Content-Disposition": f'attachment; filename="{pdf_path.name}"'},
+    )
+
+
 @app.post("/api/resumes/pdf")
 def create_resume_pdf(request: GenerateResumeRequest, db: Session = Depends(get_db)):
     """Generate resume and return the PDF file directly."""
@@ -554,7 +581,10 @@ def create_resume_pdf(request: GenerateResumeRequest, db: Session = Depends(get_
         path,
         media_type="application/pdf",
         filename=meta.filename,
-        headers={"X-Generation-Id": str(meta.generation_id or "")},
+        headers={
+            "X-Generation-Id": str(meta.generation_id or ""),
+            "Content-Disposition": f'attachment; filename="{meta.filename}"',
+        },
     )
 
 
@@ -569,7 +599,10 @@ async def create_resume_from_files(
     if use_default_profile or not profile_markdown:
         profile = load_default_profile()
     else:
-        profile = parse_profile_markdown(profile_markdown)
+        try:
+            profile = parse_profile_markdown(profile_markdown)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     request = GenerateResumeRequest(
         job_description=job_description,
@@ -579,11 +612,14 @@ async def create_resume_from_files(
 
 
 def _resolve_profile(request: GenerateResumeRequest) -> Profile:
-    if request.profile:
-        return request.profile
-    if request.profile_markdown:
-        return parse_profile_markdown(request.profile_markdown)
-    return load_default_profile()
+    try:
+        if request.profile:
+            return request.profile
+        if request.profile_markdown:
+            return parse_profile_markdown(request.profile_markdown)
+        return load_default_profile()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/{full_path:path}")
