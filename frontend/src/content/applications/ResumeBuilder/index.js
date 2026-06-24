@@ -90,7 +90,7 @@ function ResumeBuilder() {
         profileJson
       });
       const { filename } = await generateResumePdf(body);
-      notify(`Done — downloaded ${filename}`, 'success');
+      notify(`Downloaded ${filename} to your browser downloads folder`, 'success');
     } catch (err) {
       notify(err.message || 'Something went wrong.', 'error');
     } finally {

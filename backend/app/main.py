@@ -554,7 +554,10 @@ def create_resume_pdf(request: GenerateResumeRequest, db: Session = Depends(get_
         path,
         media_type="application/pdf",
         filename=meta.filename,
-        headers={"X-Generation-Id": str(meta.generation_id or "")},
+        headers={
+            "X-Generation-Id": str(meta.generation_id or ""),
+            "Content-Disposition": f'attachment; filename="{meta.filename}"',
+        },
     )
 
 
@@ -569,7 +572,10 @@ async def create_resume_from_files(
     if use_default_profile or not profile_markdown:
         profile = load_default_profile()
     else:
-        profile = parse_profile_markdown(profile_markdown)
+        try:
+            profile = parse_profile_markdown(profile_markdown)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     request = GenerateResumeRequest(
         job_description=job_description,
@@ -579,11 +585,14 @@ async def create_resume_from_files(
 
 
 def _resolve_profile(request: GenerateResumeRequest) -> Profile:
-    if request.profile:
-        return request.profile
-    if request.profile_markdown:
-        return parse_profile_markdown(request.profile_markdown)
-    return load_default_profile()
+    try:
+        if request.profile:
+            return request.profile
+        if request.profile_markdown:
+            return parse_profile_markdown(request.profile_markdown)
+        return load_default_profile()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/{full_path:path}")

@@ -81,17 +81,19 @@ async function readErrorDetail(res) {
   return detail;
 }
 
-function downloadBlob(blob, filename) {
-  const safeName = (filename || 'resume.pdf').replace(/[\\/:*?"<>|]+/g, '_');
+function sanitizePdfFilename(filename) {
+  let safeName = (filename || 'resume.pdf').replace(/[\\/:*?"<>|]+/g, '_').trim();
+  if (!safeName) safeName = 'resume.pdf';
+  if (!/\.pdf$/i.test(safeName)) safeName = `${safeName}.pdf`;
+  return safeName;
+}
+
+export function downloadPdfBlob(blob, filename) {
+  const safeName = sanitizePdfFilename(filename);
   const pdfBlob =
     blob.type === 'application/pdf'
       ? blob
       : new Blob([blob], { type: 'application/pdf' });
-
-  if (typeof navigator !== 'undefined' && navigator.msSaveOrOpenBlob) {
-    navigator.msSaveOrOpenBlob(pdfBlob, safeName);
-    return;
-  }
 
   const url = URL.createObjectURL(pdfBlob);
   const anchor = document.createElement('a');
@@ -100,12 +102,9 @@ function downloadBlob(blob, filename) {
   anchor.rel = 'noopener';
   anchor.style.display = 'none';
   document.body.appendChild(anchor);
-
-  requestAnimationFrame(() => {
-    anchor.click();
-    document.body.removeChild(anchor);
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  });
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function loadDefaultJd() {
@@ -172,9 +171,13 @@ export async function generateResumePdf(body) {
   }
 
   const blob = new Blob([buffer], { type: 'application/pdf' });
-  const filename = filenameFromDisposition(res.headers.get('Content-Disposition'));
-  downloadBlob(blob, filename);
+  const filename = sanitizePdfFilename(
+    filenameFromDisposition(res.headers.get('Content-Disposition'))
+  );
+  downloadPdfBlob(blob, filename);
+
   const generationIdHeader = res.headers.get('X-Generation-Id');
   const generationId = generationIdHeader ? Number(generationIdHeader) : null;
-  return { filename, generationId };
+  const download = () => downloadPdfBlob(blob, filename);
+  return { filename, generationId, download };
 }

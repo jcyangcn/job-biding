@@ -106,11 +106,12 @@ def render_resume_pdf(
         profile.phone,
         profile.email,
         profile.linkedin,
+        profile.portfolio,
+        profile.location,
     ]
-    if profile.portfolio:
-        contact_parts.append(profile.portfolio)
-    contact_parts.append(profile.location)
-    contact_line = " &nbsp;&nbsp;&middot;&nbsp;&nbsp; ".join(contact_parts)
+    contact_line = " &nbsp;&nbsp;&middot;&nbsp;&nbsp; ".join(
+        part for part in contact_parts if part
+    )
 
     story.append(Paragraph(profile.name, s["name"]))
     story.append(Paragraph(title, s["title"]))
