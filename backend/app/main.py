@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -542,6 +543,32 @@ def create_resume(request: GenerateResumeRequest, db: Session = Depends(get_db))
         summary_chars=len(content.summary),
         provider=provider,
         generation_id=generation_id,
+    )
+
+
+def _resolve_generated_pdf(filename: str) -> Path:
+    safe_name = Path(filename).name
+    if safe_name != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    pdf_path = (GENERATED_DIR / safe_name).resolve()
+    generated_root = GENERATED_DIR.resolve()
+    if pdf_path.parent != generated_root:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not pdf_path.is_file():
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return pdf_path
+
+
+@app.get("/api/resumes/download/{filename}")
+def download_resume_pdf(filename: str):
+    """Return a generated PDF as a browser download (no client-side Save As)."""
+    pdf_path = _resolve_generated_pdf(filename)
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=pdf_path.name,
+        headers={"Content-Disposition": f'attachment; filename="{pdf_path.name}"'},
     )
 
 

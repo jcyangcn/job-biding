@@ -30,31 +30,45 @@ async function fetchJson(path) {
   return res.json();
 }
 
-function filenameFromDisposition(header) {
-  if (!header) return 'resume.pdf';
-
-  const utf8Match = /filename\*=UTF-8''([^;\n]+)/i.exec(header);
-  if (utf8Match) {
-    try {
-      return decodeURIComponent(utf8Match[1]);
-    } catch {
-      /* fall through */
-    }
-  }
-
-  const quotedMatch = /filename="([^"]+)"/i.exec(header);
-  if (quotedMatch) return quotedMatch[1];
-
-  const plainMatch = /filename=([^;\n]+)/i.exec(header);
-  if (plainMatch) return plainMatch[1].trim();
-
-  return 'resume.pdf';
+function sanitizePdfFilename(filename) {
+  let safeName = (filename || 'resume.pdf').replace(/[\\/:*?"<>|]+/g, '_').trim();
+  if (!safeName) safeName = 'resume.pdf';
+  if (!/\.pdf$/i.test(safeName)) safeName = `${safeName}.pdf`;
+  return safeName;
 }
 
-function isPdfBuffer(buffer) {
-  if (!buffer || buffer.byteLength < 4) return false;
-  const header = new TextDecoder().decode(buffer.slice(0, 4));
-  return header === '%PDF';
+function buildResumeDownloadUrl(filename) {
+  const safeName = sanitizePdfFilename(filename);
+  return `${getApiBase()}/api/resumes/download/${encodeURIComponent(safeName)}`;
+}
+
+/**
+ * Trigger a direct browser download via the server attachment response.
+ * Uses a hidden iframe so the current page stays open (including cross-origin API).
+ */
+export function triggerResumeDownload(filename) {
+  const safeName = sanitizePdfFilename(filename);
+  const downloadUrl = buildResumeDownloadUrl(safeName);
+  const frameName = `resume-download-${Date.now()}`;
+
+  const iframe = document.createElement('iframe');
+  iframe.name = frameName;
+  iframe.style.display = 'none';
+  iframe.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(iframe);
+
+  const anchor = document.createElement('a');
+  anchor.href = downloadUrl;
+  anchor.target = frameName;
+  anchor.rel = 'noopener';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+
+  window.setTimeout(() => {
+    iframe.remove();
+  }, 60_000);
 }
 
 async function readErrorDetail(res) {
@@ -70,7 +84,7 @@ async function readErrorDetail(res) {
       const text = (await res.text()).trim();
       if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
         detail =
-          'API request returned HTML instead of a PDF. Check REACT_APP_API_URL or public/api-config.js points to the FastAPI backend.';
+          'API request returned HTML instead of JSON. Check REACT_APP_API_URL or public/api-config.js points to the FastAPI backend.';
       } else if (text) {
         detail = text.slice(0, 240);
       }
@@ -79,32 +93,6 @@ async function readErrorDetail(res) {
     /* ignore */
   }
   return detail;
-}
-
-function sanitizePdfFilename(filename) {
-  let safeName = (filename || 'resume.pdf').replace(/[\\/:*?"<>|]+/g, '_').trim();
-  if (!safeName) safeName = 'resume.pdf';
-  if (!/\.pdf$/i.test(safeName)) safeName = `${safeName}.pdf`;
-  return safeName;
-}
-
-export function downloadPdfBlob(blob, filename) {
-  const safeName = sanitizePdfFilename(filename);
-  const pdfBlob =
-    blob.type === 'application/pdf'
-      ? blob
-      : new Blob([blob], { type: 'application/pdf' });
-
-  const url = URL.createObjectURL(pdfBlob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = safeName;
-  anchor.rel = 'noopener';
-  anchor.style.display = 'none';
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function loadDefaultJd() {
@@ -153,7 +141,7 @@ export function buildResumeRequest({ jobDescription, profileMode, profileMarkdow
 }
 
 export async function generateResumePdf(body) {
-  const res = await fetch(`${getApiBase()}/api/resumes/pdf`, {
+  const res = await fetch(`${getApiBase()}/api/resumes`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body)
@@ -163,21 +151,18 @@ export async function generateResumePdf(body) {
     throw new Error(await readErrorDetail(res));
   }
 
-  const buffer = await res.arrayBuffer();
-  if (!isPdfBuffer(buffer)) {
-    throw new Error(
-      'Server response was not a PDF. In production builds, set REACT_APP_API_URL or edit public/api-config.js so API calls reach the FastAPI backend.'
-    );
-  }
+  const meta = await res.json();
+  const filename = sanitizePdfFilename(meta.filename);
+  triggerResumeDownload(filename);
 
-  const blob = new Blob([buffer], { type: 'application/pdf' });
-  const filename = sanitizePdfFilename(
-    filenameFromDisposition(res.headers.get('Content-Disposition'))
-  );
-  downloadPdfBlob(blob, filename);
+  const generationId =
+    meta.generation_id != null && meta.generation_id !== ''
+      ? Number(meta.generation_id)
+      : null;
 
-  const generationIdHeader = res.headers.get('X-Generation-Id');
-  const generationId = generationIdHeader ? Number(generationIdHeader) : null;
-  const download = () => downloadPdfBlob(blob, filename);
-  return { filename, generationId, download };
+  return {
+    filename,
+    generationId,
+    download: () => triggerResumeDownload(filename)
+  };
 }
