@@ -13,6 +13,7 @@ import EmailTwoToneIcon from '@mui/icons-material/EmailTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import ProgressionEmailProfileRow from './ProgressionEmailProfileRow';
+import { listIdentities } from 'src/services/identityApi';
 import { listProfiles } from 'src/services/profileApi';
 
 function ProgressionEmails() {
@@ -23,6 +24,7 @@ function ProgressionEmails() {
     'Choose a profile to view and manage progression emails'
   );
   const [profiles, setProfiles] = useState([]);
+  const [identities, setIdentities] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const activeProfiles = useMemo(
@@ -30,11 +32,20 @@ function ProgressionEmails() {
     [profiles]
   );
 
+  const identityById = useMemo(
+    () => Object.fromEntries(identities.map((identity) => [identity.id, identity])),
+    [identities]
+  );
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const profileRows = await listProfiles();
+      const [profileRows, identityRows] = await Promise.all([
+        listProfiles(),
+        listIdentities()
+      ]);
       setProfiles(profileRows);
+      setIdentities(identityRows);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load profiles', {
         variant: 'error'
@@ -85,6 +96,7 @@ function ProgressionEmails() {
               <ProgressionEmailProfileRow
                 key={profile.id}
                 profile={profile}
+                identity={identityById[profile.identity_id]}
                 onViewClick={() => handleProfileClick(profile)}
               />
             ))}
