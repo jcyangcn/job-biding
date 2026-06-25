@@ -21,6 +21,7 @@ import ContentCopyTwoToneIcon from '@mui/icons-material/ContentCopyTwoTone';
 import ExpandMoreTwoToneIcon from '@mui/icons-material/ExpandMoreTwoTone';
 import Label from 'src/components/Label';
 import { formatDetailDateOnly } from 'src/components/DetailDialog';
+import { copyToClipboard } from 'src/utils/copyToClipboard';
 
 function getInitials(name) {
   if (!name) return '?';
@@ -58,9 +59,12 @@ function CopyableReadOnlyField({ label, value, multiline = false }) {
   const [copied, setCopied] = useState(false);
   const text = value ?? '';
 
-  const handleCopy = async () => {
+  const handleCopy = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(String(text));
+      await copyToClipboard(text);
       setCopied(true);
       enqueueSnackbar(`Copied ${label}`, { variant: 'success' });
       window.setTimeout(() => setCopied(false), 2000);
@@ -84,7 +88,7 @@ function CopyableReadOnlyField({ label, value, multiline = false }) {
                 size="small"
                 edge="end"
                 aria-label={`Copy ${label}`}
-                onClick={handleCopy}
+                onMouseDown={handleCopy}
               >
                 {copied ? (
                   <CheckTwoToneIcon fontSize="small" color="success" />

@@ -78,20 +78,96 @@ function getRecordField(record, ...headerNames) {
   return match ? String(match[1] ?? '').trim() : '';
 }
 
-function resolveProfileId({ profileLabel, defaultProfileId, profileLabelToId, hasProfileColumn }) {
+function resolveProfileId({
+  profileIdRaw,
+  profileLabel,
+  defaultProfileId,
+  profileLabelToId,
+  needsProfileResolution
+}) {
   if (defaultProfileId) {
-    return defaultProfileId;
+    return { profileId: defaultProfileId };
   }
 
-  if (!hasProfileColumn) {
-    return null;
+  if (profileIdRaw) {
+    const parsed = Number(profileIdRaw);
+    if (!Number.isFinite(parsed)) {
+      return { error: `Invalid profile ID "${profileIdRaw}"` };
+    }
+    return { profileId: parsed };
+  }
+
+  if (!needsProfileResolution) {
+    return { profileId: null };
   }
 
   if (!profileLabel) {
-    return null;
+    return { profileId: null };
   }
 
-  return profileLabelToId[profileLabel] ?? null;
+  const profileId = profileLabelToId[profileLabel] ?? null;
+  if (!profileId) {
+    return { error: `Unknown profile "${profileLabel}"` };
+  }
+
+  return { profileId };
+}
+
+function hasCsvHeader(headerIndex, ...headerNames) {
+  return headerNames.some(
+    (headerName) => headerIndex[normalizeHeaderName(headerName)] !== undefined
+  );
+}
+
+function resolveResumeFields(record) {
+  const resumeGeneratedIdRaw = getRecordField(
+    record,
+    'Resume generated ID',
+    'Resume Generated ID'
+  );
+  const resumeOnlineLink = getRecordField(record, 'Resume online link', 'Resume Online Link');
+  const resumeLegacy = getRecordField(record, 'Resume');
+
+  if (resumeGeneratedIdRaw || resumeOnlineLink) {
+    const generatedId = resumeGeneratedIdRaw ? Number(resumeGeneratedIdRaw) : null;
+    if (resumeGeneratedIdRaw && !Number.isFinite(generatedId)) {
+      return { error: `Invalid resume generated ID "${resumeGeneratedIdRaw}"` };
+    }
+
+    return {
+      resume_generated_id: generatedId,
+      resume_online_link: resumeOnlineLink || null
+    };
+  }
+
+  return parseResumeImportValue(resumeLegacy);
+}
+
+function resolveAppliedFields(record) {
+  const appliedRaw = getRecordField(record, 'Applied');
+  const appliedAtRaw = getRecordField(record, 'Applied at', 'Applied At');
+
+  if (/^(true|yes|1)$/i.test(appliedRaw)) {
+    const parsedAt = appliedAtRaw ? tryParseAppliedDate(appliedAtRaw) : null;
+    return {
+      applied: true,
+      applied_at: (parsedAt || new Date()).toISOString()
+    };
+  }
+
+  if (/^(false|no|0)$/i.test(appliedRaw)) {
+    return { applied: false, applied_at: null };
+  }
+
+  if (appliedAtRaw && !appliedRaw) {
+    const parsedAt = tryParseAppliedDate(appliedAtRaw);
+    return {
+      applied: true,
+      applied_at: (parsedAt || new Date()).toISOString()
+    };
+  }
+
+  return parseAppliedImportValue(appliedRaw);
 }
 
 export function parseApplicationCsv(text, options = {}) {
@@ -109,17 +185,30 @@ export function parseApplicationCsv(text, options = {}) {
   }
 
   const headerIndex = buildCsvHeaderIndex(headers);
-  const requiredHeaders = ['Role', 'Company', 'Link', 'Resume', 'Applied'];
+  const requiredHeaders = ['Role', 'Company', 'Link'];
   const missingHeaders = requiredHeaders.filter(
-    (header) => headerIndex[header.toLowerCase()] === undefined
+    (header) => !hasCsvHeader(headerIndex, header)
   );
 
   if (missingHeaders.length) {
     throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
   }
 
-  if (hasProfileColumn && !defaultProfileId && headerIndex.profile === undefined) {
-    throw new Error('Missing required column: Profile');
+  const needsProfileResolution = !defaultProfileId;
+  const hasProfileIdColumn = hasCsvHeader(headerIndex, 'Profile ID');
+  const hasProfileLabelColumn = hasCsvHeader(headerIndex, 'Profile');
+
+  if (needsProfileResolution && !hasProfileIdColumn && !hasProfileLabelColumn) {
+    throw new Error('Missing required column: Profile ID or Profile');
+  }
+
+  if (
+    hasProfileColumn &&
+    !defaultProfileId &&
+    !hasProfileIdColumn &&
+    !hasProfileLabelColumn
+  ) {
+    throw new Error('Missing required column: Profile ID or Profile');
   }
 
   return records.map((record, index) => {
@@ -127,12 +216,13 @@ export function parseApplicationCsv(text, options = {}) {
     const role = getRecordField(record, 'Role');
     const company = getRecordField(record, 'Company');
     const link = getRecordField(record, 'Link');
-    const resume = getRecordField(record, 'Resume');
-    const appliedValue = getRecordField(record, 'Applied');
     const jobDescription = getRecordField(record, 'Job description', 'Job Description');
+    const profileIdRaw = getRecordField(record, 'Profile ID', 'Profile Id');
     const profileLabel = getRecordField(record, 'Profile');
+    const appliedValue = getRecordField(record, 'Applied');
+    const resumeLegacy = getRecordField(record, 'Resume');
 
-    if (!role && !company && !link && !resume && !appliedValue) {
+    if (!role && !company && !link && !profileIdRaw && !appliedValue && !resumeLegacy) {
       return { rowNumber, error: 'Empty row' };
     }
 
@@ -140,14 +230,19 @@ export function parseApplicationCsv(text, options = {}) {
       return { rowNumber, error: 'Link is required' };
     }
 
-    const profileId = resolveProfileId({
+    const profileResult = resolveProfileId({
+      profileIdRaw,
       profileLabel,
       defaultProfileId,
       profileLabelToId,
-      hasProfileColumn: hasProfileColumn && !defaultProfileId
+      needsProfileResolution
     });
 
-    if (!profileId) {
+    if (profileResult.error) {
+      return { rowNumber, error: profileResult.error };
+    }
+
+    if (!profileResult.profileId) {
       return {
         rowNumber,
         error: profileLabel
@@ -156,13 +251,17 @@ export function parseApplicationCsv(text, options = {}) {
       };
     }
 
-    const resumeFields = parseResumeImportValue(resume);
-    const appliedFields = parseAppliedImportValue(appliedValue);
+    const resumeFields = resolveResumeFields(record);
+    if (resumeFields.error) {
+      return { rowNumber, error: resumeFields.error };
+    }
+
+    const appliedFields = resolveAppliedFields(record);
 
     return {
       rowNumber,
       payload: {
-        profile_id: profileId,
+        profile_id: profileResult.profileId,
         role,
         company,
         link,

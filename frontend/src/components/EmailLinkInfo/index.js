@@ -4,6 +4,7 @@ import { useSnackbar } from 'notistack';
 import { Box, IconButton, Tooltip, Typography } from '@mui/material';
 import CheckTwoToneIcon from '@mui/icons-material/CheckTwoTone';
 import ContentCopyTwoToneIcon from '@mui/icons-material/ContentCopyTwoTone';
+import { copyToClipboard } from 'src/utils/copyToClipboard';
 
 function EmailLinkInfo({ value, maxWidth = 220, multiline = false }) {
   const { enqueueSnackbar } = useSnackbar();
@@ -11,12 +12,14 @@ function EmailLinkInfo({ value, maxWidth = 220, multiline = false }) {
   const text = value?.trim();
 
   const handleCopy = async (event) => {
+    event.preventDefault();
     event.stopPropagation();
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(text);
+      await copyToClipboard(text);
       setCopied(true);
       enqueueSnackbar('Email link copied', { variant: 'success' });
-      setTimeout(() => setCopied(false), 2000);
+      window.setTimeout(() => setCopied(false), 2000);
     } catch {
       enqueueSnackbar('Failed to copy email link', { variant: 'error' });
     }
@@ -52,7 +55,11 @@ function EmailLinkInfo({ value, maxWidth = 220, multiline = false }) {
         {text}
       </Typography>
       <Tooltip title={copied ? 'Copied' : 'Copy'}>
-        <IconButton size="small" onClick={handleCopy} aria-label="Copy email link">
+        <IconButton
+          size="small"
+          onMouseDown={handleCopy}
+          aria-label="Copy email link"
+        >
           {copied ? (
             <CheckTwoToneIcon fontSize="small" color="success" />
           ) : (

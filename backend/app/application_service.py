@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db_models import JobApplication, JobIdentity, JobProfile, ResumeGeneration, User
@@ -61,6 +61,15 @@ def _validate_resume_source(data: JobApplicationCreateRequest) -> None:
 
 def get_application(db: Session, application_id: int) -> JobApplication | None:
     return db.get(JobApplication, application_id)
+
+
+def next_application_number_for_profile(db: Session, profile_id: int) -> int:
+    count = db.scalar(
+        select(func.count())
+        .select_from(JobApplication)
+        .where(JobApplication.profile_id == profile_id)
+    )
+    return (count or 0) + 1
 
 
 def _ensure_application_access(db: Session, record: JobApplication, user: User) -> JobProfile:

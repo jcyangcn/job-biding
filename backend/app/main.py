@@ -29,6 +29,7 @@ from app.application_service import (
     delete_application,
     list_applications_admin,
     list_applications_for_profile,
+    next_application_number_for_profile,
     update_application,
 )
 from app.profile_service import (
@@ -72,7 +73,7 @@ from app.models import (
     JobProgressionEmailResponse,
     JobProgressionEmailUpdateRequest,
 )
-from app.pdf_renderer import next_resume_path, render_resume_pdf
+from app.pdf_renderer import build_resume_path, render_resume_pdf
 from app.profile_parser import load_default_profile, parse_profile_markdown
 from app.user_roles import UserRole
 from app.user_service import (
@@ -520,7 +521,7 @@ def create_resume(request: GenerateResumeRequest, db: Session = Depends(get_db))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    output_path = next_resume_path(profile.name, GENERATED_DIR)
+    output_path = _resolve_resume_output_path(db, profile, request)
     render_resume_pdf(profile, content, output_path)
 
     try:
@@ -621,6 +622,21 @@ def _resolve_profile(request: GenerateResumeRequest) -> Profile:
         return load_default_profile()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _resolve_resume_output_path(
+    db: Session,
+    profile: Profile,
+    request: GenerateResumeRequest,
+) -> Path:
+    if request.profile_id is not None:
+        job_profile = get_profile(db, request.profile_id)
+        if not job_profile:
+            raise HTTPException(status_code=422, detail="Profile not found")
+        app_number = next_application_number_for_profile(db, request.profile_id)
+    else:
+        app_number = 0
+    return build_resume_path(profile.name, app_number, GENERATED_DIR)
 
 
 @app.get("/{full_path:path}")

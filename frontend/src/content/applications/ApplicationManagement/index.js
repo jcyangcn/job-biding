@@ -98,6 +98,7 @@ function ApplicationManagement() {
           loading={loadingApplications}
           onRefresh={handleRefresh}
           profile={selectedProfileId === ALL_PROFILES ? null : selectedProfile}
+          exportProfileId={null}
           profiles={profiles}
           identities={identities}
           showProfileColumn={selectedProfileId === ALL_PROFILES}

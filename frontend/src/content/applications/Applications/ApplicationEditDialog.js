@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useSnackbar } from 'notistack';
+import { format } from 'date-fns';
 import {
   Button,
   Dialog,
@@ -14,10 +15,14 @@ import {
   MenuItem,
   Radio,
   RadioGroup,
+  Stack,
+  Switch,
   TextField
 } from '@mui/material';
+import DateField from 'src/components/DateField';
 import { updateJobApplication } from 'src/services/jobApplicationApi';
 import { listResumeGenerations } from 'src/services/resumeApi';
+import { formatDateValue } from 'src/utils/dateFormat';
 
 function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const { enqueueSnackbar } = useSnackbar();
@@ -30,7 +35,9 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     link: '',
     job_description: '',
     resume_generated_id: '',
-    resume_online_link: ''
+    resume_online_link: '',
+    applied: false,
+    applied_at: format(new Date(), 'yyyy-MM-dd')
   });
 
   useEffect(() => {
@@ -50,7 +57,10 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       link: application.link || '',
       job_description: application.job_description || '',
       resume_generated_id: application.resume_generated_id || '',
-      resume_online_link: application.resume_online_link || ''
+      resume_online_link: application.resume_online_link || '',
+      applied: Boolean(application.applied),
+      applied_at:
+        formatDateValue(application.applied_at) || format(new Date(), 'yyyy-MM-dd')
     });
 
     listResumeGenerations()
@@ -72,10 +82,26 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     }));
   };
 
+  const handleAppliedChange = (event) => {
+    const checked = event.target.checked;
+    setForm((current) => ({
+      ...current,
+      applied: checked,
+      applied_at:
+        checked && !current.applied_at
+          ? format(new Date(), 'yyyy-MM-dd')
+          : current.applied_at
+    }));
+  };
+
   const handleSave = async () => {
     if (!application) return;
     if (!form.link.trim()) {
       enqueueSnackbar('Link is required', { variant: 'warning' });
+      return;
+    }
+    if (form.applied && !form.applied_at) {
+      enqueueSnackbar('Applied at is required when applied is enabled', { variant: 'warning' });
       return;
     }
 
@@ -93,7 +119,9 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         resume_online_link:
           resumeSource === 'online' && form.resume_online_link.trim()
             ? form.resume_online_link.trim()
-            : null
+            : null,
+        applied: form.applied,
+        applied_at: form.applied ? new Date(form.applied_at).toISOString() : null
       });
       enqueueSnackbar('Application updated', { variant: 'success' });
       onSaved();
@@ -134,6 +162,31 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
               onChange={handleFormChange('link')}
               required
             />
+          </Grid>
+          <Grid item xs={12}>
+            <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.applied}
+                    onChange={handleAppliedChange}
+                    color={form.applied ? 'success' : 'error'}
+                  />
+                }
+                label="Applied"
+              />
+              {form.applied ? (
+                <DateField
+                  label="Applied at"
+                  value={form.applied_at}
+                  onChange={(value) =>
+                    setForm((current) => ({ ...current, applied_at: value }))
+                  }
+                  required
+                  sx={{ width: 180 }}
+                />
+              ) : null}
+            </Stack>
           </Grid>
           <Grid item xs={12}>
             <TextField

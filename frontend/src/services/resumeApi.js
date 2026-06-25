@@ -138,13 +138,23 @@ export async function fetchHealth() {
   return fetchJson('/health');
 }
 
-export function buildResumeRequest({ jobDescription, profileMode, profileMarkdown, profileJson }) {
+export function buildResumeRequest({
+  jobDescription,
+  profileMode,
+  profileMarkdown,
+  profileJson,
+  profileId
+}) {
   const trimmedJobDescription = jobDescription.trim();
   if (trimmedJobDescription.length < 50) {
     throw new Error('Job description must be at least 50 characters.');
   }
 
   const body = { job_description: trimmedJobDescription };
+
+  if (profileId != null && profileId !== '') {
+    body.profile_id = Number(profileId);
+  }
 
   if (profileMode === 'markdown') {
     const md = profileMarkdown.trim();

@@ -1,5 +1,7 @@
 from pathlib import Path
 import re
+import secrets
+import string
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
@@ -180,13 +182,23 @@ def render_resume_pdf(
     return output_path
 
 
-def next_resume_path(name: str, output_dir: Path) -> Path:
-    safe = re.sub(r"[^\w]+", "_", name.strip()).strip("_")
-    existing = list(output_dir.glob(f"{safe}_*.pdf"))
-    nums = []
-    for path in existing:
-        suffix = path.stem.rsplit("_", 1)[-1]
-        if suffix.isdigit():
-            nums.append(int(suffix))
-    n = max(nums, default=0) + 1
-    return output_dir / f"{safe}_{n}.pdf"
+_RANDOM_CHARS = string.ascii_letters + string.digits
+
+
+def _sanitize_filename_part(name: str) -> str:
+    return re.sub(r"[^\w]+", "_", name.strip()).strip("_")
+
+
+def _random_suffix(length: int = 4) -> str:
+    return "".join(secrets.choice(_RANDOM_CHARS) for _ in range(length))
+
+
+def build_resume_path(display_name: str, application_id: int, output_dir: Path) -> Path:
+    """Build `{display_name}_{application_id:03d}{4 random alnum}.pdf`."""
+    safe = _sanitize_filename_part(display_name)
+    app_part = f"{application_id:03d}"
+    while True:
+        filename = f"{safe}_{app_part}{_random_suffix()}.pdf"
+        path = output_dir / filename
+        if not path.exists():
+            return path

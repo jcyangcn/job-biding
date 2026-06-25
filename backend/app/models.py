@@ -79,6 +79,7 @@ class GenerateResumeRequest(BaseModel):
     job_description: str = Field(min_length=50)
     profile: Profile | None = None
     profile_markdown: str | None = None
+    profile_id: int | None = None
     ai_provider: Literal["openai", "cursor", "auto"] | None = None
 
 

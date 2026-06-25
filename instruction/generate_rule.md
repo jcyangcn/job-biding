@@ -97,6 +97,10 @@ put <hr/>
 
 ### Execution Requirement
 
-Generate resumes as PDF file named profile name by profile count in /generated_resumes folder.
+Generate resumes as PDF files in /generated_resumes folder.
+
+Filename format: `{resume_profile_display_name}_{application_id_3_digits}{4_random_alphanumeric}.pdf`
+
+Example: `Thomas_Raville_007aB3x9.pdf` — name shown on the resume PDF, zero-padded application sequence (001, 002, …), plus 4 random letters/numbers.
 
 

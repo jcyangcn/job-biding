@@ -227,7 +227,8 @@ function ApplicationDetails() {
         jobDescription: form.job_description,
         profileMode,
         profileMarkdown,
-        profileJson
+        profileJson,
+        profileId: profile.id
       });
       const { filename, generationId } = await generateResumePdf(body);
       enqueueSnackbar(`Downloaded ${filename} to your browser downloads folder`, {

@@ -69,20 +69,45 @@ function resolveOptionValue(value, options) {
   return byLabel?.value ?? null;
 }
 
-function resolveProfileId({ profileLabel, defaultProfileId, profileLabelToId, hasProfileColumn }) {
+function hasCsvHeader(headerIndex, ...headerNames) {
+  return headerNames.some(
+    (headerName) => headerIndex[normalizeHeaderName(headerName)] !== undefined
+  );
+}
+
+function resolveProfileId({
+  profileIdRaw,
+  profileLabel,
+  defaultProfileId,
+  profileLabelToId,
+  needsProfileResolution
+}) {
   if (defaultProfileId) {
-    return defaultProfileId;
+    return { profileId: defaultProfileId };
   }
 
-  if (!hasProfileColumn) {
-    return null;
+  if (profileIdRaw) {
+    const parsed = Number(profileIdRaw);
+    if (!Number.isFinite(parsed)) {
+      return { error: `Invalid profile ID "${profileIdRaw}"` };
+    }
+    return { profileId: parsed };
+  }
+
+  if (!needsProfileResolution) {
+    return { profileId: null };
   }
 
   if (!profileLabel) {
-    return null;
+    return { profileId: null };
   }
 
-  return profileLabelToId[profileLabel] ?? null;
+  const profileId = profileLabelToId[profileLabel] ?? null;
+  if (!profileId) {
+    return { error: `Unknown profile "${profileLabel}"` };
+  }
+
+  return { profileId };
 }
 
 export function parseProgressionEmailCsv(text, options = {}) {
@@ -100,17 +125,37 @@ export function parseProgressionEmailCsv(text, options = {}) {
   }
 
   const headerIndex = buildCsvHeaderIndex(headers);
-  const requiredHeaders = ['Company', 'Type', 'Email', 'Email date', 'Status'];
-  const missingHeaders = requiredHeaders.filter(
-    (header) => headerIndex[normalizeHeaderName(header)] === undefined
-  );
+  const hasEmailLinkColumn =
+    hasCsvHeader(headerIndex, 'Email link', 'Email Link') ||
+    hasCsvHeader(headerIndex, 'Email');
+  const hasEmailDateColumn = hasCsvHeader(headerIndex, 'Email date', 'Email Date');
+  const missingHeaders = [];
+
+  if (!hasCsvHeader(headerIndex, 'Company')) missingHeaders.push('Company');
+  if (!hasCsvHeader(headerIndex, 'Type')) missingHeaders.push('Type');
+  if (!hasEmailLinkColumn) missingHeaders.push('Email link');
+  if (!hasEmailDateColumn) missingHeaders.push('Email date');
+  if (!hasCsvHeader(headerIndex, 'Status')) missingHeaders.push('Status');
 
   if (missingHeaders.length) {
     throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
   }
 
-  if (hasProfileColumn && !defaultProfileId && headerIndex.profile === undefined) {
-    throw new Error('Missing required column: Profile');
+  const needsProfileResolution = !defaultProfileId;
+  const hasProfileIdColumn = hasCsvHeader(headerIndex, 'Profile ID');
+  const hasProfileLabelColumn = hasCsvHeader(headerIndex, 'Profile');
+
+  if (needsProfileResolution && !hasProfileIdColumn && !hasProfileLabelColumn) {
+    throw new Error('Missing required column: Profile ID or Profile');
+  }
+
+  if (
+    hasProfileColumn &&
+    !defaultProfileId &&
+    !hasProfileIdColumn &&
+    !hasProfileLabelColumn
+  ) {
+    throw new Error('Missing required column: Profile ID or Profile');
   }
 
   return records.map((record, index) => {
@@ -118,13 +163,22 @@ export function parseProgressionEmailCsv(text, options = {}) {
     const referenceNo = getRecordField(record, 'Reference no', 'Reference No');
     const company = getRecordField(record, 'Company');
     const typeValue = getRecordField(record, 'Type');
-    const emailLink = getRecordField(record, 'Email', 'Email link', 'Email Link');
+    const emailLink = getRecordField(record, 'Email link', 'Email Link', 'Email');
     const emailDateValue = getRecordField(record, 'Email date', 'Email Date');
     const statusValue = getRecordField(record, 'Status');
     const log = getRecordField(record, 'Log');
+    const profileIdRaw = getRecordField(record, 'Profile ID', 'Profile Id');
     const profileLabel = getRecordField(record, 'Profile');
 
-    if (!referenceNo && !company && !typeValue && !emailLink && !emailDateValue && !statusValue) {
+    if (
+      !referenceNo &&
+      !company &&
+      !typeValue &&
+      !emailLink &&
+      !emailDateValue &&
+      !statusValue &&
+      !profileIdRaw
+    ) {
       return { rowNumber, error: 'Empty row' };
     }
 
@@ -133,7 +187,7 @@ export function parseProgressionEmailCsv(text, options = {}) {
     }
 
     if (!emailLink) {
-      return { rowNumber, error: 'Email is required' };
+      return { rowNumber, error: 'Email link is required' };
     }
 
     const type = resolveOptionValue(typeValue, PROGRESSION_EMAIL_TYPES);
@@ -151,14 +205,19 @@ export function parseProgressionEmailCsv(text, options = {}) {
       return { rowNumber, error: 'Email date is required' };
     }
 
-    const profileId = resolveProfileId({
+    const profileResult = resolveProfileId({
+      profileIdRaw,
       profileLabel,
       defaultProfileId,
       profileLabelToId,
-      hasProfileColumn: hasProfileColumn && !defaultProfileId
+      needsProfileResolution
     });
 
-    if (!profileId) {
+    if (profileResult.error) {
+      return { rowNumber, error: profileResult.error };
+    }
+
+    if (!profileResult.profileId) {
       return {
         rowNumber,
         error: profileLabel
@@ -170,7 +229,7 @@ export function parseProgressionEmailCsv(text, options = {}) {
     return {
       rowNumber,
       payload: {
-        profile_id: profileId,
+        profile_id: profileResult.profileId,
         company,
         type,
         email_link: emailLink,

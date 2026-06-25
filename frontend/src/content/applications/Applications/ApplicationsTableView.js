@@ -37,7 +37,11 @@ import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import { formatIdentityLabel } from 'src/data/countryCodes';
 import { importJobApplicationsSequentially, parseApplicationCsv } from 'src/utils/applicationCsvImport';
-import { createJobApplication, deleteJobApplication } from 'src/services/jobApplicationApi';
+import {
+  APPLICATION_CSV_HEADERS,
+  buildApplicationExportRows
+} from 'src/utils/applicationCsvExport';
+import { createJobApplication, deleteJobApplication, listJobApplications } from 'src/services/jobApplicationApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
 
@@ -54,19 +58,6 @@ function formatResumeSource(row) {
   return '—';
 }
 
-function formatResumeExportValue(row) {
-  if (row.resume_pdf_filename) {
-    return row.resume_pdf_filename;
-  }
-  if (row.resume_generated_id) {
-    return `Generated #${row.resume_generated_id}`;
-  }
-  return row.resume_online_link || '';
-}
-
-function formatAppliedExportValue(row) {
-  return row.applied ? formatDateTime(row.applied_at) : 'Not applied';
-}
 
 const BASE_SEARCH_FIELDS = [
   'id',
@@ -82,6 +73,7 @@ function ApplicationsTableView({
   loading,
   onRefresh,
   profile,
+  exportProfileId,
   profiles = [],
   identities = [],
   showProfileColumn = false,
@@ -96,6 +88,7 @@ function ApplicationsTableView({
   const [deletingRecord, setDeletingRecord] = useState(null);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { open: detailOpen, selected: selectedApplication, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
 
@@ -174,40 +167,35 @@ function ApplicationsTableView({
     }
   };
 
-  const handleExportCsv = () => {
-    if (!filteredRows.length) {
-      enqueueSnackbar('No applications to export', { variant: 'info' });
-      return;
-    }
-
-    const headers = ['ID'];
-    if (showProfileColumn) {
-      headers.push('Profile');
-    }
-    headers.push('Role', 'Company', 'Link', 'Resume', 'Applied');
-
-    const csvRows = filteredRows.map((row) => {
-      const values = [row.id];
-      if (showProfileColumn) {
-        values.push(row.profile_label || '');
-      }
-      values.push(
-        row.role || '',
-        row.company || '',
-        row.link || '',
-        formatResumeExportValue(row),
-        formatAppliedExportValue(row)
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      const resolvedExportProfileId =
+        exportProfileId !== undefined ? exportProfileId : profile?.id ?? null;
+      const exportRows = await listJobApplications(
+        resolvedExportProfileId == null ? undefined : resolvedExportProfileId
       );
-      return values;
-    });
+      if (!exportRows.length) {
+        enqueueSnackbar('No applications to export', { variant: 'info' });
+        return;
+      }
 
-    const namePart = profile?.identity_name || 'all-profiles';
-    const datePart = new Date().toISOString().slice(0, 10);
-    downloadCsv(
-      sanitizeCsvFilename(`applications-${namePart}-${datePart}.csv`),
-      headers,
-      csvRows
-    );
+      const csvRows = buildApplicationExportRows(exportRows);
+      const namePart =
+        resolvedExportProfileId == null
+          ? 'all-profiles'
+          : profile?.identity_name || `profile-${resolvedExportProfileId}`;
+      const datePart = new Date().toISOString().slice(0, 10);
+      downloadCsv(
+        sanitizeCsvFilename(`job-applications-${namePart}-${datePart}.csv`),
+        APPLICATION_CSV_HEADERS,
+        csvRows
+      );
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to export CSV', { variant: 'error' });
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleImportClick = () => {
@@ -298,9 +286,9 @@ function ApplicationsTableView({
             variant="outlined"
             startIcon={<FileDownloadTwoToneIcon />}
             onClick={handleExportCsv}
-            disabled={loading || filteredRows.length === 0}
+            disabled={loading || exporting}
           >
-            Export
+            {exporting ? 'Exporting…' : 'Export'}
           </Button>
           <Button
             variant="outlined"
@@ -356,14 +344,14 @@ function ApplicationsTableView({
           <Table stickyHeader={fixedTableCard}>
               <TableHead>
                 <TableRow>
-                  <TableCell>ID</TableCell>
+                  <TableCell>No</TableCell>
                   {showProfileColumn ? <TableCell>Profile</TableCell> : null}
                   <TableCell>Role</TableCell>
                   <TableCell>Company</TableCell>
                   <TableCell>Link</TableCell>
                   <TableCell>Resume</TableCell>
                   <TableCell>Applied</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell align="right" />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -380,14 +368,14 @@ function ApplicationsTableView({
                     <TableCell colSpan={columnCount}>No applications match your filters.</TableCell>
                   </TableRow>
                 ) : (
-                  filteredRows.map((row) => (
+                  filteredRows.map((row, index) => (
                     <TableRow
                       key={row.id}
                       hover
                       sx={{ cursor: 'pointer' }}
                       onClick={() => openDetail(row)}
                     >
-                      <TableCell>{row.id}</TableCell>
+                      <TableCell>{index + 1}</TableCell>
                       {showProfileColumn ? (
                         <TableCell>{row.profile_label || '—'}</TableCell>
                       ) : null}
@@ -498,6 +486,7 @@ ApplicationsTableView.propTypes = {
   loading: PropTypes.bool.isRequired,
   onRefresh: PropTypes.func.isRequired,
   profile: PropTypes.object,
+  exportProfileId: PropTypes.oneOfType([PropTypes.number, PropTypes.oneOf([null])]),
   profiles: PropTypes.array,
   identities: PropTypes.array,
   showProfileColumn: PropTypes.bool,

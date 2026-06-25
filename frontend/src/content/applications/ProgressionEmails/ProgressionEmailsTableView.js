@@ -44,13 +44,17 @@ import {
   PROGRESSION_EMAIL_TYPES
 } from 'src/data/progressionEmailOptions';
 import { formatIdentityLabel } from 'src/data/countryCodes';
-import { createProgressionEmail, deleteProgressionEmail } from 'src/services/progressionEmailApi';
+import { createProgressionEmail, deleteProgressionEmail, listProgressionEmails } from 'src/services/progressionEmailApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
 import {
   importProgressionEmailsSequentially,
   parseProgressionEmailCsv
 } from 'src/utils/progressionEmailCsvImport';
+import {
+  PROGRESSION_EMAIL_CSV_HEADERS,
+  buildProgressionEmailExportRows
+} from 'src/utils/progressionEmailCsvExport';
 
 const BASE_SEARCH_FIELDS = [
   'id',
@@ -72,6 +76,7 @@ function ProgressionEmailsTableView({
   loading,
   onRefresh,
   profile,
+  exportProfileId,
   profiles = [],
   identities = [],
   showProfileColumn = false,
@@ -87,6 +92,7 @@ function ProgressionEmailsTableView({
   const [deletingRecord, setDeletingRecord] = useState(null);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { open: detailOpen, selected: selectedEmail, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
 
@@ -188,41 +194,35 @@ function ProgressionEmailsTableView({
     }
   };
 
-  const handleExportCsv = () => {
-    if (!filteredRows.length) {
-      enqueueSnackbar('No progression emails to export', { variant: 'info' });
-      return;
-    }
-
-    const headers = ['Reference no'];
-    if (showProfileColumn) {
-      headers.push('Profile');
-    }
-    headers.push('Company', 'Type', 'Email', 'Email date', 'Status', 'Log');
-
-    const csvRows = filteredRows.map((row) => {
-      const values = [row.reference_no || ''];
-      if (showProfileColumn) {
-        values.push(row.profile_label || '');
-      }
-      values.push(
-        row.company || '',
-        formatProgressionEmailType(row.type),
-        row.email_link || '',
-        formatDateTime(row.email_date),
-        formatProgressionEmailStatus(row.status),
-        row.log || ''
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      const resolvedExportProfileId =
+        exportProfileId !== undefined ? exportProfileId : profile?.id ?? null;
+      const exportRows = await listProgressionEmails(
+        resolvedExportProfileId == null ? undefined : resolvedExportProfileId
       );
-      return values;
-    });
+      if (!exportRows.length) {
+        enqueueSnackbar('No progression emails to export', { variant: 'info' });
+        return;
+      }
 
-    const namePart = profile?.identity_name || 'all-profiles';
-    const datePart = new Date().toISOString().slice(0, 10);
-    downloadCsv(
-      sanitizeCsvFilename(`progression-emails-${namePart}-${datePart}.csv`),
-      headers,
-      csvRows
-    );
+      const csvRows = buildProgressionEmailExportRows(exportRows);
+      const namePart =
+        resolvedExportProfileId == null
+          ? 'all-profiles'
+          : profile?.identity_name || `profile-${resolvedExportProfileId}`;
+      const datePart = new Date().toISOString().slice(0, 10);
+      downloadCsv(
+        sanitizeCsvFilename(`job-progression-emails-${namePart}-${datePart}.csv`),
+        PROGRESSION_EMAIL_CSV_HEADERS,
+        csvRows
+      );
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to export CSV', { variant: 'error' });
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleImportClick = () => {
@@ -318,10 +318,10 @@ function ProgressionEmailsTableView({
             size={singleLine ? 'small' : 'medium'}
             startIcon={<FileDownloadTwoToneIcon />}
             onClick={handleExportCsv}
-            disabled={loading || filteredRows.length === 0}
+            disabled={loading || exporting}
             sx={singleLine ? compactButtonSx : undefined}
           >
-            Export
+            {exporting ? 'Exporting…' : 'Export'}
           </Button>
           <Button
             variant="outlined"
@@ -513,6 +513,7 @@ ProgressionEmailsTableView.propTypes = {
   loading: PropTypes.bool.isRequired,
   onRefresh: PropTypes.func.isRequired,
   profile: PropTypes.object,
+  exportProfileId: PropTypes.oneOfType([PropTypes.number, PropTypes.oneOf([null])]),
   profiles: PropTypes.array,
   identities: PropTypes.array,
   showProfileColumn: PropTypes.bool,
