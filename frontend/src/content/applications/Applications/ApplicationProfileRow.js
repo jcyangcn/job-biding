@@ -2,11 +2,11 @@ import PropTypes from 'prop-types';
 import { Button } from '@mui/material';
 import QuizTwoToneIcon from '@mui/icons-material/QuizTwoTone';
 import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
-import ProfileIdentityCard from 'src/components/ProfileIdentityCard';
+import ProfileCopyCard from 'src/components/ProfileCopyCard';
 
 function ApplicationProfileRow({ profile, identity, onQaClick, onViewClick }) {
   return (
-    <ProfileIdentityCard
+    <ProfileCopyCard
       profile={profile}
       identity={identity}
       actions={

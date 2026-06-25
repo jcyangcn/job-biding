@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link as RouterLink } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
@@ -25,17 +25,26 @@ import {
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
+import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import OpenInNewTwoToneIcon from '@mui/icons-material/OpenInNewTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import ApplicationDetailDialog from './ApplicationDetailDialog';
 import ApplicationEditDialog from './ApplicationEditDialog';
+import ApplicationResumeCell from './ApplicationResumeCell';
 import TableListFilters from 'src/components/TableListFilters';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
-import { deleteJobApplication } from 'src/services/jobApplicationApi';
+import { formatIdentityLabel } from 'src/data/countryCodes';
+import { importJobApplicationsSequentially, parseApplicationCsv } from 'src/utils/applicationCsvImport';
+import { createJobApplication, deleteJobApplication } from 'src/services/jobApplicationApi';
 import { formatDateTime } from 'src/utils/dateFormat';
+import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
 
 function formatResumeSource(row) {
+  if (row.resume_pdf_filename) {
+    return row.resume_pdf_filename;
+  }
   if (row.resume_generated_id) {
     return `Generated #${row.resume_generated_id}`;
   }
@@ -43,6 +52,20 @@ function formatResumeSource(row) {
     return 'Online link';
   }
   return '—';
+}
+
+function formatResumeExportValue(row) {
+  if (row.resume_pdf_filename) {
+    return row.resume_pdf_filename;
+  }
+  if (row.resume_generated_id) {
+    return `Generated #${row.resume_generated_id}`;
+  }
+  return row.resume_online_link || '';
+}
+
+function formatAppliedExportValue(row) {
+  return row.applied ? formatDateTime(row.applied_at) : 'Not applied';
 }
 
 const BASE_SEARCH_FIELDS = [
@@ -59,16 +82,20 @@ function ApplicationsTableView({
   loading,
   onRefresh,
   profile,
+  profiles = [],
+  identities = [],
   showProfileColumn = false,
   tableCardHeight,
   renderLayout
 }) {
   const { enqueueSnackbar } = useSnackbar();
+  const fileInputRef = useRef(null);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deletingRecord, setDeletingRecord] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const { open: detailOpen, selected: selectedApplication, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
 
@@ -92,6 +119,32 @@ function ApplicationsTableView({
     searchFields,
     dateField: 'applied_at'
   });
+
+  const profileLabelToId = useMemo(() => {
+    const map = {};
+
+    if (profiles.length && identities.length) {
+      const identityById = Object.fromEntries(identities.map((identity) => [identity.id, identity]));
+      profiles.forEach((item) => {
+        const identity = identityById[item.identity_id];
+        const label = formatIdentityLabel(identity);
+        if (label) {
+          map[label] = item.id;
+        }
+        if (item.identity_name) {
+          map[item.identity_name] = item.id;
+        }
+      });
+    }
+
+    rows.forEach((row) => {
+      if (row.profile_label && row.profile_id) {
+        map[row.profile_label] = row.profile_id;
+      }
+    });
+
+    return map;
+  }, [profiles, identities, rows]);
 
   const openEditDialog = (row) => {
     closeDetail();
@@ -121,6 +174,90 @@ function ApplicationsTableView({
     }
   };
 
+  const handleExportCsv = () => {
+    if (!filteredRows.length) {
+      enqueueSnackbar('No applications to export', { variant: 'info' });
+      return;
+    }
+
+    const headers = ['ID'];
+    if (showProfileColumn) {
+      headers.push('Profile');
+    }
+    headers.push('Role', 'Company', 'Link', 'Resume', 'Applied');
+
+    const csvRows = filteredRows.map((row) => {
+      const values = [row.id];
+      if (showProfileColumn) {
+        values.push(row.profile_label || '');
+      }
+      values.push(
+        row.role || '',
+        row.company || '',
+        row.link || '',
+        formatResumeExportValue(row),
+        formatAppliedExportValue(row)
+      );
+      return values;
+    });
+
+    const namePart = profile?.identity_name || 'all-profiles';
+    const datePart = new Date().toISOString().slice(0, 10);
+    downloadCsv(
+      sanitizeCsvFilename(`applications-${namePart}-${datePart}.csv`),
+      headers,
+      csvRows
+    );
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFileSelected = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsedRows = parseApplicationCsv(text, {
+        defaultProfileId: profile?.id ?? null,
+        profileLabelToId,
+        hasProfileColumn: showProfileColumn && !profile
+      }).filter((row) => row.error !== 'Empty row');
+
+      if (!parsedRows.length) {
+        enqueueSnackbar('No rows found in CSV', { variant: 'warning' });
+        return;
+      }
+
+      const { created, failed, firstError } = await importJobApplicationsSequentially(
+        parsedRows,
+        createJobApplication
+      );
+
+      if (created) {
+        await onRefresh();
+      }
+
+      if (created && failed) {
+        enqueueSnackbar(`Imported ${created} application(s); ${failed} failed`, {
+          variant: 'warning'
+        });
+      } else if (failed) {
+        enqueueSnackbar(firstError || 'Import failed', { variant: 'error' });
+      } else {
+        enqueueSnackbar(`Imported ${created} application(s)`, { variant: 'success' });
+      }
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to import CSV', { variant: 'error' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const columnCount = showProfileColumn ? 8 : 7;
   const fixedTableCard = Boolean(tableCardHeight);
 
@@ -142,6 +279,29 @@ function ApplicationsTableView({
       totalCount={rows.length}
       actions={
         <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            hidden
+            onChange={handleImportFileSelected}
+          />
+          <Button
+            variant="outlined"
+            startIcon={<FileUploadTwoToneIcon />}
+            onClick={handleImportClick}
+            disabled={loading || importing}
+          >
+            {importing ? 'Importing…' : 'Import'}
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<FileDownloadTwoToneIcon />}
+            onClick={handleExportCsv}
+            disabled={loading || filteredRows.length === 0}
+          >
+            Export
+          </Button>
           <Button
             variant="outlined"
             startIcon={<RefreshTwoToneIcon />}
@@ -250,20 +410,7 @@ function ApplicationsTableView({
                         )}
                       </TableCell>
                       <TableCell onClick={stopPropagation}>
-                        {row.resume_online_link ? (
-                          <Tooltip title={row.resume_online_link}>
-                            <Link
-                              href={row.resume_online_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              underline="hover"
-                            >
-                              {formatResumeSource(row)}
-                            </Link>
-                          </Tooltip>
-                        ) : (
-                          formatResumeSource(row)
-                        )}
+                        <ApplicationResumeCell row={row} />
                       </TableCell>
                       <TableCell>
                         {row.applied ? formatDateTime(row.applied_at) : 'Not applied'}
@@ -351,6 +498,8 @@ ApplicationsTableView.propTypes = {
   loading: PropTypes.bool.isRequired,
   onRefresh: PropTypes.func.isRequired,
   profile: PropTypes.object,
+  profiles: PropTypes.array,
+  identities: PropTypes.array,
   showProfileColumn: PropTypes.bool,
   tableCardHeight: PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.object]),
   renderLayout: PropTypes.func

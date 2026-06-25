@@ -294,6 +294,7 @@ class JobApplicationResponse(BaseModel):
     link: str
     job_description: str
     resume_generated_id: int | None = None
+    resume_pdf_filename: str | None = None
     resume_online_link: str | None = None
     applied: bool
     applied_at: datetime | None = None

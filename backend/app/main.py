@@ -561,14 +561,15 @@ def _resolve_generated_pdf(filename: str) -> Path:
 
 
 @app.get("/api/resumes/download/{filename}")
-def download_resume_pdf(filename: str):
-    """Return a generated PDF as a browser download (no client-side Save As)."""
+def download_resume_pdf(filename: str, inline: bool = False):
+    """Return a generated PDF. Use inline=true to open in the browser."""
     pdf_path = _resolve_generated_pdf(filename)
+    disposition = "inline" if inline else "attachment"
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
         filename=pdf_path.name,
-        headers={"Content-Disposition": f'attachment; filename="{pdf_path.name}"'},
+        headers={"Content-Disposition": f'{disposition}; filename="{pdf_path.name}"'},
     )
 
 

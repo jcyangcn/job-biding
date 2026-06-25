@@ -7,6 +7,7 @@ import ProfileSidebar, { ALL_PROFILES } from '../ApplicationManagement/ProfileSi
 import ProgressionEmailsTableView from '../ProgressionEmails/ProgressionEmailsTableView';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { listProgressionEmails } from 'src/services/progressionEmailApi';
+import { listIdentities } from 'src/services/identityApi';
 import { listProfiles } from 'src/services/profileApi';
 
 function EmailManagement() {
@@ -21,6 +22,7 @@ function EmailManagement() {
     'View and manage progression emails by profile'
   );
   const [profiles, setProfiles] = useState([]);
+  const [identities, setIdentities] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState(ALL_PROFILES);
   const [allEmails, setAllEmails] = useState([]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
@@ -49,7 +51,12 @@ function EmailManagement() {
   const loadProfiles = useCallback(async () => {
     setLoadingProfiles(true);
     try {
-      setProfiles(await listProfiles());
+      const [profileRows, identityRows] = await Promise.all([
+        listProfiles(),
+        listIdentities()
+      ]);
+      setProfiles(profileRows);
+      setIdentities(identityRows);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load profiles', { variant: 'error' });
     } finally {
@@ -91,6 +98,8 @@ function EmailManagement() {
           loading={loadingEmails}
           onRefresh={handleRefresh}
           profile={selectedProfileId === ALL_PROFILES ? null : selectedProfile}
+          profiles={profiles}
+          identities={identities}
           showProfileColumn={selectedProfileId === ALL_PROFILES}
           tableCardHeight={sectionHeight}
           renderLayout={({ toolbar, table, dialogs }) => (

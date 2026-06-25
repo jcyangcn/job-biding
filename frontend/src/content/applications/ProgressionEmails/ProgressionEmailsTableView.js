@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link as RouterLink } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
@@ -25,6 +25,8 @@ import {
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
+import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import EmailLinkInfo from 'src/components/EmailLinkInfo';
 import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
@@ -41,8 +43,14 @@ import {
   PROGRESSION_EMAIL_STATUSES,
   PROGRESSION_EMAIL_TYPES
 } from 'src/data/progressionEmailOptions';
-import { deleteProgressionEmail } from 'src/services/progressionEmailApi';
+import { formatIdentityLabel } from 'src/data/countryCodes';
+import { createProgressionEmail, deleteProgressionEmail } from 'src/services/progressionEmailApi';
 import { formatDateTime } from 'src/utils/dateFormat';
+import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
+import {
+  importProgressionEmailsSequentially,
+  parseProgressionEmailCsv
+} from 'src/utils/progressionEmailCsvImport';
 
 const BASE_SEARCH_FIELDS = [
   'id',
@@ -64,17 +72,21 @@ function ProgressionEmailsTableView({
   loading,
   onRefresh,
   profile,
+  profiles = [],
+  identities = [],
   showProfileColumn = false,
   tableCardHeight,
   renderLayout,
   singleLine = false
 }) {
   const { enqueueSnackbar } = useSnackbar();
+  const fileInputRef = useRef(null);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deletingRecord, setDeletingRecord] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const { open: detailOpen, selected: selectedEmail, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
 
@@ -101,6 +113,32 @@ function ProgressionEmailsTableView({
     dateField: 'email_date',
     selects: PROGRESSION_EMAIL_SELECT_FILTERS
   });
+
+  const profileLabelToId = useMemo(() => {
+    const map = {};
+
+    if (profiles.length && identities.length) {
+      const identityById = Object.fromEntries(identities.map((identity) => [identity.id, identity]));
+      profiles.forEach((item) => {
+        const identity = identityById[item.identity_id];
+        const label = formatIdentityLabel(identity);
+        if (label) {
+          map[label] = item.id;
+        }
+        if (item.identity_name) {
+          map[item.identity_name] = item.id;
+        }
+      });
+    }
+
+    rows.forEach((row) => {
+      if (row.profile_label && row.profile_id) {
+        map[row.profile_label] = row.profile_id;
+      }
+    });
+
+    return map;
+  }, [profiles, identities, rows]);
 
   const filterSelects = useMemo(
     () => [
@@ -150,6 +188,91 @@ function ProgressionEmailsTableView({
     }
   };
 
+  const handleExportCsv = () => {
+    if (!filteredRows.length) {
+      enqueueSnackbar('No progression emails to export', { variant: 'info' });
+      return;
+    }
+
+    const headers = ['Reference no'];
+    if (showProfileColumn) {
+      headers.push('Profile');
+    }
+    headers.push('Company', 'Type', 'Email', 'Email date', 'Status', 'Log');
+
+    const csvRows = filteredRows.map((row) => {
+      const values = [row.reference_no || ''];
+      if (showProfileColumn) {
+        values.push(row.profile_label || '');
+      }
+      values.push(
+        row.company || '',
+        formatProgressionEmailType(row.type),
+        row.email_link || '',
+        formatDateTime(row.email_date),
+        formatProgressionEmailStatus(row.status),
+        row.log || ''
+      );
+      return values;
+    });
+
+    const namePart = profile?.identity_name || 'all-profiles';
+    const datePart = new Date().toISOString().slice(0, 10);
+    downloadCsv(
+      sanitizeCsvFilename(`progression-emails-${namePart}-${datePart}.csv`),
+      headers,
+      csvRows
+    );
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFileSelected = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsedRows = parseProgressionEmailCsv(text, {
+        defaultProfileId: profile?.id ?? null,
+        profileLabelToId,
+        hasProfileColumn: showProfileColumn && !profile
+      }).filter((row) => row.error !== 'Empty row');
+
+      if (!parsedRows.length) {
+        enqueueSnackbar('No rows found in CSV', { variant: 'warning' });
+        return;
+      }
+
+      const { created, failed, firstError } = await importProgressionEmailsSequentially(
+        parsedRows,
+        createProgressionEmail
+      );
+
+      if (created) {
+        await onRefresh();
+      }
+
+      if (created && failed) {
+        enqueueSnackbar(`Imported ${created} email(s); ${failed} failed`, {
+          variant: 'warning'
+        });
+      } else if (failed) {
+        enqueueSnackbar(firstError || 'Import failed', { variant: 'error' });
+      } else {
+        enqueueSnackbar(`Imported ${created} email(s)`, { variant: 'success' });
+      }
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to import CSV', { variant: 'error' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const columnCount = showProfileColumn ? 9 : 8;
   const fixedTableCard = Boolean(tableCardHeight);
 
@@ -173,6 +296,33 @@ function ProgressionEmailsTableView({
       totalCount={rows.length}
       actions={
         <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            hidden
+            onChange={handleImportFileSelected}
+          />
+          <Button
+            variant="outlined"
+            size={singleLine ? 'small' : 'medium'}
+            startIcon={<FileUploadTwoToneIcon />}
+            onClick={handleImportClick}
+            disabled={loading || importing}
+            sx={singleLine ? compactButtonSx : undefined}
+          >
+            {importing ? 'Importing…' : 'Import'}
+          </Button>
+          <Button
+            variant="outlined"
+            size={singleLine ? 'small' : 'medium'}
+            startIcon={<FileDownloadTwoToneIcon />}
+            onClick={handleExportCsv}
+            disabled={loading || filteredRows.length === 0}
+            sx={singleLine ? compactButtonSx : undefined}
+          >
+            Export
+          </Button>
           <Button
             variant="outlined"
             size={singleLine ? 'small' : 'medium'}
@@ -363,6 +513,8 @@ ProgressionEmailsTableView.propTypes = {
   loading: PropTypes.bool.isRequired,
   onRefresh: PropTypes.func.isRequired,
   profile: PropTypes.object,
+  profiles: PropTypes.array,
+  identities: PropTypes.array,
   showProfileColumn: PropTypes.bool,
   tableCardHeight: PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.object]),
   renderLayout: PropTypes.func,

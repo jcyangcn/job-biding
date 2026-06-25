@@ -1,7 +1,5 @@
 import { Box, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
-import ThemeSettings from 'src/components/ThemeSettings';
-
 import Sidebar from './Sidebar';
 import Header from './Header';
 
@@ -101,7 +99,6 @@ const BoxedSidebarLayout = () => {
               <Outlet />
             </Box>
           </Box>
-          <ThemeSettings />
         </Box>
       </Box>
     </>

@@ -4,7 +4,6 @@ import { Outlet } from 'react-router-dom';
 import BottomBar from './BottomBar';
 import { SidebarContext } from 'src/contexts/SidebarContext';
 import SidebarMenu from 'src/layouts/BoxedSidebarLayout/Sidebar/SidebarMenu';
-import ThemeSettings from './ThemeSettings';
 import Scrollbar from 'src/components/Scrollbar';
 import Logo from 'src/components/LogoSign';
 import SidebarTopSection from 'src/layouts/AccentHeaderLayout/Sidebar/SidebarTopSection';
@@ -92,7 +91,6 @@ const BottomNavigationLayout = () => {
           <Scrollbar>
             <Outlet />
           </Scrollbar>
-          <ThemeSettings />
         </MainContent>
         <BottomBar />
       </MainWrapper>

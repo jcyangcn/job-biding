@@ -1,11 +1,11 @@
 import PropTypes from 'prop-types';
 import { Button } from '@mui/material';
 import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
-import ProfileIdentityCard from 'src/components/ProfileIdentityCard';
+import ProfileCopyCard from 'src/components/ProfileCopyCard';
 
 function ProgressionEmailProfileRow({ profile, identity, onViewClick }) {
   return (
-    <ProfileIdentityCard
+    <ProfileCopyCard
       profile={profile}
       identity={identity}
       actions={

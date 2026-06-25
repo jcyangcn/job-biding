@@ -3,11 +3,17 @@ import { Helmet } from 'react-helmet-async';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import {
+  alpha,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
   FormControl,
   FormControlLabel,
@@ -28,7 +34,7 @@ import { format } from 'date-fns';
 import DateField from 'src/components/DateField';
 import ArrowBackTwoToneIcon from '@mui/icons-material/ArrowBackTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
-import SendTwoToneIcon from '@mui/icons-material/SendTwoTone';
+import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
@@ -81,6 +87,7 @@ function ApplicationDetails() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [appliedConfirmOpen, setAppliedConfirmOpen] = useState(false);
   const [resumeSource, setResumeSource] = useState('generated');
   const [profileMode, setProfileMode] = useState('markdown');
   const [profileMarkdown, setProfileMarkdown] = useState('');
@@ -166,11 +173,28 @@ function ApplicationDetails() {
 
   const handleAppliedChange = (event) => {
     const checked = event.target.checked;
+    if (checked) {
+      setAppliedConfirmOpen(true);
+      return;
+    }
+
     setForm((current) => ({
       ...current,
-      applied: checked,
-      applied_at: checked && !current.applied_at ? format(new Date(), 'yyyy-MM-dd') : current.applied_at
+      applied: false
     }));
+  };
+
+  const handleConfirmApplied = () => {
+    setForm((current) => ({
+      ...current,
+      applied: true,
+      applied_at: current.applied_at || format(new Date(), 'yyyy-MM-dd')
+    }));
+    setAppliedConfirmOpen(false);
+  };
+
+  const handleCancelApplied = () => {
+    setAppliedConfirmOpen(false);
   };
 
   const handleResumeSourceChange = (event) => {
@@ -259,10 +283,10 @@ function ApplicationDetails() {
         applied: form.applied,
         applied_at: form.applied ? new Date(form.applied_at).toISOString() : null
       });
-      enqueueSnackbar('Application submitted', { variant: 'success' });
+      enqueueSnackbar('Application saved', { variant: 'success' });
       navigate(`/applications/job-applications/${profile.id}`);
     } catch (err) {
-      enqueueSnackbar(err.message || 'Submit failed', { variant: 'error' });
+      enqueueSnackbar(err.message || 'Save failed', { variant: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -358,45 +382,6 @@ function ApplicationDetails() {
                       onChange={handleFormChange('job_description')}
                     />
                   </Box>
-
-                  <Stack spacing={1.5} sx={{ flexShrink: 0, pt: 0.5 }}>
-                    <FormLabel sx={{ fontSize: theme.typography.pxToRem(12), lineHeight: 1.2 }}>
-                      Applied
-                    </FormLabel>
-                    <Box
-                      display="flex"
-                      alignItems={{ xs: 'stretch', sm: 'center' }}
-                      gap={2}
-                      flexWrap="wrap"
-                    >
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={form.applied}
-                            onChange={handleAppliedChange}
-                            color="primary"
-                            size="small"
-                          />
-                        }
-                        label="Mark as applied"
-                        sx={{ mr: 0 }}
-                      />
-                      {form.applied ? (
-                        <Box sx={{ flex: 1, minWidth: 180 }}>
-                          <DateField
-                            fullWidth
-                            size="small"
-                            label="Applied at"
-                            value={form.applied_at}
-                            onChange={(value) =>
-                              setForm((current) => ({ ...current, applied_at: value }))
-                            }
-                            required
-                          />
-                        </Box>
-                      ) : null}
-                    </Box>
-                  </Stack>
                 </Stack>
               </Grid>
 
@@ -534,16 +519,71 @@ function ApplicationDetails() {
 
                 <Divider sx={{ my: 1, flexShrink: 0 }} />
 
-                <Box display="flex" justifyContent="flex-end" sx={{ flexShrink: 0 }}>
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="flex-end"
+                  gap={2}
+                  flexWrap="wrap"
+                  sx={{ flexShrink: 0, py: 0.5 }}
+                >
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    gap={form.applied ? 1.25 : 2}
+                    flexWrap="wrap"
+                    sx={{
+                      px: form.applied ? 1.5 : 2,
+                      py: form.applied ? 0.75 : 1.25,
+                      borderRadius: theme.general.borderRadius,
+                      bgcolor: form.applied
+                        ? alpha(theme.palette.success.main, 0.14)
+                        : alpha(theme.palette.error.main, 0.14),
+                      border: `${form.applied ? 1 : 2}px solid ${
+                        form.applied ? theme.palette.success.main : theme.palette.error.main
+                      }`
+                    }}
+                  >
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={form.applied}
+                          onChange={handleAppliedChange}
+                          color={form.applied ? 'success' : 'error'}
+                          size={form.applied ? 'small' : 'medium'}
+                        />
+                      }
+                      label={
+                        <Typography
+                          variant={form.applied ? 'body2' : 'subtitle1'}
+                          fontWeight={700}
+                        >
+                          Applied
+                        </Typography>
+                      }
+                      sx={{ m: 0 }}
+                    />
+                    {form.applied ? (
+                      <DateField
+                        size="small"
+                        label="Applied at"
+                        value={form.applied_at}
+                        onChange={(value) =>
+                          setForm((current) => ({ ...current, applied_at: value }))
+                        }
+                        required
+                        sx={{ width: 150 }}
+                      />
+                    ) : null}
+                  </Box>
                   <Button
-                    size="small"
                     variant="contained"
-                    startIcon={<SendTwoToneIcon />}
+                    size="large"
+                    startIcon={<SaveTwoToneIcon />}
                     onClick={handleSubmit}
                     disabled={submitting || generating}
-                    sx={compactButtonSx}
                   >
-                    {submitting ? 'Submitting…' : 'Submit application'}
+                    {submitting ? 'Saving…' : 'Save'}
                   </Button>
                 </Box>
               </Grid>
@@ -551,6 +591,19 @@ function ApplicationDetails() {
           </CardContent>
         </Card>
       </Box>
+
+      <Dialog open={appliedConfirmOpen} onClose={handleCancelApplied} maxWidth="xs" fullWidth>
+        <DialogTitle>Confirm applied</DialogTitle>
+        <DialogContent>
+          <DialogContentText>Are you sure applied correctly?</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelApplied}>Cancel</Button>
+          <Button onClick={handleConfirmApplied} variant="contained" autoFocus>
+            Yes, applied
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

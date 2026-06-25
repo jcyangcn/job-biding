@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Box, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
-import ThemeSettings from 'src/components/ThemeSettings';
 import { PageHeaderProvider } from 'src/contexts/PageHeaderContext';
 
 import Sidebar from './Sidebar';
@@ -45,7 +44,6 @@ const CustomedSidebarLayout = () => {
           <Box display="block">
             <Outlet />
           </Box>
-          <ThemeSettings />
         </Box>
       </Box>
     </PageHeaderProvider>

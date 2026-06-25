@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,6 +23,12 @@ def application_to_response(db: Session, record: JobApplication) -> dict:
         identity = db.get(JobIdentity, profile.identity_id)
         profile_label = _format_identity_label(identity)
 
+    resume_pdf_filename = None
+    if record.resume_generated_id is not None:
+        generation = db.get(ResumeGeneration, record.resume_generated_id)
+        if generation and generation.pdf_path:
+            resume_pdf_filename = Path(generation.pdf_path).name
+
     return {
         "id": record.id,
         "profile_id": record.profile_id,
@@ -31,6 +38,7 @@ def application_to_response(db: Session, record: JobApplication) -> dict:
         "link": record.link,
         "job_description": record.job_description,
         "resume_generated_id": record.resume_generated_id,
+        "resume_pdf_filename": resume_pdf_filename,
         "resume_online_link": record.resume_online_link,
         "applied": record.applied,
         "applied_at": record.applied_at,

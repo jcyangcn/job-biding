@@ -7,6 +7,7 @@ import ApplicationsTableView from '../Applications/ApplicationsTableView';
 import ProfileSidebar, { ALL_PROFILES } from './ProfileSidebar';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { listJobApplications } from 'src/services/jobApplicationApi';
+import { listIdentities } from 'src/services/identityApi';
 import { listProfiles } from 'src/services/profileApi';
 
 function ApplicationManagement() {
@@ -21,6 +22,7 @@ function ApplicationManagement() {
     'View and manage job applications by profile'
   );
   const [profiles, setProfiles] = useState([]);
+  const [identities, setIdentities] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState(ALL_PROFILES);
   const [allApplications, setAllApplications] = useState([]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
@@ -49,7 +51,12 @@ function ApplicationManagement() {
   const loadProfiles = useCallback(async () => {
     setLoadingProfiles(true);
     try {
-      setProfiles(await listProfiles());
+      const [profileRows, identityRows] = await Promise.all([
+        listProfiles(),
+        listIdentities()
+      ]);
+      setProfiles(profileRows);
+      setIdentities(identityRows);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load profiles', { variant: 'error' });
     } finally {
@@ -91,6 +98,8 @@ function ApplicationManagement() {
           loading={loadingApplications}
           onRefresh={handleRefresh}
           profile={selectedProfileId === ALL_PROFILES ? null : selectedProfile}
+          profiles={profiles}
+          identities={identities}
           showProfileColumn={selectedProfileId === ALL_PROFILES}
           tableCardHeight={sectionHeight}
           renderLayout={({ toolbar, table, dialogs }) => (
