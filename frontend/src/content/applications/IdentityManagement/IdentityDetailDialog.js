@@ -1,9 +1,11 @@
 import PropTypes from 'prop-types';
-import { Grid, Link, Typography } from '@mui/material';
+import { Grid, Stack, Typography } from '@mui/material';
 import BadgeTwoToneIcon from '@mui/icons-material/BadgeTwoTone';
 import HomeTwoToneIcon from '@mui/icons-material/HomeTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import PublicTwoToneIcon from '@mui/icons-material/PublicTwoTone';
+import CountryLabel from 'src/components/CountryLabel';
+import CopyableLink from 'src/components/CopyableLink';
 import { getAnswerFieldLabel } from 'src/data/profileAnswerFields';
 import {
   DetailDialog,
@@ -19,7 +21,14 @@ function IdentityDetailDialog({ open, identity, onClose }) {
   }
 
   const title = identity.name || 'Identity details';
-  const caption = `#${identity.id} · ${identity.country}`;
+  const caption = (
+    <Stack direction="row" alignItems="center" gap={0.75} component="span">
+      <Typography variant="caption" color="text.secondary" component="span">
+        #{identity.id} ·
+      </Typography>
+      <CountryLabel country={identity.country} flagHeight={12} variant="caption" />
+    </Stack>
+  );
   const answerLines = Object.entries(identity.answers || {})
     .map(([key, value]) => {
       const trimmed = value?.trim();
@@ -33,29 +42,19 @@ function IdentityDetailDialog({ open, identity, onClose }) {
     <DetailDialog open={open} onClose={onClose} title={title} caption={caption}>
       <Grid container spacing={2}>
         <DetailField label="Name" value={identity.name} icon={BadgeTwoToneIcon} />
-        <DetailField label="Country" value={identity.country} icon={PublicTwoToneIcon} />
+        <DetailField label="Country" icon={PublicTwoToneIcon}>
+          <CountryLabel country={identity.country} variant="body1" />
+        </DetailField>
         <DetailField label="City/State" value={identity.city_state || '—'} icon={HomeTwoToneIcon} />
         <DetailField label="Zipcode" value={identity.zipcode || '—'} icon={HomeTwoToneIcon} />
         <DetailField label="DOB" value={formatDetailDateOnly(identity.dob) || '—'} />
         <DetailField label="SSN" value={identity.ssn || '—'} />
         <DetailField label="Address" value={identity.address || '—'} xs={12} sm={12} icon={HomeTwoToneIcon} />
         <DetailField label="LinkedIn" icon={LinkTwoToneIcon} xs={12} sm={6}>
-          {identity.linkedin ? (
-            <Link href={identity.linkedin} target="_blank" rel="noopener noreferrer" underline="hover">
-              {identity.linkedin}
-            </Link>
-          ) : (
-            <Typography variant="body1">—</Typography>
-          )}
+          <CopyableLink url={identity.linkedin} label="LinkedIn" maxWidth="100%" multiline />
         </DetailField>
         <DetailField label="GitHub" icon={LinkTwoToneIcon} xs={12} sm={6}>
-          {identity.github ? (
-            <Link href={identity.github} target="_blank" rel="noopener noreferrer" underline="hover">
-              {identity.github}
-            </Link>
-          ) : (
-            <Typography variant="body1">—</Typography>
-          )}
+          <CopyableLink url={identity.github} label="GitHub" maxWidth="100%" multiline />
         </DetailField>
         <DetailField label="Created" value={formatDetailDate(identity.created_at) || '—'} />
       </Grid>

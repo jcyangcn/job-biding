@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Query
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +22,17 @@ from app.identity_service import (
     identity_to_response,
     list_identities,
     update_identity,
+)
+from app.citizen_service import (
+    add_citizen_image,
+    citizen_to_response,
+    create_citizen,
+    delete_citizen,
+    get_citizen,
+    list_citizens,
+    remove_citizen_image,
+    resolve_citizen_image_path,
+    update_citizen,
 )
 from app.application_service import (
     application_to_response,
@@ -72,6 +83,9 @@ from app.models import (
     JobProgressionEmailReferencePreview,
     JobProgressionEmailResponse,
     JobProgressionEmailUpdateRequest,
+    CitizenCreateRequest,
+    CitizenResponse,
+    CitizenUpdateRequest,
 )
 from app.pdf_renderer import build_resume_path, render_resume_pdf
 from app.profile_parser import load_default_profile, parse_profile_markdown
@@ -462,6 +476,135 @@ def delete_job_progression_email_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"ok": True}
+
+
+@app.get("/api/citizens", response_model=list[CitizenResponse])
+def list_citizens_endpoint(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    return [citizen_to_response(row) for row in list_citizens(db)]
+
+
+@app.post("/api/citizens", response_model=CitizenResponse)
+def create_citizen_endpoint(
+    request: CitizenCreateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = create_citizen(db, request)
+    return citizen_to_response(record)
+
+
+@app.put("/api/citizens/{citizen_id}", response_model=CitizenResponse)
+def update_citizen_endpoint(
+    citizen_id: int,
+    request: CitizenUpdateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_citizen(db, citizen_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Citizen not found")
+    updated = update_citizen(db, record, request)
+    return citizen_to_response(updated)
+
+
+@app.delete("/api/citizens/{citizen_id}")
+def delete_citizen_endpoint(
+    citizen_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_citizen(db, citizen_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Citizen not found")
+    delete_citizen(db, record)
+    return {"ok": True}
+
+
+@app.post("/api/citizens/{citizen_id}/images", response_model=CitizenResponse)
+async def upload_citizen_image_endpoint(
+    citizen_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_citizen(db, citizen_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Citizen not found")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    try:
+        add_citizen_image(
+            db,
+            record,
+            original_name=file.filename or "image.jpg",
+            content=content,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    refreshed = get_citizen(db, citizen_id)
+    return citizen_to_response(refreshed)
+
+
+@app.get("/api/citizens/{citizen_id}/images/{filename}")
+def download_citizen_image_endpoint(
+    citizen_id: int,
+    filename: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_citizen(db, citizen_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Citizen not found")
+
+    images = {item["filename"] for item in (record.images or [])}
+    safe_name = Path(filename).name
+    if safe_name not in images:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    try:
+        image_path = resolve_citizen_image_path(citizen_id, safe_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not image_path.is_file():
+        raise HTTPException(status_code=404, detail="Image file not found")
+
+    original_name = next(
+        (item.get("original_name") for item in record.images if item.get("filename") == safe_name),
+        safe_name,
+    )
+    return FileResponse(
+        image_path,
+        filename=original_name,
+        headers={"Content-Disposition": f'attachment; filename="{original_name}"'},
+    )
+
+
+@app.delete("/api/citizens/{citizen_id}/images/{filename}", response_model=CitizenResponse)
+def delete_citizen_image_endpoint(
+    citizen_id: int,
+    filename: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_citizen(db, citizen_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Citizen not found")
+
+    try:
+        remove_citizen_image(db, record, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    refreshed = get_citizen(db, citizen_id)
+    return citizen_to_response(refreshed)
 
 
 @app.get("/api/profile/default")

@@ -94,9 +94,13 @@ export function DetailDialog({
               {title}
             </Typography>
             {caption ? (
-              <Typography variant="caption" color="text.secondary" noWrap display="block">
-                {caption}
-              </Typography>
+              typeof caption === 'string' ? (
+                <Typography variant="caption" color="text.secondary" noWrap display="block">
+                  {caption}
+                </Typography>
+              ) : (
+                <Box>{caption}</Box>
+              )
             ) : null}
           </Box>
           <IconButton onClick={onClose} aria-label="Close" size="small">
@@ -114,7 +118,7 @@ DetailDialog.propTypes = {
   open: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
   title: PropTypes.string.isRequired,
-  caption: PropTypes.string,
+  caption: PropTypes.node,
   maxWidth: PropTypes.oneOf(['xs', 'sm', 'md', 'lg', 'xl']),
   children: PropTypes.node
 };

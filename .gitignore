@@ -1,5 +1,12 @@
-# Generated resume PDFs
-generated_resumes/*.pdf
+# Generated files (keep folder structure via .gitkeep)
+storage/downloads/generated resume/*
+!storage/downloads/generated resume/.gitkeep
+storage/uploads/citizen image/*
+!storage/uploads/citizen image/.gitkeep
+
+# Legacy paths (pre-storage layout)
+generated_resumes/
+citizen_images/
 
 # Backend secrets
 backend/.env

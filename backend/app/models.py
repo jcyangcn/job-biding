@@ -4,6 +4,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field, field_validator
 
 UserRoleLiteral = Literal["admin", "bidder", "caller"]
+CitizenStatusLiteral = Literal["Good", "Bad", "None"]
 
 
 class ProfileJob(BaseModel):
@@ -338,3 +339,37 @@ class JobProgressionEmailResponse(BaseModel):
 class JobProgressionEmailReferencePreview(BaseModel):
     profile_id: int
     reference_no: str
+
+
+class CitizenImageInfo(BaseModel):
+    filename: str
+    original_name: str
+    uploaded_at: datetime
+
+
+class CitizenCreateRequest(BaseModel):
+    country: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=255)
+    linkedin: str | None = Field(default=None, max_length=500)
+    details: str = ""
+    status: CitizenStatusLiteral = "None"
+
+
+class CitizenUpdateRequest(BaseModel):
+    country: str | None = Field(default=None, min_length=1, max_length=100)
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    linkedin: str | None = Field(default=None, max_length=500)
+    details: str | None = None
+    status: CitizenStatusLiteral | None = None
+
+
+class CitizenResponse(BaseModel):
+    id: int
+    country: str
+    name: str
+    linkedin: str | None = None
+    details: str
+    status: CitizenStatusLiteral
+    images: list[CitizenImageInfo]
+    created_at: datetime
+    updated_at: datetime

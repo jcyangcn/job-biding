@@ -20,6 +20,7 @@ import CheckTwoToneIcon from '@mui/icons-material/CheckTwoTone';
 import ContentCopyTwoToneIcon from '@mui/icons-material/ContentCopyTwoTone';
 import ExpandMoreTwoToneIcon from '@mui/icons-material/ExpandMoreTwoTone';
 import Label from 'src/components/Label';
+import { CountryFlag } from 'src/components/CountryLabel';
 import { formatDetailDateOnly } from 'src/components/DetailDialog';
 import { copyToClipboard } from 'src/utils/copyToClipboard';
 
@@ -41,7 +42,7 @@ function buildProfileFields(profile, identity) {
     { label: 'Email password', value: profile.email_password || '', columns: { xs: 12, sm: 6, lg: 4 } },
     { label: 'Phone', value: profile.phone || '' },
     { label: 'Proxy', value: profile.proxy || '', columns: { xs: 12, sm: 6, lg: 8 } },
-    { label: 'Country', value: identity?.country || '' },
+    { label: 'Country', value: identity?.country || '', showCountryFlag: true },
     { label: 'City / State', value: identity?.city_state || '' },
     { label: 'Zipcode', value: identity?.zipcode || '' },
     { label: 'Date of birth', value: formatDetailDateOnly(identity?.dob) || '' },
@@ -54,7 +55,7 @@ function buildProfileFields(profile, identity) {
 
 const DEFAULT_COLUMNS = { xs: 12, sm: 6, lg: 4 };
 
-function CopyableReadOnlyField({ label, value, multiline = false }) {
+function CopyableReadOnlyField({ label, value, multiline = false, showCountryFlag = false }) {
   const { enqueueSnackbar } = useSnackbar();
   const [copied, setCopied] = useState(false);
   const text = value ?? '';
@@ -81,6 +82,12 @@ function CopyableReadOnlyField({ label, value, multiline = false }) {
       value={text}
       InputProps={{
         readOnly: true,
+        startAdornment:
+          showCountryFlag && text ? (
+            <InputAdornment position="start">
+              <CountryFlag country={text} />
+            </InputAdornment>
+          ) : undefined,
         endAdornment: (
           <InputAdornment position="end">
             <Tooltip title={copied ? 'Copied' : 'Copy'}>
@@ -109,7 +116,8 @@ function CopyableReadOnlyField({ label, value, multiline = false }) {
 CopyableReadOnlyField.propTypes = {
   label: PropTypes.string.isRequired,
   value: PropTypes.string,
-  multiline: PropTypes.bool
+  multiline: PropTypes.bool,
+  showCountryFlag: PropTypes.bool
 };
 
 function getFieldColumns(field) {
@@ -220,6 +228,7 @@ function ProfileCopyCard({ profile, identity, actions }) {
                     label={field.label}
                     value={field.value}
                     multiline={field.multiline}
+                    showCountryFlag={field.showCountryFlag}
                   />
                 </Grid>
               );

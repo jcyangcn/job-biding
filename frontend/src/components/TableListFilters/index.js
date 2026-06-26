@@ -1,7 +1,6 @@
 import PropTypes from 'prop-types';
 import {
   Box,
-  Button,
   FormControl,
   InputAdornment,
   InputLabel,
@@ -10,7 +9,6 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import ClearAllTwoToneIcon from '@mui/icons-material/ClearAllTwoTone';
 import SearchTwoToneIcon from '@mui/icons-material/SearchTwoTone';
 import DateField from 'src/components/DateField';
 import { EMPTY_FILTER_VALUE } from 'src/utils/tableListFilters';
@@ -41,16 +39,11 @@ const compactButtonSx = {
   }
 };
 
-const filterButtonSx = {
-  whiteSpace: 'nowrap',
-  flexShrink: 0
-};
-
 function TableListFilters({
   search,
   onSearchChange,
   searchPlaceholder = 'Search…',
-  showDateRange = true,
+  showDateRange = false,
   dateFrom,
   dateTo,
   onDateFromChange,
@@ -58,8 +51,6 @@ function TableListFilters({
   dateFromLabel = 'From',
   dateToLabel = 'To',
   selects = [],
-  onClear,
-  hasActiveFilters,
   filteredCount,
   totalCount,
   actions,
@@ -169,16 +160,6 @@ function TableListFilters({
           />
         </>
       ) : null}
-      <Button
-        variant="outlined"
-        size="small"
-        startIcon={<ClearAllTwoToneIcon />}
-        onClick={onClear}
-        disabled={!hasActiveFilters}
-        sx={singleLine ? compactButtonSx : filterButtonSx}
-      >
-        Clear
-      </Button>
       <Box
         sx={{
           display: 'flex',
@@ -212,10 +193,10 @@ TableListFilters.propTypes = {
   onSearchChange: PropTypes.func.isRequired,
   searchPlaceholder: PropTypes.string,
   showDateRange: PropTypes.bool,
-  dateFrom: PropTypes.string.isRequired,
-  dateTo: PropTypes.string.isRequired,
-  onDateFromChange: PropTypes.func.isRequired,
-  onDateToChange: PropTypes.func.isRequired,
+  dateFrom: PropTypes.string,
+  dateTo: PropTypes.string,
+  onDateFromChange: PropTypes.func,
+  onDateToChange: PropTypes.func,
   dateFromLabel: PropTypes.string,
   dateToLabel: PropTypes.string,
   selects: PropTypes.arrayOf(
@@ -232,8 +213,6 @@ TableListFilters.propTypes = {
       ).isRequired
     })
   ),
-  onClear: PropTypes.func.isRequired,
-  hasActiveFilters: PropTypes.bool.isRequired,
   filteredCount: PropTypes.number,
   totalCount: PropTypes.number,
   actions: PropTypes.node,

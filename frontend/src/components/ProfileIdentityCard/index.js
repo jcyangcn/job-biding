@@ -23,6 +23,7 @@ import TagTwoToneIcon from '@mui/icons-material/TagTwoTone';
 import VpnKeyTwoToneIcon from '@mui/icons-material/VpnKeyTwoTone';
 import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
 import Label from 'src/components/Label';
+import CountryLabel from 'src/components/CountryLabel';
 import {
   DetailItem,
   formatDetailDateOnly
@@ -111,9 +112,13 @@ function SectionHeader({ icon: Icon, title, subtitle, color = 'primary' }) {
           {title}
         </Typography>
         {subtitle ? (
-          <Typography variant="caption" color="text.secondary">
-            {subtitle}
-          </Typography>
+          typeof subtitle === 'string' ? (
+            <Typography variant="caption" color="text.secondary">
+              {subtitle}
+            </Typography>
+          ) : (
+            subtitle
+          )
         ) : null}
       </Box>
     </Stack>
@@ -123,7 +128,7 @@ function SectionHeader({ icon: Icon, title, subtitle, color = 'primary' }) {
 SectionHeader.propTypes = {
   icon: PropTypes.elementType.isRequired,
   title: PropTypes.string.isRequired,
-  subtitle: PropTypes.string,
+  subtitle: PropTypes.node,
   color: PropTypes.string
 };
 
@@ -271,7 +276,18 @@ function ProfileIdentityCard({ profile, identity, actions }) {
                 <SectionHeader
                   icon={BadgeTwoToneIcon}
                   title="Identity"
-                  subtitle={`#${identity.id}${identity.country ? ` · ${identity.country}` : ''}`}
+                  subtitle={
+                    identity.country ? (
+                      <Stack direction="row" alignItems="center" gap={0.75} component="span">
+                        <Typography variant="body2" color="text.secondary" component="span">
+                          #{identity.id} ·
+                        </Typography>
+                        <CountryLabel country={identity.country} flagHeight={12} variant="body2" />
+                      </Stack>
+                    ) : (
+                      `#${identity.id}`
+                    )
+                  }
                   color="secondary"
                 />
                 <Grid container spacing={1.25}>
@@ -281,12 +297,9 @@ function ProfileIdentityCard({ profile, identity, actions }) {
                     value={identity.name}
                     iconColor="secondary.main"
                   />
-                  <InfoTile
-                    icon={PublicTwoToneIcon}
-                    label="Country"
-                    value={identity.country}
-                    iconColor="info.main"
-                  />
+                  <InfoTile icon={PublicTwoToneIcon} label="Country" iconColor="info.main">
+                    <CountryLabel country={identity.country} variant="body2" fontWeight={500} />
+                  </InfoTile>
                   <InfoTile icon={HomeTwoToneIcon} label="City / State" value={identity.city_state} />
                   <InfoTile icon={HomeTwoToneIcon} label="Zipcode" value={identity.zipcode} />
                   <InfoTile

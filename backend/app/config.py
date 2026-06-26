@@ -1,10 +1,17 @@
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
 INSTRUCTION_DIR = REPO_ROOT / "instruction"
+
+STORAGE_DIR = REPO_ROOT / "storage"
+DOWNLOADS_DIR = STORAGE_DIR / "downloads"
+UPLOADS_DIR = STORAGE_DIR / "uploads"
+GENERATED_RESUME_DIR = DOWNLOADS_DIR / "generated resume"
+CITIZEN_IMAGE_DIR = UPLOADS_DIR / "citizen image"
 
 
 class Settings(BaseSettings):
@@ -25,6 +32,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_expire_hours: int = 48
     generated_resumes_dir: str = ""
+    citizen_images_dir_config: str = Field(default="", validation_alias="CITIZEN_IMAGES_DIR")
     cors_origins: str = ""
 
     def resolved_provider(self) -> str:
@@ -44,10 +52,22 @@ class Settings(BaseSettings):
         return provider
 
     @property
+    def storage_root(self) -> Path:
+        return STORAGE_DIR
+
+    @property
     def generated_dir(self) -> Path:
-        raw = self.generated_resumes_dir.strip()
+        return self._resolve_storage_path(self.generated_resumes_dir, GENERATED_RESUME_DIR)
+
+    @property
+    def citizen_images_dir(self) -> Path:
+        return self._resolve_storage_path(self.citizen_images_dir_config, CITIZEN_IMAGE_DIR)
+
+    @staticmethod
+    def _resolve_storage_path(raw_value: str, default: Path) -> Path:
+        raw = raw_value.strip()
         if not raw:
-            return REPO_ROOT / "generated_resumes"
+            return default
         path = Path(raw)
         if not path.is_absolute():
             path = REPO_ROOT / path
@@ -67,3 +87,15 @@ class Settings(BaseSettings):
 
 settings = Settings()
 GENERATED_DIR = settings.generated_dir
+CITIZEN_IMAGES_DIR = settings.citizen_images_dir
+
+
+def ensure_storage_dirs() -> None:
+    for path in (
+        STORAGE_DIR,
+        DOWNLOADS_DIR,
+        UPLOADS_DIR,
+        GENERATED_DIR,
+        CITIZEN_IMAGES_DIR,
+    ):
+        path.mkdir(parents=True, exist_ok=True)

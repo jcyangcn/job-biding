@@ -303,16 +303,66 @@ def migrate_answers_to_identity() -> None:
             conn.execute(text("ALTER TABLE job_profile DROP COLUMN answers"))
 
 
+def migrate_citizen_columns() -> None:
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'citizen'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            return
+
+        linkedin_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'citizen'
+                  AND column_name = 'linkedin'
+                """
+            )
+        ).scalar()
+        if not linkedin_exists:
+            conn.execute(text("ALTER TABLE citizen ADD COLUMN linkedin VARCHAR(500)"))
+
+        status_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'citizen'
+                  AND column_name = 'status'
+                """
+            )
+        ).scalar()
+        if not status_exists:
+            conn.execute(
+                text(
+                    "ALTER TABLE citizen ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'None'"
+                )
+            )
+
+
 def init_db() -> None:
     from app import db_models  # noqa: F401
     from app.auth import seed_default_users
+    from app.config import ensure_storage_dirs
 
+    ensure_storage_dirs()
     Base.metadata.create_all(bind=engine)
     migrate_user_role_column()
     migrate_job_identity_columns()
     migrate_job_application_columns()
     migrate_job_profile_columns()
     migrate_answers_to_identity()
+    migrate_citizen_columns()
     with SessionLocal() as db:
         seed_default_users(db)
 

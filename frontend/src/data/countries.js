@@ -1,3 +1,5 @@
+export const DEFAULT_COUNTRY = 'United States';
+
 const COUNTRIES = [
   'Afghanistan',
   'Albania',

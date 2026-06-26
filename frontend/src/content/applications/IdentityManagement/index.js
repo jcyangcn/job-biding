@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
 import {
-  Autocomplete,
   Box,
   Button,
   Card,
@@ -31,11 +30,13 @@ import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import IdentityDetailDialog from './IdentityDetailDialog';
 import TableListFilters from 'src/components/TableListFilters';
+import CountryLabel from 'src/components/CountryLabel';
+import CountrySelectField from 'src/components/CountrySelectField';
 import DateField from 'src/components/DateField';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
-import COUNTRIES from 'src/data/countries';
+import COUNTRIES, { DEFAULT_COUNTRY } from 'src/data/countries';
 import {
   answersToItems,
   buildSampleAnswerItems,
@@ -52,7 +53,7 @@ import { formatDate } from 'src/utils/dateFormat';
 
 const emptyForm = {
   name: '',
-  country: '',
+  country: DEFAULT_COUNTRY,
   address: '',
   city_state: '',
   zipcode: '',
@@ -164,10 +165,6 @@ function IdentityManagement() {
 
   const handleFormChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
-  };
-
-  const handleCountryChange = (_, value) => {
-    setForm((current) => ({ ...current, country: value || '' }));
   };
 
   const handleAddQuestion = () => {
@@ -367,7 +364,9 @@ function IdentityManagement() {
                       >
                         <TableCell>{row.id}</TableCell>
                         <TableCell>{row.name}</TableCell>
-                        <TableCell>{row.country}</TableCell>
+                        <TableCell>
+                          <CountryLabel country={row.country} noWrap />
+                        </TableCell>
                         <TableCell sx={{ maxWidth: 200 }}>
                           <Typography noWrap title={row.address}>
                             {row.address}
@@ -428,23 +427,11 @@ function IdentityManagement() {
             onChange={handleFormChange('name')}
             required
           />
-          <Autocomplete
-            fullWidth
+          <CountrySelectField
             options={countryOptions}
-            value={form.country || null}
-            onChange={handleCountryChange}
-            autoHighlight
-            openOnFocus
-            disablePortal
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                margin="normal"
-                label="Country"
-                placeholder="Search country..."
-                required
-              />
-            )}
+            value={form.country}
+            onChange={(value) => setForm((current) => ({ ...current, country: value }))}
+            required
           />
           <TextField
             fullWidth

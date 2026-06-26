@@ -30,6 +30,10 @@ const menuItems = [
           {
             name: 'Email Management',
             link: '/applications/email-management'
+          },
+          {
+            name: 'Citizen Management',
+            link: '/applications/citizen-management'
           }
         ]
       }

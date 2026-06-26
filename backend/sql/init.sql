@@ -83,3 +83,15 @@ CREATE TABLE IF NOT EXISTS job_progression_email (
     log TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS citizen (
+    id SERIAL PRIMARY KEY,
+    country VARCHAR(100) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    linkedin VARCHAR(500),
+    status VARCHAR(20) NOT NULL DEFAULT 'None',
+    details TEXT NOT NULL DEFAULT '',
+    images JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
