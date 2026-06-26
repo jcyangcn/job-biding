@@ -342,12 +342,91 @@ def migrate_citizen_columns() -> None:
                 """
             )
         ).scalar()
-        if not status_exists:
+
+        review_status_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'citizen'
+                  AND column_name = 'review_status'
+                """
+            )
+        ).scalar()
+        if not review_status_exists:
             conn.execute(
                 text(
-                    "ALTER TABLE citizen ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'None'"
+                    "ALTER TABLE citizen ADD COLUMN review_status VARCHAR(20) NOT NULL DEFAULT 'None'"
                 )
             )
+            if status_exists:
+                conn.execute(
+                    text("UPDATE citizen SET review_status = status WHERE status IS NOT NULL")
+                )
+
+        reviewer_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'citizen'
+                  AND column_name = 'reviewer'
+                """
+            )
+        ).scalar()
+        if not reviewer_exists:
+            conn.execute(text("ALTER TABLE citizen ADD COLUMN reviewer VARCHAR(255)"))
+
+        reviewed_at_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'citizen'
+                  AND column_name = 'reviewed_at'
+                """
+            )
+        ).scalar()
+        if not reviewed_at_exists:
+            conn.execute(text("ALTER TABLE citizen ADD COLUMN reviewed_at DATE"))
+
+        review_log_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'citizen'
+                  AND column_name = 'review_log'
+                """
+            )
+        ).scalar()
+        if not review_log_exists:
+            conn.execute(
+                text("ALTER TABLE citizen ADD COLUMN review_log TEXT NOT NULL DEFAULT ''")
+            )
+
+        review_files_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'citizen'
+                  AND column_name = 'review_files'
+                """
+            )
+        ).scalar()
+        if not review_files_exists:
+            conn.execute(
+                text("ALTER TABLE citizen ADD COLUMN review_files JSONB NOT NULL DEFAULT '[]'")
+            )
+
+        if status_exists:
+            conn.execute(text("ALTER TABLE citizen DROP COLUMN status"))
 
 
 def init_db() -> None:

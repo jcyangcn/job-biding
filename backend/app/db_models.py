@@ -143,9 +143,13 @@ class Citizen(Base):
     country: Mapped[str] = mapped_column(String(100), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     linkedin: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="None")
+    review_status: Mapped[str] = mapped_column(String(20), nullable=False, default="None")
+    reviewer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    review_log: Mapped[str] = mapped_column(Text, nullable=False, default="")
     details: Mapped[str] = mapped_column(Text, nullable=False, default="")
     images: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    review_files: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -1,23 +1,35 @@
 import PropTypes from 'prop-types';
 import { Box, Grid, Stack, Typography } from '@mui/material';
 import BadgeTwoToneIcon from '@mui/icons-material/BadgeTwoTone';
-import FlagTwoToneIcon from '@mui/icons-material/FlagTwoTone';
+import CalendarTodayTwoToneIcon from '@mui/icons-material/CalendarTodayTwoTone';
 import ImageTwoToneIcon from '@mui/icons-material/ImageTwoTone';
+import InsertDriveFileTwoToneIcon from '@mui/icons-material/InsertDriveFileTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
+import PersonTwoToneIcon from '@mui/icons-material/PersonTwoTone';
 import PublicTwoToneIcon from '@mui/icons-material/PublicTwoTone';
+import RateReviewTwoToneIcon from '@mui/icons-material/RateReviewTwoTone';
 import CountryLabel from 'src/components/CountryLabel';
 import CopyableLink from 'src/components/CopyableLink';
 import {
   DetailDialog,
   DetailField,
   DetailTextSection,
-  formatDetailDate
+  formatDetailDate,
+  formatDetailDateOnly
 } from 'src/components/DetailDialog';
 import { formatDateTime } from 'src/utils/dateFormat';
 import CitizenImageTile from './CitizenImageTile';
-import CitizenStatusLabel from './CitizenStatusLabel';
+import CitizenReviewFileList from './CitizenReviewFileList';
+import CitizenReviewStatusLabel from './CitizenReviewStatusLabel';
 
-function CitizenDetailDialog({ open, citizen, onClose, onPreviewImage, onDownloadImage }) {
+function CitizenDetailDialog({
+  open,
+  citizen,
+  onClose,
+  onPreviewImage,
+  onDownloadImage,
+  onDownloadReviewFile
+}) {
   if (!citizen) {
     return null;
   }
@@ -32,6 +44,7 @@ function CitizenDetailDialog({ open, citizen, onClose, onPreviewImage, onDownloa
     </Stack>
   );
   const images = citizen.images || [];
+  const reviewFiles = citizen.review_files || [];
 
   return (
     <DetailDialog open={open} onClose={onClose} title={title} caption={caption}>
@@ -40,9 +53,6 @@ function CitizenDetailDialog({ open, citizen, onClose, onPreviewImage, onDownloa
           <CountryLabel country={citizen.country} variant="body1" />
         </DetailField>
         <DetailField label="Name" value={citizen.name} icon={BadgeTwoToneIcon} />
-        <DetailField label="Status" icon={FlagTwoToneIcon}>
-          <CitizenStatusLabel status={citizen.status} />
-        </DetailField>
         <DetailField label="LinkedIn" icon={LinkTwoToneIcon} xs={12}>
           <CopyableLink url={citizen.linkedin} label="LinkedIn" maxWidth="100%" multiline />
         </DetailField>
@@ -56,6 +66,42 @@ function CitizenDetailDialog({ open, citizen, onClose, onPreviewImage, onDownloa
         text={citizen.details}
         emptyText="No details provided."
       />
+
+      <Box mt={2}>
+        <Stack direction="row" alignItems="center" gap={1} mb={1.5}>
+          <RateReviewTwoToneIcon color="primary" />
+          <Typography variant="h5">Review</Typography>
+        </Stack>
+        <Grid container spacing={2}>
+          <DetailField label="Review status" icon={RateReviewTwoToneIcon}>
+            <CitizenReviewStatusLabel status={citizen.review_status} />
+          </DetailField>
+          <DetailField label="Reviewer" value={citizen.reviewer || '—'} icon={PersonTwoToneIcon} />
+          <DetailField
+            label="Reviewed at"
+            value={formatDetailDateOnly(citizen.reviewed_at) || '—'}
+            icon={CalendarTodayTwoToneIcon}
+          />
+        </Grid>
+        <Box mt={2}>
+          <DetailTextSection
+            title="Review log"
+            icon={RateReviewTwoToneIcon}
+            text={citizen.review_log}
+            emptyText="No review log provided."
+          />
+        </Box>
+        <Box mt={2}>
+          <Stack direction="row" alignItems="center" gap={1} mb={1}>
+            <InsertDriveFileTwoToneIcon color="primary" />
+            <Typography variant="h5">Review files</Typography>
+          </Stack>
+          <CitizenReviewFileList
+            files={reviewFiles}
+            onDownload={(file) => onDownloadReviewFile(citizen.id, file)}
+          />
+        </Box>
+      </Box>
 
       <Box mt={2}>
         <Stack direction="row" alignItems="center" gap={1} mb={1.5}>
@@ -99,7 +145,8 @@ CitizenDetailDialog.propTypes = {
   citizen: PropTypes.object,
   onClose: PropTypes.func.isRequired,
   onPreviewImage: PropTypes.func.isRequired,
-  onDownloadImage: PropTypes.func.isRequired
+  onDownloadImage: PropTypes.func.isRequired,
+  onDownloadReviewFile: PropTypes.func.isRequired
 };
 
 export default CitizenDetailDialog;

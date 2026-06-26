@@ -89,9 +89,13 @@ CREATE TABLE IF NOT EXISTS citizen (
     country VARCHAR(100) NOT NULL,
     name VARCHAR(255) NOT NULL,
     linkedin VARCHAR(500),
-    status VARCHAR(20) NOT NULL DEFAULT 'None',
+    review_status VARCHAR(20) NOT NULL DEFAULT 'None',
+    reviewer VARCHAR(255),
+    reviewed_at DATE,
+    review_log TEXT NOT NULL DEFAULT '',
     details TEXT NOT NULL DEFAULT '',
     images JSONB NOT NULL DEFAULT '[]',
+    review_files JSONB NOT NULL DEFAULT '[]',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

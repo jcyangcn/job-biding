@@ -12,6 +12,7 @@ DOWNLOADS_DIR = STORAGE_DIR / "downloads"
 UPLOADS_DIR = STORAGE_DIR / "uploads"
 GENERATED_RESUME_DIR = DOWNLOADS_DIR / "generated resume"
 CITIZEN_IMAGE_DIR = UPLOADS_DIR / "citizen image"
+CITIZEN_REVIEW_FILES_DIR = UPLOADS_DIR / "citizen review files"
 
 
 class Settings(BaseSettings):
@@ -33,6 +34,9 @@ class Settings(BaseSettings):
     jwt_expire_hours: int = 48
     generated_resumes_dir: str = ""
     citizen_images_dir_config: str = Field(default="", validation_alias="CITIZEN_IMAGES_DIR")
+    citizen_review_files_dir_config: str = Field(
+        default="", validation_alias="CITIZEN_REVIEW_FILES_DIR"
+    )
     cors_origins: str = ""
 
     def resolved_provider(self) -> str:
@@ -63,6 +67,13 @@ class Settings(BaseSettings):
     def citizen_images_dir(self) -> Path:
         return self._resolve_storage_path(self.citizen_images_dir_config, CITIZEN_IMAGE_DIR)
 
+    @property
+    def citizen_review_files_dir(self) -> Path:
+        return self._resolve_storage_path(
+            self.citizen_review_files_dir_config,
+            CITIZEN_REVIEW_FILES_DIR,
+        )
+
     @staticmethod
     def _resolve_storage_path(raw_value: str, default: Path) -> Path:
         raw = raw_value.strip()
@@ -88,6 +99,7 @@ class Settings(BaseSettings):
 settings = Settings()
 GENERATED_DIR = settings.generated_dir
 CITIZEN_IMAGES_DIR = settings.citizen_images_dir
+CITIZEN_REVIEW_FILES_DIR = settings.citizen_review_files_dir
 
 
 def ensure_storage_dirs() -> None:
@@ -97,5 +109,6 @@ def ensure_storage_dirs() -> None:
         UPLOADS_DIR,
         GENERATED_DIR,
         CITIZEN_IMAGES_DIR,
+        CITIZEN_REVIEW_FILES_DIR,
     ):
         path.mkdir(parents=True, exist_ok=True)

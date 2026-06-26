@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 
 UserRoleLiteral = Literal["admin", "bidder", "caller"]
 CitizenStatusLiteral = Literal["Good", "Bad", "None"]
+CitizenReviewStatusLiteral = CitizenStatusLiteral
 
 
 class ProfileJob(BaseModel):
@@ -352,7 +353,10 @@ class CitizenCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     linkedin: str | None = Field(default=None, max_length=500)
     details: str = ""
-    status: CitizenStatusLiteral = "None"
+    review_status: CitizenReviewStatusLiteral = "None"
+    reviewer: str | None = Field(default=None, max_length=255)
+    reviewed_at: date | None = None
+    review_log: str = ""
 
 
 class CitizenUpdateRequest(BaseModel):
@@ -360,7 +364,10 @@ class CitizenUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     linkedin: str | None = Field(default=None, max_length=500)
     details: str | None = None
-    status: CitizenStatusLiteral | None = None
+    review_status: CitizenReviewStatusLiteral | None = None
+    reviewer: str | None = Field(default=None, max_length=255)
+    reviewed_at: date | None = None
+    review_log: str | None = None
 
 
 class CitizenResponse(BaseModel):
@@ -369,7 +376,11 @@ class CitizenResponse(BaseModel):
     name: str
     linkedin: str | None = None
     details: str
-    status: CitizenStatusLiteral
+    review_status: CitizenReviewStatusLiteral
+    reviewer: str | None = None
+    reviewed_at: date | None = None
+    review_log: str
     images: list[CitizenImageInfo]
+    review_files: list[CitizenImageInfo]
     created_at: datetime
     updated_at: datetime

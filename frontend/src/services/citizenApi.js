@@ -112,3 +112,48 @@ export async function downloadCitizenImage(citizenId, filename, originalName) {
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 }
+
+export function uploadCitizenReviewFile(citizenId, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return fetch(`${getApiBase()}/api/citizens/${citizenId}/review-files`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
+export function deleteCitizenReviewFile(citizenId, filename) {
+  return requestJson(
+    `/api/citizens/${citizenId}/review-files/${encodeURIComponent(filename)}`,
+    { method: 'DELETE' }
+  );
+}
+
+export async function downloadCitizenReviewFile(citizenId, filename, originalName) {
+  const response = await fetch(
+    `${getApiBase()}/api/citizens/${citizenId}/review-files/${encodeURIComponent(filename)}`,
+    { headers: authHeaders() }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = originalName || filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}

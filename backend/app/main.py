@@ -25,13 +25,16 @@ from app.identity_service import (
 )
 from app.citizen_service import (
     add_citizen_image,
+    add_citizen_review_file,
     citizen_to_response,
     create_citizen,
     delete_citizen,
     get_citizen,
     list_citizens,
     remove_citizen_image,
+    remove_citizen_review_file,
     resolve_citizen_image_path,
+    resolve_citizen_review_file_path,
     update_citizen,
 )
 from app.application_service import (
@@ -600,6 +603,94 @@ def delete_citizen_image_endpoint(
 
     try:
         remove_citizen_image(db, record, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    refreshed = get_citizen(db, citizen_id)
+    return citizen_to_response(refreshed)
+
+
+@app.post("/api/citizens/{citizen_id}/review-files", response_model=CitizenResponse)
+async def upload_citizen_review_file_endpoint(
+    citizen_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_citizen(db, citizen_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Citizen not found")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    try:
+        add_citizen_review_file(
+            db,
+            record,
+            original_name=file.filename or "file.bin",
+            content=content,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    refreshed = get_citizen(db, citizen_id)
+    return citizen_to_response(refreshed)
+
+
+@app.get("/api/citizens/{citizen_id}/review-files/{filename}")
+def download_citizen_review_file_endpoint(
+    citizen_id: int,
+    filename: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_citizen(db, citizen_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Citizen not found")
+
+    files = {item["filename"] for item in (record.review_files or [])}
+    safe_name = Path(filename).name
+    if safe_name not in files:
+        raise HTTPException(status_code=404, detail="Review file not found")
+
+    try:
+        file_path = resolve_citizen_review_file_path(citizen_id, safe_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Review file not found")
+
+    original_name = next(
+        (
+            item.get("original_name")
+            for item in record.review_files
+            if item.get("filename") == safe_name
+        ),
+        safe_name,
+    )
+    return FileResponse(
+        file_path,
+        filename=original_name,
+        headers={"Content-Disposition": f'attachment; filename="{original_name}"'},
+    )
+
+
+@app.delete("/api/citizens/{citizen_id}/review-files/{filename}", response_model=CitizenResponse)
+def delete_citizen_review_file_endpoint(
+    citizen_id: int,
+    filename: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_citizen(db, citizen_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Citizen not found")
+
+    try:
+        remove_citizen_review_file(db, record, filename)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
