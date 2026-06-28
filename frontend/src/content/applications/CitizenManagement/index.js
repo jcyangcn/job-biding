@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
+import { format } from 'date-fns';
 import {
   Box,
   Button,
@@ -11,12 +12,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
   Grid,
   IconButton,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
   Table,
   TableBody,
@@ -39,7 +36,6 @@ import { PROJECT_NAME } from 'src/config/app';
 import TableListFilters from 'src/components/TableListFilters';
 import CountryLabel from 'src/components/CountryLabel';
 import CountrySelectField from 'src/components/CountrySelectField';
-import DateField from 'src/components/DateField';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import useTableListFilters from 'src/hooks/useTableListFilters';
@@ -65,20 +61,24 @@ import CitizenImageTile from './CitizenImageTile';
 import CitizenImagePreviewOverlay from './CitizenImagePreviewOverlay';
 import CitizenDetailDialog from './CitizenDetailDialog';
 import CitizenLinkedInCell from './CitizenLinkedInCell';
-import CitizenReviewFileList from './CitizenReviewFileList';
+import CitizenReviewFormSection from './CitizenReviewFormSection';
 import CitizenReviewStatusLabel from './CitizenReviewStatusLabel';
 import PendingFileTile from './PendingFileTile';
 
-const emptyForm = {
-  country: DEFAULT_COUNTRY,
-  name: '',
-  linkedin: '',
-  details: '',
-  review_status: DEFAULT_CITIZEN_REVIEW_STATUS,
-  reviewer: '',
-  reviewed_at: '',
-  review_log: ''
-};
+function createEmptyForm() {
+  return {
+    country: DEFAULT_COUNTRY,
+    name: '',
+    linkedin: '',
+    details: '',
+    review_status: DEFAULT_CITIZEN_REVIEW_STATUS,
+    reviewer: '',
+    reviewed_at: format(new Date(), 'yyyy-MM-dd'),
+    review_log: ''
+  };
+}
+
+const CITIZEN_SELECT_FILTERS = [{ id: 'review_status', field: 'review_status' }];
 
 const CITIZEN_SEARCH_FIELDS = [
   'id',
@@ -104,7 +104,7 @@ function CitizenManagement() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deletingRecord, setDeletingRecord] = useState(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(createEmptyForm);
   const [pendingFiles, setPendingFiles] = useState([]);
   const [pendingReviewFiles, setPendingReviewFiles] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -122,10 +122,26 @@ function CitizenManagement() {
   const {
     search,
     setSearch,
+    selectValues,
+    setSelectValue,
     filteredRows
   } = useTableListFilters(rows, {
-    searchFields: CITIZEN_SEARCH_FIELDS
+    searchFields: CITIZEN_SEARCH_FIELDS,
+    selects: CITIZEN_SELECT_FILTERS
   });
+
+  const filterSelects = useMemo(
+    () => [
+      {
+        id: 'review_status',
+        label: 'Review status',
+        value: selectValues.review_status,
+        onChange: (value) => setSelectValue('review_status', value),
+        options: CITIZEN_REVIEW_STATUSES
+      }
+    ],
+    [selectValues.review_status, setSelectValue]
+  );
 
   const dialogTitle = useMemo(
     () => (editingRecord ? 'Edit citizen' : 'Add citizen'),
@@ -164,7 +180,7 @@ function CitizenManagement() {
 
   const openCreateDialog = () => {
     setEditingRecord(null);
-    setForm(emptyForm);
+    setForm(createEmptyForm());
     setPendingFiles([]);
     setPendingReviewFiles([]);
     setDialogOpen(true);
@@ -191,7 +207,7 @@ function CitizenManagement() {
     if (!saving && !uploading) {
       setDialogOpen(false);
       setEditingRecord(null);
-      setForm(emptyForm);
+      setForm(createEmptyForm());
       setPendingFiles([]);
       setPendingReviewFiles([]);
       setImagePreview(null);
@@ -398,6 +414,7 @@ function CitizenManagement() {
             onSearchChange={setSearch}
             searchPlaceholder="Search name, country, LinkedIn, details…"
             showDateRange={false}
+            selects={filterSelects}
             filteredCount={filteredRows.length}
             totalCount={rows.length}
             actions={
@@ -529,6 +546,7 @@ function CitizenManagement() {
                   options={countryOptions}
                   value={form.country}
                   onChange={(value) => setForm((current) => ({ ...current, country: value }))}
+                  margin="none"
                   required
                 />
               </Grid>
@@ -539,121 +557,8 @@ function CitizenManagement() {
                   label="Name"
                   value={form.name}
                   onChange={handleFormChange('name')}
+                  margin="none"
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Review status</InputLabel>
-                  <Select
-                    label="Review status"
-                    value={form.review_status}
-                    onChange={handleFormChange('review_status')}
-                    renderValue={(value) => <CitizenReviewStatusLabel status={value} />}
-                  >
-                    {CITIZEN_REVIEW_STATUSES.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        <CitizenReviewStatusLabel status={option.value} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Reviewer"
-                  value={form.reviewer}
-                  onChange={handleFormChange('reviewer')}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <DateField
-                  fullWidth
-                  label="Reviewed at"
-                  value={form.reviewed_at}
-                  onChange={(value) => setForm((current) => ({ ...current, reviewed_at: value }))}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Review log"
-                  multiline
-                  minRows={3}
-                  value={form.review_log}
-                  onChange={handleFormChange('review_log')}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
-                  <Typography variant="h5">Review files</Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<CloudUploadTwoToneIcon />}
-                    onClick={handlePickReviewFiles}
-                    disabled={uploading || saving}
-                  >
-                    Upload
-                  </Button>
-                  <input
-                    ref={reviewFileInputRef}
-                    type="file"
-                    hidden
-                    multiple
-                    accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.zip"
-                    onChange={handleReviewFilesSelected}
-                  />
-                </Stack>
-
-                {pendingReviewFiles.length ? (
-                  <Box mb={2}>
-                    <Typography variant="caption" color="text.secondary" display="block" mb={1}>
-                      Pending upload (saved when you click Save)
-                    </Typography>
-                    <Stack spacing={0.75}>
-                      {pendingReviewFiles.map((file, index) => (
-                        <Stack
-                          key={`${file.name}-${index}`}
-                          direction="row"
-                          alignItems="center"
-                          spacing={1}
-                          sx={{
-                            px: 1,
-                            py: 0.5,
-                            borderRadius: 1,
-                            border: `1px solid ${theme.colors.alpha.black[10]}`
-                          }}
-                        >
-                          <Typography variant="body2" flex={1} noWrap title={file.name}>
-                            {file.name}
-                          </Typography>
-                          <Button
-                            size="small"
-                            color="error"
-                            onClick={() => handleRemovePendingReviewFile(index)}
-                            disabled={saving || uploading}
-                          >
-                            Remove
-                          </Button>
-                        </Stack>
-                      ))}
-                    </Stack>
-                  </Box>
-                ) : null}
-
-                {editingRecord ? (
-                  <CitizenReviewFileList
-                    files={currentReviewFiles}
-                    onDownload={(file) => handleDownloadReviewFile(editingRecord.id, file)}
-                    onDelete={(filename) => handleDeleteReviewFile(editingRecord.id, filename)}
-                    disabled={uploading}
-                  />
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    Save the citizen first, or select files now to upload on save.
-                  </Typography>
-                )}
               </Grid>
               <Grid item xs={12}>
                 <TextField
@@ -770,6 +675,25 @@ function CitizenManagement() {
                   </Typography>
                 )}
               </Grid>
+              <CitizenReviewFormSection
+                form={form}
+                onFormChange={handleFormChange}
+                onReviewedAtChange={(value) =>
+                  setForm((current) => ({ ...current, reviewed_at: value }))
+                }
+                reviewFileInputRef={reviewFileInputRef}
+                onPickReviewFiles={handlePickReviewFiles}
+                onReviewFilesSelected={handleReviewFilesSelected}
+                pendingReviewFiles={pendingReviewFiles}
+                onRemovePendingReviewFile={handleRemovePendingReviewFile}
+                editingRecord={editingRecord}
+                currentReviewFiles={currentReviewFiles}
+                onDownloadReviewFile={handleDownloadReviewFile}
+                onDeleteReviewFile={handleDeleteReviewFile}
+                saving={saving}
+                uploading={uploading}
+                theme={theme}
+              />
             </Grid>
           </DialogContent>
           <DialogActions>
