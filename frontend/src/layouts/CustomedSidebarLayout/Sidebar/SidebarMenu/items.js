@@ -55,10 +55,10 @@ const menuItems = [
             name: 'Progression Emails',
             link: '/applications/progression-emails'
           },
-          {
-            name: 'Resume Builder',
-            link: '/applications/resume-builder'
-          }
+          // {
+          //   name: 'Resume Builder',
+          //   link: '/applications/resume-builder'
+          // }
         ]
       }
     ]
