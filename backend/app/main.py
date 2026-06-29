@@ -132,19 +132,10 @@ app.add_middleware(
 
 if FRONTEND_BUILD_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=FRONTEND_BUILD_DIR / "static"), name="static")
+    app.mount("/", StaticFiles(directory=FRONTEND_BUILD_DIR, html=True), name="frontend")
 elif FRONTEND_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
-
-
-@app.get("/")
-def index():
-    build_index = FRONTEND_BUILD_DIR / "index.html"
-    if build_index.is_file():
-        return FileResponse(build_index)
-    legacy_index = FRONTEND_DIR / "index.html"
-    if legacy_index.is_file():
-        return FileResponse(legacy_index)
-    raise HTTPException(status_code=404, detail="Frontend build not found")
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 
 @app.get("/health")
@@ -875,11 +866,3 @@ def _resolve_resume_output_path(
     return build_resume_path(profile.name, app_number, GENERATED_DIR)
 
 
-@app.get("/{full_path:path}")
-def spa_fallback(full_path: str):
-    if full_path.startswith("api/"):
-        raise HTTPException(status_code=404, detail="Not found")
-    build_index = FRONTEND_BUILD_DIR / "index.html"
-    if build_index.is_file():
-        return FileResponse(build_index)
-    raise HTTPException(status_code=404, detail="Frontend build not found")

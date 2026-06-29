@@ -11,15 +11,6 @@ def _value_after(lines: list[str], i: int) -> str:
     return ""
 
 
-def _require_fields(data: dict, fields: list[str]) -> None:
-    missing = [field for field in fields if not data.get(field)]
-    if missing:
-        raise ValueError(
-            "Profile markdown is missing required fields: "
-            + ", ".join(missing)
-        )
-
-
 def parse_profile_markdown(text: str) -> Profile:
     lines = [ln.rstrip() for ln in text.strip().splitlines()]
     data: dict[str, str | list] = {
@@ -88,18 +79,16 @@ def parse_profile_markdown(text: str) -> Profile:
             continue
         i += 1
 
-    _require_fields(data, ["name", "title", "email", "phone", "location"])
-
     education = data.get("education")
     if education is None:
         education = ProfileEducation(school="", degree="", period="")
 
     return Profile(
-        name=data["name"],
-        title=data["title"],
-        email=data["email"],
-        phone=data["phone"],
-        location=data["location"],
+        name=data.get("name", ""),
+        title=data.get("title", ""),
+        email=data.get("email", ""),
+        phone=data.get("phone", ""),
+        location=data.get("location", ""),
         linkedin=data.get("linkedin", ""),
         portfolio=data.get("portfolio", ""),
         experience=data.get("experience", []),

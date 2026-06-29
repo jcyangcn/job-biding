@@ -117,7 +117,8 @@ def render_resume_pdf(
 
     story.append(Paragraph(profile.name, s["name"]))
     story.append(Paragraph(title, s["title"]))
-    story.append(Paragraph(contact_line, s["contact"]))
+    if contact_line:
+        story.append(Paragraph(contact_line, s["contact"]))
 
     _section_header("Professional Summary", story, s["h2"])
     story.append(Paragraph(content.summary, s["summary"]))
