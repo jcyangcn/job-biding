@@ -213,7 +213,6 @@ elif FRONTEND_DIR.is_dir():
 def index():
     return _serve_frontend("")
 
-
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
     try:

@@ -11,13 +11,9 @@ def _value_after(lines: list[str], i: int) -> str:
     return ""
 
 
-def _require_fields(data: dict, fields: list[str]) -> None:
-    missing = [field for field in fields if not data.get(field)]
-    if missing:
-        raise ValueError(
-            "Profile markdown is missing required fields: "
-            + ", ".join(missing)
-        )
+def _set_scalar(data: dict, field: str, value: str) -> None:
+    if value:
+        data[field] = value
 
 
 def parse_profile_markdown(text: str) -> Profile:
@@ -33,31 +29,31 @@ def parse_profile_markdown(text: str) -> Profile:
         key = line.lstrip("- ").strip().lower()
 
         if key == "name":
-            data["name"] = _value_after(lines, i)
+            _set_scalar(data, "name", _value_after(lines, i))
             i += 2
             continue
         if key == "title":
-            data["title"] = _value_after(lines, i)
+            _set_scalar(data, "title", _value_after(lines, i))
             i += 2
             continue
         if key == "email":
-            data["email"] = _value_after(lines, i)
+            _set_scalar(data, "email", _value_after(lines, i))
             i += 2
             continue
         if key == "phone":
-            data["phone"] = _value_after(lines, i)
+            _set_scalar(data, "phone", _value_after(lines, i))
             i += 2
             continue
         if key == "location":
-            data["location"] = _value_after(lines, i)
+            _set_scalar(data, "location", _value_after(lines, i))
             i += 2
             continue
         if key == "linkedin":
-            data["linkedin"] = _value_after(lines, i)
+            _set_scalar(data, "linkedin", _value_after(lines, i))
             i += 2
             continue
         if key == "portfolio":
-            data["portfolio"] = _value_after(lines, i)
+            _set_scalar(data, "portfolio", _value_after(lines, i))
             i += 2
             continue
         if key == "work experience":
@@ -88,18 +84,16 @@ def parse_profile_markdown(text: str) -> Profile:
             continue
         i += 1
 
-    _require_fields(data, ["name", "title", "email", "phone", "location"])
-
     education = data.get("education")
     if education is None:
         education = ProfileEducation(school="", degree="", period="")
 
     return Profile(
-        name=data["name"],
-        title=data["title"],
-        email=data["email"],
-        phone=data["phone"],
-        location=data["location"],
+        name=data.get("name", ""),
+        title=data.get("title", ""),
+        email=data.get("email", ""),
+        phone=data.get("phone", ""),
+        location=data.get("location", ""),
         linkedin=data.get("linkedin", ""),
         portfolio=data.get("portfolio", ""),
         experience=data.get("experience", []),
