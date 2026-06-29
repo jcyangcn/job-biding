@@ -38,6 +38,7 @@ class Settings(BaseSettings):
         default="", validation_alias="CITIZEN_REVIEW_FILES_DIR"
     )
     cors_origins: str = ""
+    uvicorn_reload: bool = False
 
     def resolved_provider(self) -> str:
         provider = self.ai_provider.lower()

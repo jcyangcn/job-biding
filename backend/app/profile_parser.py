@@ -11,6 +11,11 @@ def _value_after(lines: list[str], i: int) -> str:
     return ""
 
 
+def _set_scalar(data: dict, field: str, value: str) -> None:
+    if value:
+        data[field] = value
+
+
 def parse_profile_markdown(text: str) -> Profile:
     lines = [ln.rstrip() for ln in text.strip().splitlines()]
     data: dict[str, str | list] = {
@@ -24,31 +29,31 @@ def parse_profile_markdown(text: str) -> Profile:
         key = line.lstrip("- ").strip().lower()
 
         if key == "name":
-            data["name"] = _value_after(lines, i)
+            _set_scalar(data, "name", _value_after(lines, i))
             i += 2
             continue
         if key == "title":
-            data["title"] = _value_after(lines, i)
+            _set_scalar(data, "title", _value_after(lines, i))
             i += 2
             continue
         if key == "email":
-            data["email"] = _value_after(lines, i)
+            _set_scalar(data, "email", _value_after(lines, i))
             i += 2
             continue
         if key == "phone":
-            data["phone"] = _value_after(lines, i)
+            _set_scalar(data, "phone", _value_after(lines, i))
             i += 2
             continue
         if key == "location":
-            data["location"] = _value_after(lines, i)
+            _set_scalar(data, "location", _value_after(lines, i))
             i += 2
             continue
         if key == "linkedin":
-            data["linkedin"] = _value_after(lines, i)
+            _set_scalar(data, "linkedin", _value_after(lines, i))
             i += 2
             continue
         if key == "portfolio":
-            data["portfolio"] = _value_after(lines, i)
+            _set_scalar(data, "portfolio", _value_after(lines, i))
             i += 2
             continue
         if key == "work experience":

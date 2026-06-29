@@ -130,13 +130,6 @@ app.add_middleware(
     expose_headers=["X-Generation-Id", "Content-Disposition"],
 )
 
-if FRONTEND_BUILD_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=FRONTEND_BUILD_DIR / "static"), name="static")
-    app.mount("/", StaticFiles(directory=FRONTEND_BUILD_DIR, html=True), name="frontend")
-elif FRONTEND_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
-    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-
 
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
@@ -866,3 +859,7 @@ def _resolve_resume_output_path(
     return build_resume_path(profile.name, app_number, GENERATED_DIR)
 
 
+if FRONTEND_BUILD_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_BUILD_DIR, html=True), name="frontend")
+elif FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

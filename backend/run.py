@@ -8,7 +8,7 @@ def main():
         "app.main:app",
         host=settings.host,
         port=settings.port,
-        reload=True,
+        reload=settings.uvicorn_reload,
     )
 
 

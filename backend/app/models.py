@@ -23,15 +23,17 @@ class ProfileEducation(BaseModel):
 
 
 class Profile(BaseModel):
-    name: str
-    title: str
-    email: str
-    phone: str
-    location: str
-    linkedin: str
+    name: str = ""
+    title: str = ""
+    email: str = ""
+    phone: str = ""
+    location: str = ""
+    linkedin: str = ""
     portfolio: str = ""
-    experience: list[ProfileJob]
-    education: ProfileEducation
+    experience: list[ProfileJob] = Field(default_factory=list)
+    education: ProfileEducation = Field(
+        default_factory=lambda: ProfileEducation(school="", degree="", period="")
+    )
     certifications: list[str] = Field(default_factory=list)
     projects: list[str] = Field(default_factory=list)
 
