@@ -56,6 +56,7 @@ import {
   uploadCitizenImage,
   uploadCitizenReviewFile
 } from 'src/services/citizenApi';
+import { listUsers } from 'src/services/usersApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 import CitizenImageTile from './CitizenImageTile';
 import CitizenImagePreviewOverlay from './CitizenImagePreviewOverlay';
@@ -99,6 +100,7 @@ function CitizenManagement() {
   useSetPageHeader('Citizen Management', 'Manage citizens with country, details, and images');
 
   const [rows, setRows] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -155,6 +157,19 @@ function CitizenManagement() {
     return COUNTRIES;
   }, [form.country]);
 
+  const adminUsers = useMemo(
+    () => users.filter((user) => user.role === 'admin'),
+    [users]
+  );
+
+  const reviewerOptions = useMemo(() => {
+    const labels = adminUsers.map((user) => user.full_name || user.username);
+    if (form.reviewer && !labels.includes(form.reviewer)) {
+      return [form.reviewer, ...labels];
+    }
+    return labels;
+  }, [adminUsers, form.reviewer]);
+
   const closeImagePreview = () => {
     setImagePreview(null);
   };
@@ -166,7 +181,9 @@ function CitizenManagement() {
   const loadCitizens = useCallback(async () => {
     setLoading(true);
     try {
-      setRows(await listCitizens());
+      const [citizenRows, userRows] = await Promise.all([listCitizens(), listUsers()]);
+      setRows(citizenRows);
+      setUsers(userRows);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load citizens', { variant: 'error' });
     } finally {
@@ -677,6 +694,7 @@ function CitizenManagement() {
               </Grid>
               <CitizenReviewFormSection
                 form={form}
+                reviewerOptions={reviewerOptions}
                 onFormChange={handleFormChange}
                 onReviewedAtChange={(value) =>
                   setForm((current) => ({ ...current, reviewed_at: value }))

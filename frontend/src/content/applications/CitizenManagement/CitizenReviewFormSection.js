@@ -19,6 +19,7 @@ import CitizenReviewStatusLabel from './CitizenReviewStatusLabel';
 
 function CitizenReviewFormSection({
   form,
+  reviewerOptions,
   onFormChange,
   onReviewedAtChange,
   reviewFileInputRef,
@@ -59,12 +60,24 @@ function CitizenReviewFormSection({
         </FormControl>
       </Grid>
       <Grid item xs={12} sm={6}>
-        <TextField
-          fullWidth
-          label="Reviewer"
-          value={form.reviewer}
-          onChange={onFormChange('reviewer')}
-        />
+        <FormControl fullWidth>
+          <InputLabel>Reviewer</InputLabel>
+          <Select
+            label="Reviewer"
+            value={form.reviewer || ''}
+            onChange={onFormChange('reviewer')}
+            displayEmpty
+          >
+            <MenuItem value="">
+              <em>None</em>
+            </MenuItem>
+            {reviewerOptions.map((name) => (
+              <MenuItem key={name} value={name}>
+                {name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       </Grid>
       <Grid item xs={12} sm={6}>
         <DateField
@@ -166,6 +179,7 @@ CitizenReviewFormSection.propTypes = {
     reviewed_at: PropTypes.string.isRequired,
     review_log: PropTypes.string.isRequired
   }).isRequired,
+  reviewerOptions: PropTypes.arrayOf(PropTypes.string).isRequired,
   onFormChange: PropTypes.func.isRequired,
   onReviewedAtChange: PropTypes.func.isRequired,
   reviewFileInputRef: PropTypes.oneOfType([

@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db_models import JobApplication, JobIdentity, JobProfile, ResumeGeneration, User
@@ -163,6 +163,25 @@ def list_applications_admin(
         query = query.where(JobApplication.profile_id == profile_id)
 
     return list(db.scalars(query).all())
+
+
+def list_applications_for_user(db: Session, user: User) -> list[JobApplication]:
+    return list(
+        db.scalars(
+            select(JobApplication)
+            .join(JobProfile, JobApplication.profile_id == JobProfile.id)
+            .where(
+                or_(
+                    JobProfile.bidder_user_id == user.id,
+                    JobProfile.caller_user_id == user.id,
+                )
+            )
+            .order_by(
+                JobApplication.applied_at.desc().nullslast(),
+                JobApplication.id.desc(),
+            )
+        ).all()
+    )
 
 
 def update_application(

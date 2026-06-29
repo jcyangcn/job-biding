@@ -1,6 +1,6 @@
 import re
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.application_service import user_can_access_profile
@@ -101,6 +101,25 @@ def list_progression_emails_admin(
         query = query.where(JobProgressionEmail.profile_id == profile_id)
 
     return list(db.scalars(query).all())
+
+
+def list_progression_emails_for_user(db: Session, user: User) -> list[JobProgressionEmail]:
+    return list(
+        db.scalars(
+            select(JobProgressionEmail)
+            .join(JobProfile, JobProgressionEmail.profile_id == JobProfile.id)
+            .where(
+                or_(
+                    JobProfile.bidder_user_id == user.id,
+                    JobProfile.caller_user_id == user.id,
+                )
+            )
+            .order_by(
+                JobProgressionEmail.email_date.desc(),
+                JobProgressionEmail.id.desc(),
+            )
+        ).all()
+    )
 
 
 def list_progression_emails_for_profile(

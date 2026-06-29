@@ -20,7 +20,7 @@ from app.identity_service import (
     delete_identity,
     get_identity,
     identity_to_response,
-    list_identities,
+    list_identities_for_user,
     update_identity,
 )
 from app.citizen_service import (
@@ -43,6 +43,7 @@ from app.application_service import (
     delete_application,
     list_applications_admin,
     list_applications_for_profile,
+    list_applications_for_user,
     next_application_number_for_profile,
     update_application,
 )
@@ -59,6 +60,7 @@ from app.progression_email_service import (
     delete_progression_email,
     list_progression_emails_admin,
     list_progression_emails_for_profile,
+    list_progression_emails_for_user,
     preview_reference_no,
     progression_email_to_response,
     update_progression_email,
@@ -232,9 +234,9 @@ def delete_user_endpoint(
 @app.get("/api/job-identities", response_model=list[JobIdentityResponse])
 def get_job_identities(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ):
-    return [identity_to_response(row) for row in list_identities(db)]
+    return [identity_to_response(row) for row in list_identities_for_user(db, user)]
 
 
 @app.post("/api/job-identities", response_model=JobIdentityResponse)
@@ -332,12 +334,12 @@ def list_job_applications_endpoint(
     user: User = Depends(get_current_user),
 ):
     try:
-        if profile_id is None:
-            rows = list_applications_admin(db, user)
-        elif user.role == UserRole.admin:
+        if user.role == UserRole.admin:
             rows = list_applications_admin(db, user, profile_id=profile_id)
-        else:
+        elif profile_id is not None:
             rows = list_applications_for_profile(db, profile_id, user)
+        else:
+            rows = list_applications_for_user(db, user)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -398,12 +400,12 @@ def list_job_progression_emails_endpoint(
     user: User = Depends(get_current_user),
 ):
     try:
-        if profile_id is None:
-            rows = list_progression_emails_admin(db, user)
-        elif user.role == UserRole.admin:
+        if user.role == UserRole.admin:
             rows = list_progression_emails_admin(db, user, profile_id=profile_id)
-        else:
+        elif profile_id is not None:
             rows = list_progression_emails_for_profile(db, profile_id, user)
+        else:
+            rows = list_progression_emails_for_user(db, user)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
