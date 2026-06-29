@@ -38,7 +38,7 @@ import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
-import { createJobApplication } from 'src/services/jobApplicationApi';
+import { createJobApplication, listJobApplications } from 'src/services/jobApplicationApi';
 import { listIdentities } from 'src/services/identityApi';
 import { listProfiles } from 'src/services/profileApi';
 import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
@@ -48,6 +48,7 @@ import {
   listResumeGenerations
 } from 'src/services/resumeApi';
 import { formatDateTime } from 'src/utils/dateFormat';
+import { isDuplicateCompanyName } from 'src/utils/normalizeCompanyName';
 
 const compactButtonSx = {
   py: 0.25,
@@ -88,6 +89,8 @@ function ApplicationDetails() {
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [appliedConfirmOpen, setAppliedConfirmOpen] = useState(false);
+  const [companyDuplicate, setCompanyDuplicate] = useState(false);
+  const [existingApplications, setExistingApplications] = useState([]);
   const [resumeSource, setResumeSource] = useState('generated');
   const [profileMode, setProfileMode] = useState('markdown');
   const [profileMarkdown, setProfileMarkdown] = useState('');
@@ -131,15 +134,28 @@ function ApplicationDetails() {
     setProfileJson(json);
   }, []);
 
+  const checkCompanyDuplicate = useCallback(
+    (companyValue) => {
+      const trimmed = companyValue.trim();
+      if (!trimmed) {
+        return false;
+      }
+      const existingCompanies = existingApplications.map((app) => app.company);
+      return isDuplicateCompanyName(trimmed, existingCompanies);
+    },
+    [existingApplications]
+  );
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [profileRows, generationRows, identityRows] = await Promise.all([
+      const numericId = Number(profileId);
+      const [profileRows, generationRows, identityRows, applicationRows] = await Promise.all([
         listProfiles(),
         listResumeGenerations(),
-        listIdentities()
+        listIdentities(),
+        listJobApplications(numericId)
       ]);
-      const numericId = Number(profileId);
       const match = profileRows.find(
         (row) => row.id === numericId && row.is_active
       );
@@ -152,6 +168,7 @@ function ApplicationDetails() {
         identityRows.find((row) => row.id === match.identity_id) || null;
       setProfile(match);
       setIdentity(matchedIdentity);
+      setExistingApplications(applicationRows);
       applyProfileResumeContent(match, matchedIdentity);
       setResumeGenerations(generationRows);
     } catch (err) {
@@ -169,6 +186,20 @@ function ApplicationDetails() {
 
   const handleFormChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const handleCompanyChange = (event) => {
+    const value = event.target.value;
+    setForm((current) => ({ ...current, company: value }));
+    setCompanyDuplicate(checkCompanyDuplicate(value));
+  };
+
+  const handleCompanyBlur = () => {
+    if (checkCompanyDuplicate(form.company)) {
+      enqueueSnackbar('This company has already been applied to for this profile.', {
+        variant: 'warning'
+      });
+    }
   };
 
   const handleAppliedChange = (event) => {
@@ -262,6 +293,13 @@ function ApplicationDetails() {
     }
     if (form.applied && !form.applied_at) {
       enqueueSnackbar('Applied at is required when applied is enabled', { variant: 'warning' });
+      return;
+    }
+    if (checkCompanyDuplicate(form.company)) {
+      setCompanyDuplicate(true);
+      enqueueSnackbar('This company has already been applied to for this profile.', {
+        variant: 'warning'
+      });
       return;
     }
 
@@ -362,7 +400,14 @@ function ApplicationDetails() {
                       size="small"
                       label="Company"
                       value={form.company}
-                      onChange={handleFormChange('company')}
+                      onChange={handleCompanyChange}
+                      onBlur={handleCompanyBlur}
+                      error={companyDuplicate}
+                      helperText={
+                        companyDuplicate
+                          ? 'This company has already been applied to for this profile.'
+                          : ''
+                      }
                     />
                     <TextField
                       fullWidth
