@@ -5,6 +5,9 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -107,6 +110,70 @@ FRONTEND_DIR = REPO_ROOT / "frontend"
 FRONTEND_BUILD_DIR = FRONTEND_DIR / "build"
 
 
+def _frontend_index() -> Path | None:
+    build_index = FRONTEND_BUILD_DIR / "index.html"
+    if build_index.is_file():
+        return build_index
+    legacy_index = FRONTEND_DIR / "index.html"
+    if legacy_index.is_file():
+        return legacy_index
+    return None
+
+
+def _safe_frontend_path(relative_path: str) -> Path | None:
+    if not relative_path or not FRONTEND_BUILD_DIR.is_dir():
+        return None
+    base = FRONTEND_BUILD_DIR.resolve()
+    target = (FRONTEND_BUILD_DIR / relative_path.lstrip("/")).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return None
+    return target if target.is_file() else None
+
+
+def _serve_frontend(relative_path: str) -> FileResponse:
+    if relative_path.startswith("api/") or relative_path == "api":
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if relative_path:
+        asset = _safe_frontend_path(relative_path)
+        if asset:
+            return FileResponse(asset)
+
+    index = _frontend_index()
+    if index:
+        return FileResponse(index)
+    raise HTTPException(status_code=404, detail="Frontend build not found")
+
+
+class SpaFallbackMiddleware(BaseHTTPMiddleware):
+    """Return index.html (or build assets) for non-API 404s so client routes work on refresh."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        path = request.url.path
+        if (
+            request.method not in ("GET", "HEAD")
+            or response.status_code != 404
+            or path.startswith("/api")
+            or path.startswith("/static")
+            or path in ("/health", "/docs", "/openapi.json", "/redoc")
+        ):
+            return response
+
+        relative = path.lstrip("/")
+        if relative:
+            asset = _safe_frontend_path(relative)
+            if asset:
+                return FileResponse(asset)
+
+        index = _frontend_index()
+        if index:
+            return FileResponse(index)
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -120,10 +187,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(SpaFallbackMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=(
+        r"https?://("
+        r"localhost|127\.0\.0\.1"
+        r"|\d{1,3}(?:\.\d{1,3}){3}"
+        r")(:\d+)?"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -138,13 +211,7 @@ elif FRONTEND_DIR.is_dir():
 
 @app.get("/")
 def index():
-    build_index = FRONTEND_BUILD_DIR / "index.html"
-    if build_index.is_file():
-        return FileResponse(build_index)
-    legacy_index = FRONTEND_DIR / "index.html"
-    if legacy_index.is_file():
-        return FileResponse(legacy_index)
-    raise HTTPException(status_code=404, detail="Frontend build not found")
+    return _serve_frontend("")
 
 
 @app.get("/health")
@@ -875,11 +942,6 @@ def _resolve_resume_output_path(
     return build_resume_path(profile.name, app_number, GENERATED_DIR)
 
 
-@app.get("/{full_path:path}")
+@app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
 def spa_fallback(full_path: str):
-    if full_path.startswith("api/"):
-        raise HTTPException(status_code=404, detail="Not found")
-    build_index = FRONTEND_BUILD_DIR / "index.html"
-    if build_index.is_file():
-        return FileResponse(build_index)
-    raise HTTPException(status_code=404, detail="Frontend build not found")
+    return _serve_frontend(full_path)

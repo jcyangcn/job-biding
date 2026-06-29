@@ -1,4 +1,5 @@
 const STATIC_DEV_PORTS = new Set(['3000', '4173', '5000', '8080']);
+const BACKEND_PORTS = new Set(['8000', '8001']);
 const DEFAULT_BACKEND_PORT = '8001';
 
 function normalizeBase(url) {
@@ -17,13 +18,17 @@ export function getApiBase() {
   const builtIn = normalizeBase(process.env.REACT_APP_API_URL);
   if (builtIn) return builtIn;
 
-  // Production build served by a static dev server (e.g. `serve -s build` on :3000)
-  // while FastAPI runs on :8001 — CRA proxy does not exist in production builds.
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
     const { hostname, port, protocol } = window.location;
+    // FastAPI (or reverse proxy) serves UI + /api on the same host/port.
+    if (!port || BACKEND_PORTS.has(port)) {
+      return '';
+    }
+    // Static preview servers (e.g. `serve -s build` on :3000) need the API host.
     if (STATIC_DEV_PORTS.has(port)) {
       return `${protocol}//${hostname}:${DEFAULT_BACKEND_PORT}`;
     }
+    return '';
   }
 
   return '';

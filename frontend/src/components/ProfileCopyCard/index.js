@@ -95,7 +95,7 @@ function CopyableReadOnlyField({ label, value, multiline = false, showCountryFla
                 size="small"
                 edge="end"
                 aria-label={`Copy ${label}`}
-                onMouseDown={handleCopy}
+                onClick={handleCopy}
               >
                 {copied ? (
                   <CheckTwoToneIcon fontSize="small" color="success" />

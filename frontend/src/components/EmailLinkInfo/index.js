@@ -57,7 +57,7 @@ function EmailLinkInfo({ value, maxWidth = 220, multiline = false }) {
       <Tooltip title={copied ? 'Copied' : 'Copy'}>
         <IconButton
           size="small"
-          onMouseDown={handleCopy}
+          onClick={handleCopy}
           aria-label="Copy email link"
         >
           {copied ? (

@@ -64,7 +64,11 @@ function CopyableLink({
         {text}
       </Link>
       <Tooltip title={copied ? 'Copied' : 'Copy'}>
-        <IconButton size="small" onMouseDown={handleCopy} aria-label={`Copy ${label}`}>
+        <IconButton
+          size="small"
+          onClick={handleCopy}
+          aria-label={`Copy ${label}`}
+        >
           {copied ? (
             <CheckTwoToneIcon fontSize="small" color="success" />
           ) : (

@@ -1,5 +1,4 @@
 import ReactDOM from 'react-dom';
-import 'src/mocks';
 import { HelmetProvider } from 'react-helmet-async';
 import { BrowserRouter } from 'react-router-dom';
 import ScrollTop from 'src/hooks/useScrollTop';
@@ -11,6 +10,11 @@ import App from 'src/App';
 import { SidebarProvider } from 'src/contexts/SidebarContext';
 import * as serviceWorker from 'src/serviceWorker';
 import { AuthProvider } from 'src/contexts/JWTAuthContext';
+
+if (process.env.NODE_ENV !== 'production') {
+  // eslint-disable-next-line global-require
+  require('src/mocks');
+}
 
 ReactDOM.render(
   <HelmetProvider>
