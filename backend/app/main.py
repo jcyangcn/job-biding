@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -347,7 +347,10 @@ def get_job_profiles(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return [profile_to_response(db, row) for row in list_profiles_for_user(db, user)]
+    return [
+        profile_to_response(db, row, include_admin_fields=user.role == UserRole.admin)
+        for row in list_profiles_for_user(db, user)
+    ]
 
 
 @app.post("/api/job-profiles", response_model=JobProfileResponse)
@@ -364,9 +367,9 @@ def create_job_profile_endpoint(
 
 
 @app.put("/api/job-profiles/{profile_id}", response_model=JobProfileResponse)
-def update_job_profile_endpoint(
+async def update_job_profile_endpoint(
     profile_id: int,
-    request: JobProfileUpdateRequest,
+    request: Request,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
@@ -374,7 +377,11 @@ def update_job_profile_endpoint(
     if not record:
         raise HTTPException(status_code=404, detail="Profile not found")
     try:
-        updated = update_profile(db, record, request)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=400, detail="Invalid request body")
+        parsed = JobProfileUpdateRequest.model_validate(body)
+        updated = update_profile(db, record, parsed, raw_body=body)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return profile_to_response(db, updated)

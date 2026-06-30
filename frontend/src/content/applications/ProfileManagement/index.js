@@ -62,6 +62,8 @@ const emptyForm = {
   email: '',
   email_password: '',
   phone: '',
+  email_detail: '',
+  phone_detail: '',
   proxy: '',
   is_active: true,
   resume_detail: emptyResumeDetail()
@@ -201,6 +203,8 @@ function ProfileManagement() {
       email: record.email,
       email_password: record.email_password,
       phone: record.phone,
+      email_detail: record.email_detail || '',
+      phone_detail: record.phone_detail || '',
       proxy: record.proxy || '',
       is_active: record.is_active,
       resume_detail: normalizeResumeDetail(record.resume_detail)
@@ -231,6 +235,8 @@ function ProfileManagement() {
     email: form.email.trim(),
     email_password: form.email_password,
     phone: form.phone.trim(),
+    email_detail: form.email_detail.trim(),
+    phone_detail: form.phone_detail.trim(),
     proxy: form.proxy.trim() || null,
     is_active: form.is_active,
     resume_detail: serializeResumeDetailForApi(form.resume_detail)
@@ -523,6 +529,26 @@ function ProfileManagement() {
             label="Phone"
             value={form.phone}
             onChange={handleFormChange('phone')}
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Email detail"
+            value={form.email_detail}
+            onChange={handleFormChange('email_detail')}
+            multiline
+            minRows={3}
+            placeholder="Additional email notes (admin only)"
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Phone detail"
+            value={form.phone_detail}
+            onChange={handleFormChange('phone_detail')}
+            multiline
+            minRows={3}
+            placeholder="Additional phone notes (admin only)"
           />
           <TextField
             fullWidth

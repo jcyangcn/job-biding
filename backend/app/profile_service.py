@@ -1,5 +1,6 @@
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.country_codes import format_identity_label
 from app.db_models import JobIdentity, JobProfile, User
@@ -36,7 +37,7 @@ def _serialize_resume_detail(detail: ResumeDetail | dict) -> dict:
     return detail.model_dump(mode="json")
 
 
-def profile_to_response(db: Session, record: JobProfile) -> dict:
+def profile_to_response(db: Session, record: JobProfile, *, include_admin_fields: bool = True) -> dict:
     identity_name, bidder_name, caller_name = _related_names(db, record)
     return {
         "id": record.id,
@@ -50,6 +51,8 @@ def profile_to_response(db: Session, record: JobProfile) -> dict:
         "email": record.email,
         "email_password": record.email_password,
         "phone": record.phone,
+        "email_detail": record.email_detail if include_admin_fields else "",
+        "phone_detail": record.phone_detail if include_admin_fields else "",
         "proxy": record.proxy,
         "reference_tag": record.reference_tag,
         "is_active": record.is_active,
@@ -117,6 +120,8 @@ def create_profile(db: Session, data: JobProfileCreateRequest) -> JobProfile:
         email=data.email,
         email_password=data.email_password,
         phone=data.phone,
+        email_detail=data.email_detail,
+        phone_detail=data.phone_detail,
         proxy=data.proxy or None,
         reference_tag=(data.reference_tag.strip() if data.reference_tag else None),
         is_active=data.is_active,
@@ -128,8 +133,23 @@ def create_profile(db: Session, data: JobProfileCreateRequest) -> JobProfile:
     return record
 
 
+def _apply_profile_detail_fields(record: JobProfile, raw_body: dict | None) -> None:
+    if not raw_body:
+        return
+    if "email_detail" in raw_body:
+        record.email_detail = str(raw_body.get("email_detail") or "")
+        flag_modified(record, "email_detail")
+    if "phone_detail" in raw_body:
+        record.phone_detail = str(raw_body.get("phone_detail") or "")
+        flag_modified(record, "phone_detail")
+
+
 def update_profile(
-    db: Session, record: JobProfile, data: JobProfileUpdateRequest
+    db: Session,
+    record: JobProfile,
+    data: JobProfileUpdateRequest,
+    *,
+    raw_body: dict | None = None,
 ) -> JobProfile:
     updates = data.model_dump(exclude_unset=True)
     _validate_ref_updates(db, updates)
@@ -141,6 +161,8 @@ def update_profile(
         if field == "resume_detail" and value is not None:
             value = _serialize_resume_detail(value)
         setattr(record, field, value)
+
+    _apply_profile_detail_fields(record, raw_body)
 
     db.commit()
     db.refresh(record)

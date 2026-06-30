@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -80,6 +80,12 @@ class JobProfile(Base):
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     email_password: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str] = mapped_column(String(50), nullable=False)
+    email_detail: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=text("''")
+    )
+    phone_detail: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=text("''")
+    )
     proxy: Mapped[str | None] = mapped_column(String(500), nullable=True)
     reference_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

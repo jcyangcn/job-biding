@@ -186,6 +186,8 @@ def migrate_job_profile_columns() -> None:
     columns = {
         "reference_tag": "VARCHAR(255)",
         "resume_detail": "JSONB NOT NULL DEFAULT '{}'",
+        "email_detail": "TEXT NOT NULL DEFAULT ''",
+        "phone_detail": "TEXT NOT NULL DEFAULT ''",
     }
     with engine.begin() as conn:
         table_exists = conn.execute(

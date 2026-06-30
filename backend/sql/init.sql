@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS job_profile (
     email VARCHAR(255) NOT NULL,
     email_password VARCHAR(255) NOT NULL,
     phone VARCHAR(50) NOT NULL,
+    email_detail TEXT NOT NULL DEFAULT '',
+    phone_detail TEXT NOT NULL DEFAULT '',
     proxy VARCHAR(500),
     reference_tag VARCHAR(255),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,

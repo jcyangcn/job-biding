@@ -63,6 +63,20 @@ function ProfileDetailDialog({ open, profile, onClose }) {
         <DetailField label="Email" value={profile.email} icon={EmailTwoToneIcon} />
         <DetailField label="Email password" value={profile.email_password} icon={EmailTwoToneIcon} />
         <DetailField label="Phone" value={profile.phone || '—'} icon={PhoneTwoToneIcon} />
+        <Grid item xs={12}>
+          <DetailTextSection
+            title="Email detail"
+            text={profile.email_detail}
+            emptyText="No email detail."
+          />
+        </Grid>
+        <Grid item xs={12}>
+          <DetailTextSection
+            title="Phone detail"
+            text={profile.phone_detail}
+            emptyText="No phone detail."
+          />
+        </Grid>
         <DetailField label="Proxy" value={profile.proxy || '—'} xs={12} sm={12} />
         <DetailField label="Active">
           <Label color={profile.is_active ? 'success' : 'error'}>
