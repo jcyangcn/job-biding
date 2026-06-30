@@ -5,6 +5,7 @@ import {
   alpha,
   Avatar,
   Box,
+  Button,
   Card,
   Collapse,
   Grid,
@@ -19,9 +20,11 @@ import {
 import CheckTwoToneIcon from '@mui/icons-material/CheckTwoTone';
 import ContentCopyTwoToneIcon from '@mui/icons-material/ContentCopyTwoTone';
 import ExpandMoreTwoToneIcon from '@mui/icons-material/ExpandMoreTwoTone';
+import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import Label from 'src/components/Label';
 import { CountryFlag } from 'src/components/CountryLabel';
 import { formatDetailDateOnly } from 'src/components/DetailDialog';
+import { downloadProfileDefaultResume } from 'src/services/profileApi';
 import { copyToClipboard } from 'src/utils/copyToClipboard';
 
 function getInitials(name) {
@@ -41,6 +44,12 @@ function buildProfileFields(profile, identity) {
     { label: 'Email', value: profile.email || '', columns: { xs: 12, sm: 8, lg: 6 } },
     { label: 'Email password', value: profile.email_password || '', columns: { xs: 12, sm: 6, lg: 4 } },
     { label: 'Phone', value: profile.phone || '' },
+    {
+      label: 'Cover letter',
+      value: profile.cover_letter || '',
+      multiline: true,
+      columns: { xs: 12 }
+    },
     { label: 'Proxy', value: profile.proxy || '', columns: { xs: 12, sm: 6, lg: 8 } },
     { label: 'Country', value: identity?.country || '', showCountryFlag: true },
     { label: 'City / State', value: identity?.city_state || '' },
@@ -118,6 +127,47 @@ CopyableReadOnlyField.propTypes = {
   value: PropTypes.string,
   multiline: PropTypes.bool,
   showCountryFlag: PropTypes.bool
+};
+
+function DefaultResumeDownload({ profile }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const [downloading, setDownloading] = useState(false);
+  const filename = profile.default_resume_original_name;
+
+  if (!filename) {
+    return null;
+  }
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      await downloadProfileDefaultResume(profile.id, filename);
+      enqueueSnackbar(`Downloaded ${filename}`, { variant: 'success' });
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Download failed', { variant: 'error' });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Grid item xs={12}>
+      <Button
+        variant="outlined"
+        size="small"
+        startIcon={<PictureAsPdfTwoToneIcon />}
+        onClick={handleDownload}
+        disabled={downloading}
+        sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+      >
+        {downloading ? 'Downloading…' : filename}
+      </Button>
+    </Grid>
+  );
+}
+
+DefaultResumeDownload.propTypes = {
+  profile: PropTypes.object.isRequired
 };
 
 function getFieldColumns(field) {
@@ -233,6 +283,7 @@ function ProfileCopyCard({ profile, identity, actions }) {
                 </Grid>
               );
             })}
+            <DefaultResumeDownload profile={profile} />
           </Grid>
         </Box>
       </Collapse>

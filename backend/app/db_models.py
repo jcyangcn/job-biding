@@ -86,6 +86,11 @@ class JobProfile(Base):
     phone_detail: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=text("''")
     )
+    cover_letter: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=text("''")
+    )
+    default_resume_stored_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    default_resume_original_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
     proxy: Mapped[str | None] = mapped_column(String(500), nullable=True)
     reference_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

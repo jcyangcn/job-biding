@@ -32,6 +32,7 @@ import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import ProfileDetailDialog from './ProfileDetailDialog';
+import ProfileDefaultResumeUpload from './ProfileDefaultResumeUpload';
 import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
@@ -64,6 +65,7 @@ const emptyForm = {
   phone: '',
   email_detail: '',
   phone_detail: '',
+  cover_letter: '',
   proxy: '',
   is_active: true,
   resume_detail: emptyResumeDetail()
@@ -205,6 +207,7 @@ function ProfileManagement() {
       phone: record.phone,
       email_detail: record.email_detail || '',
       phone_detail: record.phone_detail || '',
+      cover_letter: record.cover_letter || '',
       proxy: record.proxy || '',
       is_active: record.is_active,
       resume_detail: normalizeResumeDetail(record.resume_detail)
@@ -226,6 +229,11 @@ function ProfileManagement() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const handleDefaultResumeUploaded = async (updatedProfile) => {
+    setEditingRecord(updatedProfile);
+    await loadData();
+  };
+
   const buildPayload = () => ({
     identity_id: form.identity_id,
     bidder_user_id: form.bidder_user_id,
@@ -237,6 +245,7 @@ function ProfileManagement() {
     phone: form.phone.trim(),
     email_detail: form.email_detail.trim(),
     phone_detail: form.phone_detail.trim(),
+    cover_letter: form.cover_letter.trim(),
     proxy: form.proxy.trim() || null,
     is_active: form.is_active,
     resume_detail: serializeResumeDetailForApi(form.resume_detail)
@@ -549,6 +558,21 @@ function ProfileManagement() {
             multiline
             minRows={3}
             placeholder="Additional phone notes (admin only)"
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Cover letter"
+            value={form.cover_letter}
+            onChange={handleFormChange('cover_letter')}
+            multiline
+            minRows={6}
+            placeholder="Cover letter text shown to bidders and callers"
+          />
+          <ProfileDefaultResumeUpload
+            editingRecord={editingRecord}
+            saving={saving}
+            onUploaded={handleDefaultResumeUploaded}
           />
           <TextField
             fullWidth

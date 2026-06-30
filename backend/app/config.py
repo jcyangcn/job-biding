@@ -13,6 +13,7 @@ UPLOADS_DIR = STORAGE_DIR / "uploads"
 GENERATED_RESUME_DIR = DOWNLOADS_DIR / "generated resume"
 CITIZEN_IMAGE_DIR = UPLOADS_DIR / "citizen image"
 CITIZEN_REVIEW_FILES_DIR = UPLOADS_DIR / "citizen review files"
+PROFILE_DEFAULT_RESUME_DIR = UPLOADS_DIR / "profile default resume"
 
 
 class Settings(BaseSettings):
@@ -111,5 +112,6 @@ def ensure_storage_dirs() -> None:
         GENERATED_DIR,
         CITIZEN_IMAGES_DIR,
         CITIZEN_REVIEW_FILES_DIR,
+        PROFILE_DEFAULT_RESUME_DIR,
     ):
         path.mkdir(parents=True, exist_ok=True)

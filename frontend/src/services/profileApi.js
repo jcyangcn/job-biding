@@ -14,9 +14,9 @@ async function parseError(response) {
   return detail;
 }
 
-function authHeaders() {
+function authHeaders(extra = {}) {
   const token = getStoredAccessToken();
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { ...extra };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -28,7 +28,7 @@ async function request(path, options = {}) {
   const response = await fetch(`${apiBase}${path}`, {
     ...options,
     headers: {
-      ...authHeaders(),
+      ...authHeaders({ 'Content-Type': 'application/json' }),
       ...(options.headers || {})
     }
   });
@@ -63,4 +63,41 @@ export function deleteProfile(profileId) {
   return request(`/api/job-profiles/${profileId}`, {
     method: 'DELETE'
   });
+}
+
+export function uploadProfileDefaultResume(profileId, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return fetch(`${getApiBase()}/api/job-profiles/${profileId}/default-resume`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
+export async function downloadProfileDefaultResume(profileId, originalName) {
+  const response = await fetch(`${getApiBase()}/api/job-profiles/${profileId}/default-resume`, {
+    headers: authHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = originalName || 'resume.pdf';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }

@@ -56,7 +56,10 @@ from app.profile_service import (
     get_profile,
     list_profiles_for_user,
     profile_to_response,
+    resolve_profile_default_resume_path,
+    set_profile_default_resume,
     update_profile,
+    user_can_access_profile,
 )
 from app.progression_email_service import (
     create_progression_email,
@@ -385,6 +388,62 @@ async def update_job_profile_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return profile_to_response(db, updated)
+
+
+@app.post("/api/job-profiles/{profile_id}/default-resume", response_model=JobProfileResponse)
+async def upload_profile_default_resume_endpoint(
+    profile_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_profile(db, profile_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    try:
+        set_profile_default_resume(
+            db,
+            record,
+            original_name=file.filename or "resume.pdf",
+            content=content,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    refreshed = get_profile(db, profile_id)
+    return profile_to_response(db, refreshed)
+
+
+@app.get("/api/job-profiles/{profile_id}/default-resume")
+def download_profile_default_resume_endpoint(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    record = get_profile(db, profile_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if not user_can_access_profile(user, record):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not record.default_resume_stored_name:
+        raise HTTPException(status_code=404, detail="Default resume not found")
+
+    try:
+        file_path = resolve_profile_default_resume_path(record)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    download_name = record.default_resume_original_name or "resume.pdf"
+    return FileResponse(
+        file_path,
+        filename=download_name,
+        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+    )
 
 
 @app.delete("/api/job-profiles/{profile_id}")
@@ -950,4 +1009,6 @@ def _resolve_resume_output_path(
 
 @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
 def spa_fallback(full_path: str):
+    if full_path.startswith("api/") or full_path == "api":
+        raise HTTPException(status_code=404, detail="Not found")
     return _serve_frontend(full_path)
