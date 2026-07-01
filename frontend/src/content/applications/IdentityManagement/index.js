@@ -30,11 +30,13 @@ import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import IdentityDetailDialog from './IdentityDetailDialog';
 import TableListFilters from 'src/components/TableListFilters';
+import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import CountryLabel from 'src/components/CountryLabel';
 import CountrySelectField from 'src/components/CountrySelectField';
 import DateField from 'src/components/DateField';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
+import useTablePagination from 'src/hooks/useTablePagination';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import COUNTRIES, { DEFAULT_COUNTRY } from 'src/data/countries';
 import {
@@ -109,6 +111,15 @@ function IdentityManagement() {
     searchFields: IDENTITY_SEARCH_FIELDS,
     dateField: 'created_at'
   });
+
+  const {
+    page,
+    limit,
+    paginatedRows,
+    handlePageChange,
+    handleLimitChange,
+    rowsPerPageOptions
+  } = useTablePagination(filteredRows);
 
   const dialogTitle = useMemo(
     () => (editingRecord ? 'Edit identity' : 'Add identity'),
@@ -355,7 +366,7 @@ function IdentityManagement() {
                       <TableCell colSpan={11}>No identities match your filters.</TableCell>
                     </TableRow>
                   ) : (
-                    filteredRows.map((row) => (
+                    paginatedRows.map((row) => (
                       <TableRow
                         key={row.id}
                         hover
@@ -412,6 +423,14 @@ function IdentityManagement() {
                 </TableBody>
               </Table>
             </TableContainer>
+            <TablePaginationFooter
+              count={filteredRows.length}
+              page={page}
+              rowsPerPage={limit}
+              onPageChange={handlePageChange}
+              onRowsPerPageChange={handleLimitChange}
+              rowsPerPageOptions={rowsPerPageOptions}
+            />
           </CardContent>
         </Card>
       </Container>

@@ -33,8 +33,10 @@ import ApplicationDetailDialog from './ApplicationDetailDialog';
 import ApplicationEditDialog from './ApplicationEditDialog';
 import ApplicationResumeCell from './ApplicationResumeCell';
 import TableListFilters from 'src/components/TableListFilters';
+import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
+import useTablePagination from 'src/hooks/useTablePagination';
 import { formatIdentityLabel } from 'src/data/countryCodes';
 import { importJobApplicationsSequentially, parseApplicationCsv } from 'src/utils/applicationCsvImport';
 import {
@@ -112,6 +114,16 @@ function ApplicationsTableView({
     searchFields,
     dateField: 'applied_at'
   });
+
+  const {
+    page,
+    limit,
+    paginatedRows,
+    handlePageChange,
+    handleLimitChange,
+    rowsPerPageOptions,
+    rowOffset
+  } = useTablePagination(filteredRows);
 
   const profileLabelToId = useMemo(() => {
     const map = {};
@@ -368,14 +380,14 @@ function ApplicationsTableView({
                     <TableCell colSpan={columnCount}>No applications match your filters.</TableCell>
                   </TableRow>
                 ) : (
-                  filteredRows.map((row, index) => (
+                  paginatedRows.map((row, index) => (
                     <TableRow
                       key={row.id}
                       hover
                       sx={{ cursor: 'pointer' }}
                       onClick={() => openDetail(row)}
                     >
-                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>{rowOffset + index + 1}</TableCell>
                       {showProfileColumn ? (
                         <TableCell>{row.profile_label || '—'}</TableCell>
                       ) : null}
@@ -429,6 +441,14 @@ function ApplicationsTableView({
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePaginationFooter
+            count={filteredRows.length}
+            page={page}
+            rowsPerPage={limit}
+            onPageChange={handlePageChange}
+            onRowsPerPageChange={handleLimitChange}
+            rowsPerPageOptions={rowsPerPageOptions}
+          />
         </CardContent>
       </Card>
   );
