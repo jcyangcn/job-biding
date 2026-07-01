@@ -30,8 +30,10 @@ import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import EmailLinkInfo from 'src/components/EmailLinkInfo';
 import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
+import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
+import useTablePagination from 'src/hooks/useTablePagination';
 import ProgressionEmailDetailDialog from './ProgressionEmailDetailDialog';
 import ProgressionEmailEditDialog from './ProgressionEmailEditDialog';
 import ProgressionEmailStatusLabel from './ProgressionEmailStatusLabel';
@@ -119,6 +121,15 @@ function ProgressionEmailsTableView({
     dateField: 'email_date',
     selects: PROGRESSION_EMAIL_SELECT_FILTERS
   });
+
+  const {
+    page,
+    limit,
+    paginatedRows,
+    handlePageChange,
+    handleLimitChange,
+    rowsPerPageOptions
+  } = useTablePagination(filteredRows);
 
   const profileLabelToId = useMemo(() => {
     const map = {};
@@ -406,7 +417,7 @@ function ProgressionEmailsTableView({
                   <TableCell colSpan={columnCount}>No progression emails match your filters.</TableCell>
                 </TableRow>
               ) : (
-                filteredRows.map((row) => (
+                paginatedRows.map((row) => (
                   <TableRow
                     key={row.id}
                     hover
@@ -457,6 +468,14 @@ function ProgressionEmailsTableView({
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePaginationFooter
+          count={filteredRows.length}
+          page={page}
+          rowsPerPage={limit}
+          onPageChange={handlePageChange}
+          onRowsPerPageChange={handleLimitChange}
+          rowsPerPageOptions={rowsPerPageOptions}
+        />
       </CardContent>
     </Card>
   );

@@ -34,11 +34,13 @@ import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import TableListFilters from 'src/components/TableListFilters';
+import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import CountryLabel from 'src/components/CountryLabel';
 import CountrySelectField from 'src/components/CountrySelectField';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import useTableListFilters from 'src/hooks/useTableListFilters';
+import useTablePagination from 'src/hooks/useTablePagination';
 import COUNTRIES, { DEFAULT_COUNTRY } from 'src/data/countries';
 import {
   CITIZEN_REVIEW_STATUSES,
@@ -131,6 +133,15 @@ function CitizenManagement() {
     searchFields: CITIZEN_SEARCH_FIELDS,
     selects: CITIZEN_SELECT_FILTERS
   });
+
+  const {
+    page,
+    limit,
+    paginatedRows,
+    handlePageChange,
+    handleLimitChange,
+    rowsPerPageOptions
+  } = useTablePagination(filteredRows);
 
   const filterSelects = useMemo(
     () => [
@@ -481,7 +492,7 @@ function CitizenManagement() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredRows.map((row) => (
+                    paginatedRows.map((row) => (
                       <TableRow key={row.id} hover>
                         <TableCell>
                           <CountryLabel country={row.country} noWrap />
@@ -551,6 +562,14 @@ function CitizenManagement() {
                 </TableBody>
               </Table>
             </TableContainer>
+            <TablePaginationFooter
+              count={filteredRows.length}
+              page={page}
+              rowsPerPage={limit}
+              onPageChange={handlePageChange}
+              onRowsPerPageChange={handleLimitChange}
+              rowsPerPageOptions={rowsPerPageOptions}
+            />
           </CardContent>
         </Card>
 

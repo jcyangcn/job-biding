@@ -34,8 +34,10 @@ import { PROJECT_NAME } from 'src/config/app';
 import ProfileDetailDialog from './ProfileDetailDialog';
 import ProfileDefaultResumeUpload from './ProfileDefaultResumeUpload';
 import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
+import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
+import useTablePagination from 'src/hooks/useTablePagination';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { uniqueFieldValues } from 'src/utils/tableListFilters';
 import { formatIdentityLabel } from 'src/data/countryCodes';
@@ -136,6 +138,15 @@ function ProfileManagement() {
     dateField: 'created_at',
     selects: PROFILE_SELECT_FILTERS
   });
+
+  const {
+    page,
+    limit,
+    paginatedRows,
+    handlePageChange,
+    handleLimitChange,
+    rowsPerPageOptions
+  } = useTablePagination(filteredRows);
 
   const roleOptions = useMemo(
     () =>
@@ -399,7 +410,7 @@ function ProfileManagement() {
                       <TableCell colSpan={10}>No profiles match your filters.</TableCell>
                     </TableRow>
                   ) : (
-                    filteredRows.map((row) => (
+                    paginatedRows.map((row) => (
                       <TableRow
                         key={row.id}
                         hover
@@ -445,6 +456,14 @@ function ProfileManagement() {
                 </TableBody>
               </Table>
             </TableContainer>
+            <TablePaginationFooter
+              count={filteredRows.length}
+              page={page}
+              rowsPerPage={limit}
+              onPageChange={handlePageChange}
+              onRowsPerPageChange={handleLimitChange}
+              rowsPerPageOptions={rowsPerPageOptions}
+            />
           </CardContent>
         </Card>
       </Container>

@@ -19,7 +19,9 @@ import {
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import TableListFilters from 'src/components/TableListFilters';
+import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import useTableListFilters from 'src/hooks/useTableListFilters';
+import useTablePagination from 'src/hooks/useTablePagination';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { PROJECT_NAME } from 'src/config/app';
 import { fetchHealth, listResumeGenerations } from 'src/services/resumeApi';
@@ -68,6 +70,15 @@ function ResumeHistory() {
     searchFields: RESUME_HISTORY_SEARCH_FIELDS,
     dateField: 'created_at'
   });
+
+  const {
+    page,
+    limit,
+    paginatedRows,
+    handlePageChange,
+    handleLimitChange,
+    rowsPerPageOptions
+  } = useTablePagination(filteredRows);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -132,7 +143,7 @@ function ResumeHistory() {
         )}
 
         <Card>
-          <CardContent>
+          <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
             <TableContainer>
               <Table>
                 <TableHead>
@@ -156,7 +167,7 @@ function ResumeHistory() {
                       <TableCell colSpan={5}>No generations match your filters.</TableCell>
                     </TableRow>
                   ) : (
-                    filteredRows.map((row) => (
+                    paginatedRows.map((row) => (
                       <TableRow
                         key={row.id}
                         hover
@@ -178,6 +189,14 @@ function ResumeHistory() {
                 </TableBody>
               </Table>
             </TableContainer>
+            <TablePaginationFooter
+              count={filteredRows.length}
+              page={page}
+              rowsPerPage={limit}
+              onPageChange={handlePageChange}
+              onRowsPerPageChange={handleLimitChange}
+              rowsPerPageOptions={rowsPerPageOptions}
+            />
           </CardContent>
         </Card>
       </Container>
