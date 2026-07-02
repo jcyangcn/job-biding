@@ -1,8 +1,5 @@
-import { useState } from 'react';
 import PropTypes from 'prop-types';
-import { useSnackbar } from 'notistack';
 import {
-  CircularProgress,
   IconButton,
   Link,
   Stack,
@@ -10,42 +7,11 @@ import {
   Typography
 } from '@mui/material';
 import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
-import { downloadResumePdf, openResumePdf } from 'src/services/resumeApi';
+import { getResumeDownloadUrl, getResumeInlineUrl } from 'src/services/resumeApi';
 
 function ApplicationResumeCell({ row }) {
-  const { enqueueSnackbar } = useSnackbar();
-  const [busyAction, setBusyAction] = useState(null);
   const filename = row.resume_pdf_filename;
   const hasGeneratedPdf = Boolean(row.resume_generated_id && filename);
-
-  const handleOpenPdf = async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (busyAction) return;
-
-    setBusyAction('open');
-    try {
-      await openResumePdf(filename);
-    } catch (err) {
-      enqueueSnackbar(err.message || 'Failed to open PDF', { variant: 'error' });
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleDownloadPdf = async (event) => {
-    event.stopPropagation();
-    if (busyAction) return;
-
-    setBusyAction('download');
-    try {
-      await downloadResumePdf(filename);
-    } catch (err) {
-      enqueueSnackbar(err.message || 'Failed to download PDF', { variant: 'error' });
-    } finally {
-      setBusyAction(null);
-    }
-  };
 
   if (hasGeneratedPdf) {
     return (
@@ -56,13 +22,12 @@ function ApplicationResumeCell({ row }) {
         minWidth={0}
         onClick={(event) => event.stopPropagation()}
       >
-        <Tooltip title="Open PDF">
+        <Tooltip title="Open PDF in new tab">
           <Link
-            component="button"
-            type="button"
+            href={getResumeInlineUrl(filename)}
+            target="_blank"
+            rel="noopener noreferrer"
             underline="hover"
-            disabled={Boolean(busyAction)}
-            onClick={handleOpenPdf}
             sx={{
               wordBreak: 'break-all',
               fontWeight: 500,
@@ -74,21 +39,18 @@ function ApplicationResumeCell({ row }) {
           </Link>
         </Tooltip>
         <Tooltip title="Download PDF">
-          <span>
-            <IconButton
-              size="small"
-              color="primary"
-              aria-label={`Download ${filename}`}
-              disabled={Boolean(busyAction)}
-              onClick={handleDownloadPdf}
-            >
-              {busyAction === 'download' ? (
-                <CircularProgress size={16} />
-              ) : (
-                <FileDownloadTwoToneIcon sx={{ fontSize: 18 }} />
-              )}
-            </IconButton>
-          </span>
+          <IconButton
+            component="a"
+            href={getResumeDownloadUrl(filename)}
+            download={filename}
+            size="small"
+            color="primary"
+            aria-label={`Download ${filename}`}
+            rel="noopener noreferrer"
+            sx={{ flexShrink: 0 }}
+          >
+            <FileDownloadTwoToneIcon sx={{ fontSize: 18 }} />
+          </IconButton>
         </Tooltip>
       </Stack>
     );

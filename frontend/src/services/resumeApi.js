@@ -42,6 +42,14 @@ function buildResumeDownloadUrl(filename) {
   return `${getApiBase()}/api/resumes/download/${encodeURIComponent(safeName)}`;
 }
 
+export function getResumeDownloadUrl(filename) {
+  return buildResumeDownloadUrl(filename);
+}
+
+export function getResumeInlineUrl(filename) {
+  return `${buildResumeDownloadUrl(filename)}?inline=true`;
+}
+
 async function readErrorDetail(res) {
   let detail = `Request failed (${res.status})`;
   try {
@@ -66,56 +74,32 @@ async function readErrorDetail(res) {
   return detail;
 }
 
-async function fetchResumePdfBlob(filename) {
-  const res = await fetch(buildResumeDownloadUrl(filename), {
-    headers: authHeaders()
-  });
-
-  if (!res.ok) {
-    throw new Error(await readErrorDetail(res));
-  }
-
-  const buffer = await res.arrayBuffer();
-  const header = new TextDecoder().decode(buffer.slice(0, 4));
-  if (header !== '%PDF') {
-    throw new Error('Server did not return a PDF file.');
-  }
-
-  return new Blob([buffer], { type: 'application/pdf' });
-}
-
-function scheduleObjectUrlRevoke(url, delayMs = 60_000) {
-  window.setTimeout(() => URL.revokeObjectURL(url), delayMs);
-}
-
-export async function openResumePdf(filename) {
-  const blob = await fetchResumePdfBlob(filename);
-  const url = URL.createObjectURL(blob);
-  const tab = window.open(url, '_blank', 'noopener,noreferrer');
-  if (!tab) {
-    URL.revokeObjectURL(url);
-    throw new Error('Popup blocked. Allow popups to view the PDF.');
-  }
-  scheduleObjectUrlRevoke(url);
-}
-
-export async function downloadResumePdf(filename) {
-  const blob = await fetchResumePdfBlob(filename);
-  const safeName = sanitizePdfFilename(filename);
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = safeName;
-  anchor.rel = 'noopener';
-  anchor.style.display = 'none';
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
-}
+let resumeDownloadFrame = null;
 
 export function triggerResumeDownload(filename) {
-  return downloadResumePdf(filename);
+  const url = buildResumeDownloadUrl(filename);
+
+  if (resumeDownloadFrame) {
+    resumeDownloadFrame.remove();
+    resumeDownloadFrame = null;
+  }
+
+  resumeDownloadFrame = document.createElement('iframe');
+  resumeDownloadFrame.style.display = 'none';
+  resumeDownloadFrame.setAttribute('aria-hidden', 'true');
+  resumeDownloadFrame.src = url;
+  document.body.appendChild(resumeDownloadFrame);
+
+  window.setTimeout(() => {
+    if (resumeDownloadFrame) {
+      resumeDownloadFrame.remove();
+      resumeDownloadFrame = null;
+    }
+  }, 60_000);
+}
+
+export function downloadResumePdf(filename) {
+  triggerResumeDownload(filename);
 }
 
 export async function loadDefaultJd() {
@@ -186,7 +170,7 @@ export async function generateResumePdf(body) {
 
   const meta = await res.json();
   const filename = sanitizePdfFilename(meta.filename);
-  await downloadResumePdf(filename);
+  triggerResumeDownload(filename);
 
   const generationId =
     meta.generation_id != null && meta.generation_id !== ''
