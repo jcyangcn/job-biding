@@ -122,6 +122,13 @@ function ProfileDetailDialog({ open, profile, onClose }) {
           </Grid>
         ) : null}
         <DetailField label="Proxy" value={profile.proxy || '—'} xs={12} sm={12} />
+        <Grid item xs={12}>
+          <DetailTextSection
+            title="Proxy detail"
+            text={profile.proxy_detail}
+            emptyText="No proxy detail."
+          />
+        </Grid>
         <DetailField label="Active">
           <Label color={profile.is_active ? 'success' : 'error'}>
             {profile.is_active ? 'Active' : 'Inactive'}

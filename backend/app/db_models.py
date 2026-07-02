@@ -92,6 +92,9 @@ class JobProfile(Base):
     default_resume_stored_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
     default_resume_original_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
     proxy: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    proxy_detail: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=text("''")
+    )
     reference_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     resume_detail: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

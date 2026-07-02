@@ -64,6 +64,7 @@ def profile_to_response(db: Session, record: JobProfile, *, include_admin_fields
         "cover_letter": record.cover_letter,
         "default_resume_original_name": record.default_resume_original_name,
         "proxy": record.proxy,
+        "proxy_detail": record.proxy_detail if include_admin_fields else "",
         "reference_tag": record.reference_tag,
         "is_active": record.is_active,
         "resume_detail": _parse_resume_detail(record.resume_detail).model_dump(mode="json"),
@@ -218,6 +219,7 @@ def create_profile(db: Session, data: JobProfileCreateRequest) -> JobProfile:
         phone_detail=data.phone_detail,
         cover_letter=data.cover_letter,
         proxy=data.proxy or None,
+        proxy_detail=data.proxy_detail,
         reference_tag=(data.reference_tag.strip() if data.reference_tag else None),
         is_active=data.is_active,
         resume_detail=_serialize_resume_detail(data.resume_detail),
@@ -240,6 +242,9 @@ def _apply_profile_detail_fields(record: JobProfile, raw_body: dict | None) -> N
     if "cover_letter" in raw_body:
         record.cover_letter = str(raw_body.get("cover_letter") or "")
         flag_modified(record, "cover_letter")
+    if "proxy_detail" in raw_body:
+        record.proxy_detail = str(raw_body.get("proxy_detail") or "")
+        flag_modified(record, "proxy_detail")
 
 
 def update_profile(

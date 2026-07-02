@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS job_profile (
     default_resume_stored_name VARCHAR(500),
     default_resume_original_name VARCHAR(500),
     proxy VARCHAR(500),
+    proxy_detail TEXT NOT NULL DEFAULT '',
     reference_tag VARCHAR(255),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     resume_detail JSONB NOT NULL DEFAULT '{}',

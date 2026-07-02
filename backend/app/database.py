@@ -191,6 +191,7 @@ def migrate_job_profile_columns() -> None:
         "cover_letter": "TEXT NOT NULL DEFAULT ''",
         "default_resume_stored_name": "VARCHAR(500)",
         "default_resume_original_name": "VARCHAR(500)",
+        "proxy_detail": "TEXT NOT NULL DEFAULT ''",
     }
     with engine.begin() as conn:
         table_exists = conn.execute(

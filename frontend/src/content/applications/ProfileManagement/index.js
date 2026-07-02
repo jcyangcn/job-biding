@@ -69,6 +69,7 @@ const emptyForm = {
   phone_detail: '',
   cover_letter: '',
   proxy: '',
+  proxy_detail: '',
   is_active: true,
   resume_detail: emptyResumeDetail()
 };
@@ -220,6 +221,7 @@ function ProfileManagement() {
       phone_detail: record.phone_detail || '',
       cover_letter: record.cover_letter || '',
       proxy: record.proxy || '',
+      proxy_detail: record.proxy_detail || '',
       is_active: record.is_active,
       resume_detail: normalizeResumeDetail(record.resume_detail)
     });
@@ -258,6 +260,7 @@ function ProfileManagement() {
     phone_detail: form.phone_detail.trim(),
     cover_letter: form.cover_letter.trim(),
     proxy: form.proxy.trim() || null,
+    proxy_detail: form.proxy_detail.trim(),
     is_active: form.is_active,
     resume_detail: serializeResumeDetailForApi(form.resume_detail)
   });
@@ -599,6 +602,16 @@ function ProfileManagement() {
             label="Proxy"
             value={form.proxy}
             onChange={handleFormChange('proxy')}
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Proxy detail"
+            value={form.proxy_detail}
+            onChange={handleFormChange('proxy_detail')}
+            multiline
+            minRows={3}
+            placeholder="Additional proxy notes (admin only)"
           />
           <FormControlLabel
             sx={{ mt: 1, mb: 0.5, display: 'block' }}

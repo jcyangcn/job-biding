@@ -232,6 +232,7 @@ class JobProfileCreateRequest(BaseModel):
     phone_detail: str = Field(default="")
     cover_letter: str = Field(default="")
     proxy: str | None = Field(default=None, max_length=500)
+    proxy_detail: str = Field(default="")
     reference_tag: str | None = Field(default=None, max_length=255)
     is_active: bool = True
     resume_detail: ResumeDetail = Field(default_factory=ResumeDetail)
@@ -249,6 +250,7 @@ class JobProfileUpdateRequest(BaseModel):
     phone_detail: str = Field(default="")
     cover_letter: str = Field(default="")
     proxy: str | None = Field(default=None, max_length=500)
+    proxy_detail: str = Field(default="")
     reference_tag: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
     resume_detail: ResumeDetail | None = None
@@ -271,6 +273,7 @@ class JobProfileResponse(BaseModel):
     cover_letter: str = ""
     default_resume_original_name: str | None = None
     proxy: str | None = None
+    proxy_detail: str = ""
     reference_tag: str | None = None
     is_active: bool
     resume_detail: ResumeDetail
