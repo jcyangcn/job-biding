@@ -33,6 +33,7 @@ import {
 import { format } from 'date-fns';
 import DateField from 'src/components/DateField';
 import ArrowBackTwoToneIcon from '@mui/icons-material/ArrowBackTwoTone';
+import CloseIcon from '@mui/icons-material/Close';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
@@ -77,11 +78,35 @@ const compactTabSx = {
   '& .MuiTabs-indicator': { height: 2 }
 };
 
+const APPLICATION_SNACKBAR = {
+  anchorOrigin: { vertical: 'top', horizontal: 'center' }
+};
+
 function ApplicationDetails() {
   const theme = useTheme();
   const { profileId } = useParams();
   const navigate = useNavigate();
-  const { enqueueSnackbar } = useSnackbar();
+  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
+  const notify = useCallback(
+    (message, options = {}) =>
+      enqueueSnackbar(message, {
+        ...options,
+        anchorOrigin: options.anchorOrigin ?? APPLICATION_SNACKBAR.anchorOrigin,
+        action:
+          options.action ??
+          ((snackbarId) => (
+            <IconButton
+              size="small"
+              color="inherit"
+              aria-label="Close"
+              onClick={() => closeSnackbar(snackbarId)}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          ))
+      }),
+    [enqueueSnackbar, closeSnackbar]
+  );
   const [profile, setProfile] = useState(null);
   const [identity, setIdentity] = useState(null);
   const [resumeGenerations, setResumeGenerations] = useState([]);
@@ -160,7 +185,7 @@ function ApplicationDetails() {
         (row) => row.id === numericId && row.is_active
       );
       if (!match) {
-        enqueueSnackbar('Profile not found or access denied', { variant: 'warning' });
+        notify('Profile not found or access denied', { variant: 'warning' });
         navigate('/applications/job-applications', { replace: true });
         return;
       }
@@ -172,13 +197,13 @@ function ApplicationDetails() {
       applyProfileResumeContent(match, matchedIdentity);
       setResumeGenerations(generationRows);
     } catch (err) {
-      enqueueSnackbar(err.message || 'Failed to load application data', {
+      notify(err.message || 'Failed to load application data', {
         variant: 'error'
       });
     } finally {
       setLoading(false);
     }
-  }, [applyProfileResumeContent, enqueueSnackbar, navigate, profileId]);
+  }, [applyProfileResumeContent, notify, navigate, profileId]);
 
   useEffect(() => {
     loadData();
@@ -196,7 +221,7 @@ function ApplicationDetails() {
 
   const handleCompanyBlur = () => {
     if (checkCompanyDuplicate(form.company)) {
-      enqueueSnackbar('This company has already been applied to for this profile.', {
+      notify('This company has already been applied to for this profile.', {
         variant: 'warning'
       });
     }
@@ -244,12 +269,12 @@ function ApplicationDetails() {
   const handleReloadProfileContent = () => {
     if (!profile) return;
     applyProfileResumeContent(profile, identity);
-    enqueueSnackbar('Reloaded profile resume data', { variant: 'success' });
+    notify('Reloaded profile resume data', { variant: 'success' });
   };
 
   const handleGenerateResume = async () => {
     setGenerating(true);
-    enqueueSnackbar('Generating resume… this usually takes 1–3 minutes.', {
+    notify('Generating resume… this usually takes 1–3 minutes.', {
       variant: 'info'
     });
 
@@ -262,7 +287,7 @@ function ApplicationDetails() {
         profileId: profile.id
       });
       const { filename, generationId } = await generateResumePdf(body);
-      enqueueSnackbar(`Downloaded ${filename} to your browser downloads folder`, {
+      notify(`Downloaded ${filename} to your browser downloads folder`, {
         variant: 'success'
       });
 
@@ -279,7 +304,7 @@ function ApplicationDetails() {
         }
       }
     } catch (err) {
-      enqueueSnackbar(err.message || 'Something went wrong.', { variant: 'error' });
+      notify(err.message || 'Something went wrong.', { variant: 'error' });
     } finally {
       setGenerating(false);
     }
@@ -288,16 +313,16 @@ function ApplicationDetails() {
   const handleSubmit = async () => {
     if (!profile) return;
     if (!form.link.trim()) {
-      enqueueSnackbar('Link is required', { variant: 'warning' });
+      notify('Link is required', { variant: 'warning' });
       return;
     }
     if (form.applied && !form.applied_at) {
-      enqueueSnackbar('Applied at is required when applied is enabled', { variant: 'warning' });
+      notify('Applied at is required when applied is enabled', { variant: 'warning' });
       return;
     }
     if (checkCompanyDuplicate(form.company)) {
       setCompanyDuplicate(true);
-      enqueueSnackbar('This company has already been applied to for this profile.', {
+      notify('This company has already been applied to for this profile.', {
         variant: 'warning'
       });
       return;
@@ -322,10 +347,10 @@ function ApplicationDetails() {
         applied: form.applied,
         applied_at: form.applied ? new Date(form.applied_at).toISOString() : null
       });
-      enqueueSnackbar('Application saved', { variant: 'success' });
+      notify('Application saved', { variant: 'success' });
       navigate(`/applications/job-applications/${profile.id}`);
     } catch (err) {
-      enqueueSnackbar(err.message || 'Save failed', { variant: 'error' });
+      notify(err.message || 'Save failed', { variant: 'error' });
     } finally {
       setSubmitting(false);
     }

@@ -181,6 +181,40 @@ def migrate_job_application_columns() -> None:
                 text("ALTER TABLE job_application ALTER COLUMN applied_at DROP NOT NULL")
             )
 
+        bidder_user_id_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'bidder_user_id'
+                """
+            )
+        ).scalar()
+        if not bidder_user_id_exists:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN bidder_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL
+                    """
+                )
+            )
+
+        conn.execute(
+            text(
+                """
+                UPDATE job_application AS ja
+                SET bidder_user_id = jp.bidder_user_id
+                FROM job_profile AS jp
+                WHERE ja.profile_id = jp.id
+                  AND ja.bidder_user_id IS NULL
+                  AND jp.bidder_user_id IS NOT NULL
+                """
+            )
+        )
+
 
 def migrate_job_profile_columns() -> None:
     columns = {

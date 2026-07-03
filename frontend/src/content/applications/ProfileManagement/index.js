@@ -35,9 +35,11 @@ import ProfileDetailDialog from './ProfileDetailDialog';
 import ProfileDefaultResumeUpload from './ProfileDefaultResumeUpload';
 import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
+import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
+import useTableSort from 'src/hooks/useTableSort';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { uniqueFieldValues } from 'src/utils/tableListFilters';
 import { formatIdentityLabel } from 'src/data/countryCodes';
@@ -140,6 +142,8 @@ function ProfileManagement() {
     selects: PROFILE_SELECT_FILTERS
   });
 
+  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
+
   const {
     page,
     limit,
@@ -147,7 +151,7 @@ function ProfileManagement() {
     handlePageChange,
     handleLimitChange,
     rowsPerPageOptions
-  } = useTablePagination(filteredRows);
+  } = useTablePagination(sortedRows);
 
   const roleOptions = useMemo(
     () =>
@@ -389,15 +393,69 @@ function ProfileManagement() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Identity</TableCell>
-                    <TableCell>Bidder</TableCell>
-                    <TableCell>Caller</TableCell>
-                    <TableCell>Roles</TableCell>
-                    <TableCell>Reference tag</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Phone</TableCell>
-                    <TableCell>Active</TableCell>
+                    <SortableTableCell
+                      label="ID"
+                      sortKey="id"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Identity"
+                      sortKey="identity_name"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Bidder"
+                      sortKey="bidder_name"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Caller"
+                      sortKey="caller_name"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Roles"
+                      sortKey="roles"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Reference tag"
+                      sortKey="reference_tag"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Email"
+                      sortKey="email"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Phone"
+                      sortKey="phone"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Active"
+                      sortKey="is_active"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>

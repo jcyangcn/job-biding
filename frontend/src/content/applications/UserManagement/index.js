@@ -31,9 +31,11 @@ import { PROJECT_NAME } from 'src/config/app';
 import UserDetailDialog from './UserDetailDialog';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
+import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
+import useTableSort from 'src/hooks/useTableSort';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import {
   createUser,
@@ -99,6 +101,8 @@ function UserManagement() {
     selects: USER_SELECT_FILTERS
   });
 
+  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
+
   const {
     page,
     limit,
@@ -106,7 +110,7 @@ function UserManagement() {
     handlePageChange,
     handleLimitChange,
     rowsPerPageOptions
-  } = useTablePagination(filteredRows);
+  } = useTablePagination(sortedRows);
 
   const dialogTitle = useMemo(
     () => (editingUser ? 'Edit user' : 'Add user'),
@@ -280,11 +284,41 @@ function UserManagement() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Full name</TableCell>
-                    <TableCell>Username</TableCell>
-                    <TableCell>Role</TableCell>
-                    <TableCell>Description</TableCell>
+                    <SortableTableCell
+                      label="ID"
+                      sortKey="id"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Full name"
+                      sortKey="full_name"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Username"
+                      sortKey="username"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Role"
+                      sortKey="role"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Description"
+                      sortKey="description"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>

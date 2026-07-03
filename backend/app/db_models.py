@@ -143,6 +143,9 @@ class JobApplication(Base):
     resume_online_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     applied: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    bidder_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

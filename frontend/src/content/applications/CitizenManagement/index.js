@@ -35,12 +35,14 @@ import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
+import SortableTableCell from 'src/components/SortableTableCell';
 import CountryLabel from 'src/components/CountryLabel';
 import CountrySelectField from 'src/components/CountrySelectField';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
+import useTableSort from 'src/hooks/useTableSort';
 import COUNTRIES, { DEFAULT_COUNTRY } from 'src/data/countries';
 import {
   CITIZEN_REVIEW_STATUSES,
@@ -134,6 +136,8 @@ function CitizenManagement() {
     selects: CITIZEN_SELECT_FILTERS
   });
 
+  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
+
   const {
     page,
     limit,
@@ -141,7 +145,7 @@ function CitizenManagement() {
     handlePageChange,
     handleLimitChange,
     rowsPerPageOptions
-  } = useTablePagination(filteredRows);
+  } = useTablePagination(sortedRows);
 
   const filterSelects = useMemo(
     () => [
@@ -469,14 +473,62 @@ function CitizenManagement() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Country</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Review</TableCell>
-                    <TableCell>Reviewer</TableCell>
-                    <TableCell>LinkedIn</TableCell>
-                    <TableCell>Details</TableCell>
-                    <TableCell>Images</TableCell>
-                    <TableCell>Updated</TableCell>
+                    <SortableTableCell
+                      label="Country"
+                      sortKey="country"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Name"
+                      sortKey="name"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Review"
+                      sortKey="review_status"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Reviewer"
+                      sortKey="reviewer"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="LinkedIn"
+                      sortKey="linkedin"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Details"
+                      sortKey="details"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Images"
+                      sortKey={(row) => (row.images || []).length}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Updated"
+                      sortKey="updated_at"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>

@@ -307,6 +307,7 @@ class JobApplicationResponse(BaseModel):
     id: int
     profile_id: int
     profile_label: str
+    bidder_username: str = ""
     role: str
     company: str
     link: str

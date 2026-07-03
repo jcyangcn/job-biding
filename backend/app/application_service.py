@@ -29,10 +29,16 @@ def application_to_response(db: Session, record: JobApplication) -> dict:
         if generation and generation.pdf_path:
             resume_pdf_filename = Path(generation.pdf_path).name
 
+    bidder_username = ""
+    if record.bidder_user_id is not None:
+        bidder = db.get(User, record.bidder_user_id)
+        bidder_username = bidder.username if bidder else ""
+
     return {
         "id": record.id,
         "profile_id": record.profile_id,
         "profile_label": profile_label,
+        "bidder_username": bidder_username,
         "role": record.role,
         "company": record.company,
         "link": record.link,
@@ -119,6 +125,7 @@ def create_application(
         ),
         applied=data.applied,
         applied_at=_resolve_applied_fields(data.applied, data.applied_at),
+        bidder_user_id=user.id,
     )
     db.add(record)
     db.commit()

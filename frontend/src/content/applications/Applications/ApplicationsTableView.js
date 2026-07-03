@@ -34,9 +34,11 @@ import ApplicationEditDialog from './ApplicationEditDialog';
 import ApplicationResumeCell from './ApplicationResumeCell';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
+import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
+import useTableSort from 'src/hooks/useTableSort';
 import { formatIdentityLabel } from 'src/data/countryCodes';
 import { importJobApplicationsSequentially, parseApplicationCsv } from 'src/utils/applicationCsvImport';
 import {
@@ -46,6 +48,7 @@ import {
 import { createJobApplication, deleteJobApplication, listJobApplications } from 'src/services/jobApplicationApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
+import { uniqueFieldValues } from 'src/utils/tableListFilters';
 
 function formatResumeSource(row) {
   if (row.resume_pdf_filename) {
@@ -63,12 +66,15 @@ function formatResumeSource(row) {
 
 const BASE_SEARCH_FIELDS = [
   'id',
+  'bidder_username',
   'role',
   'company',
   'link',
   'job_description',
   (row) => formatResumeSource(row)
 ];
+
+const APPLICATION_SELECT_FILTERS = [{ id: 'bidder_username', field: 'bidder_username', emptyValue: '' }];
 
 function ApplicationsTableView({
   rows,
@@ -106,14 +112,41 @@ function ApplicationsTableView({
     setDateFrom,
     dateTo,
     setDateTo,
+    selectValues,
+    setSelectValue,
     filteredRows,
     clearFilters,
     hasActiveFilters,
     showDateRange
   } = useTableListFilters(rows, {
     searchFields,
-    dateField: 'applied_at'
+    dateField: 'applied_at',
+    selects: APPLICATION_SELECT_FILTERS
   });
+
+  const bidderOptions = useMemo(
+    () =>
+      uniqueFieldValues(rows, 'bidder_username', { emptyValue: '' }).map((value) => ({
+        value,
+        label: value === '' ? '(Unknown)' : value
+      })),
+    [rows]
+  );
+
+  const filterSelects = useMemo(
+    () => [
+      {
+        id: 'bidder_username',
+        label: 'Bidder',
+        value: selectValues.bidder_username,
+        onChange: (value) => setSelectValue('bidder_username', value),
+        options: bidderOptions
+      }
+    ],
+    [bidderOptions, selectValues.bidder_username, setSelectValue]
+  );
+
+  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
 
   const {
     page,
@@ -123,7 +156,7 @@ function ApplicationsTableView({
     handleLimitChange,
     rowsPerPageOptions,
     rowOffset
-  } = useTablePagination(filteredRows);
+  } = useTablePagination(sortedRows);
 
   const profileLabelToId = useMemo(() => {
     const map = {};
@@ -258,7 +291,7 @@ function ApplicationsTableView({
     }
   };
 
-  const columnCount = showProfileColumn ? 8 : 7;
+  const columnCount = showProfileColumn ? 9 : 8;
   const fixedTableCard = Boolean(tableCardHeight);
 
   const toolbar = (
@@ -273,6 +306,7 @@ function ApplicationsTableView({
       onDateToChange={setDateTo}
       dateFromLabel="Applied from"
       dateToLabel="Applied to"
+      selects={filterSelects}
       onClear={clearFilters}
       hasActiveFilters={hasActiveFilters}
       filteredCount={filteredRows.length}
@@ -357,12 +391,57 @@ function ApplicationsTableView({
               <TableHead>
                 <TableRow>
                   <TableCell>No</TableCell>
-                  {showProfileColumn ? <TableCell>Profile</TableCell> : null}
-                  <TableCell>Role</TableCell>
-                  <TableCell>Company</TableCell>
-                  <TableCell>Link</TableCell>
-                  <TableCell>Resume</TableCell>
-                  <TableCell>Applied</TableCell>
+                  {showProfileColumn ? (
+                    <SortableTableCell
+                      label="Profile"
+                      sortKey="profile_label"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                  ) : null}
+                  <SortableTableCell
+                    label="Bidder"
+                    sortKey="bidder_username"
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                  <SortableTableCell
+                    label="Role"
+                    sortKey="role"
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                  <SortableTableCell
+                    label="Company"
+                    sortKey="company"
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                  <SortableTableCell
+                    label="Link"
+                    sortKey="link"
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                  <SortableTableCell
+                    label="Resume"
+                    sortKey={(row) => formatResumeSource(row)}
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                  <SortableTableCell
+                    label="Applied"
+                    sortKey={(row) => row.applied_at || ''}
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                  />
                   <TableCell align="right" />
                 </TableRow>
               </TableHead>
@@ -391,6 +470,7 @@ function ApplicationsTableView({
                       {showProfileColumn ? (
                         <TableCell>{row.profile_label || '—'}</TableCell>
                       ) : null}
+                      <TableCell>{row.bidder_username || '—'}</TableCell>
                       <TableCell>{row.role || '—'}</TableCell>
                       <TableCell>{row.company || '—'}</TableCell>
                       <TableCell onClick={stopPropagation}>

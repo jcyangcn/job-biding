@@ -20,8 +20,10 @@ import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
+import SortableTableCell from 'src/components/SortableTableCell';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
+import useTableSort from 'src/hooks/useTableSort';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { PROJECT_NAME } from 'src/config/app';
 import { fetchHealth, listResumeGenerations } from 'src/services/resumeApi';
@@ -71,6 +73,8 @@ function ResumeHistory() {
     dateField: 'created_at'
   });
 
+  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
+
   const {
     page,
     limit,
@@ -78,7 +82,7 @@ function ResumeHistory() {
     handlePageChange,
     handleLimitChange,
     rowsPerPageOptions
-  } = useTablePagination(filteredRows);
+  } = useTablePagination(sortedRows);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -148,11 +152,41 @@ function ResumeHistory() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Candidate</TableCell>
-                    <TableCell>Job preview</TableCell>
-                    <TableCell>PDF</TableCell>
-                    <TableCell>Created</TableCell>
+                    <SortableTableCell
+                      label="ID"
+                      sortKey="id"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Candidate"
+                      sortKey={(row) => profileName(row.profile)}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Job preview"
+                      sortKey="job_details"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="PDF"
+                      sortKey="pdf_path"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Created"
+                      sortKey="created_at"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </TableRow>
                 </TableHead>
                 <TableBody>

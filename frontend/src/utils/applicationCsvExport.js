@@ -3,6 +3,7 @@ import { formatDateTime } from 'src/utils/dateFormat';
 export const APPLICATION_CSV_HEADERS = [
   'Profile ID',
   'Profile',
+  'Bidder',
   'Role',
   'Company',
   'Link',
@@ -17,6 +18,7 @@ export function buildApplicationExportRows(rows) {
   return rows.map((row) => [
     row.profile_id ?? '',
     row.profile_label || '',
+    row.bidder_username || '',
     row.role || '',
     row.company || '',
     row.link || '',

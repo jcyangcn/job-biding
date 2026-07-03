@@ -31,9 +31,11 @@ import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import EmailLinkInfo from 'src/components/EmailLinkInfo';
 import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
+import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
+import useTableSort from 'src/hooks/useTableSort';
 import ProgressionEmailDetailDialog from './ProgressionEmailDetailDialog';
 import ProgressionEmailEditDialog from './ProgressionEmailEditDialog';
 import ProgressionEmailStatusLabel from './ProgressionEmailStatusLabel';
@@ -122,6 +124,8 @@ function ProgressionEmailsTableView({
     selects: PROGRESSION_EMAIL_SELECT_FILTERS
   });
 
+  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
+
   const {
     page,
     limit,
@@ -129,7 +133,7 @@ function ProgressionEmailsTableView({
     handlePageChange,
     handleLimitChange,
     rowsPerPageOptions
-  } = useTablePagination(filteredRows);
+  } = useTablePagination(sortedRows);
 
   const profileLabelToId = useMemo(() => {
     const map = {};
@@ -392,14 +396,64 @@ function ProgressionEmailsTableView({
           <Table stickyHeader={fixedTableCard}>
             <TableHead>
               <TableRow>
-                <TableCell>Reference no</TableCell>
-                {showProfileColumn ? <TableCell>Profile</TableCell> : null}
-                <TableCell>Company</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Email date</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Log</TableCell>
+                <SortableTableCell
+                  label="Reference no"
+                  sortKey="reference_no"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                {showProfileColumn ? (
+                  <SortableTableCell
+                    label="Profile"
+                    sortKey="profile_label"
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                ) : null}
+                <SortableTableCell
+                  label="Company"
+                  sortKey="company"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableCell
+                  label="Type"
+                  sortKey="type"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableCell
+                  label="Email"
+                  sortKey="email_link"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableCell
+                  label="Email date"
+                  sortKey="email_date"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableCell
+                  label="Status"
+                  sortKey="status"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableCell
+                  label="Log"
+                  sortKey="log"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>

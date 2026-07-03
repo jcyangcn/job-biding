@@ -4,6 +4,7 @@ import BusinessTwoToneIcon from '@mui/icons-material/BusinessTwoTone';
 import CalendarTodayTwoToneIcon from '@mui/icons-material/CalendarTodayTwoTone';
 import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
+import PersonPinTwoToneIcon from '@mui/icons-material/PersonPinTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
 import {
@@ -37,6 +38,11 @@ function ApplicationDetailDialog({ open, application, onClose }) {
           icon={BusinessTwoToneIcon}
         />
         <DetailField label="Role" value={application.role?.trim() || '—'} icon={WorkTwoToneIcon} />
+        <DetailField
+          label="Bidder"
+          value={application.bidder_username?.trim() || '—'}
+          icon={PersonPinTwoToneIcon}
+        />
         <DetailField label="Applied" icon={CalendarTodayTwoToneIcon}>
           <Typography variant="body1">
             {application.applied

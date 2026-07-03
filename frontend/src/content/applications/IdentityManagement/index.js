@@ -31,12 +31,14 @@ import { PROJECT_NAME } from 'src/config/app';
 import IdentityDetailDialog from './IdentityDetailDialog';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
+import SortableTableCell from 'src/components/SortableTableCell';
 import CountryLabel from 'src/components/CountryLabel';
 import CountrySelectField from 'src/components/CountrySelectField';
 import DateField from 'src/components/DateField';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
+import useTableSort from 'src/hooks/useTableSort';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import COUNTRIES, { DEFAULT_COUNTRY } from 'src/data/countries';
 import {
@@ -112,6 +114,8 @@ function IdentityManagement() {
     dateField: 'created_at'
   });
 
+  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
+
   const {
     page,
     limit,
@@ -119,7 +123,7 @@ function IdentityManagement() {
     handlePageChange,
     handleLimitChange,
     rowsPerPageOptions
-  } = useTablePagination(filteredRows);
+  } = useTablePagination(sortedRows);
 
   const dialogTitle = useMemo(
     () => (editingRecord ? 'Edit identity' : 'Add identity'),
@@ -341,16 +345,76 @@ function IdentityManagement() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Country</TableCell>
-                    <TableCell>Address</TableCell>
-                    <TableCell>City/State</TableCell>
-                    <TableCell>Zipcode</TableCell>
-                    <TableCell>LinkedIn</TableCell>
-                    <TableCell>GitHub</TableCell>
-                    <TableCell>DOB</TableCell>
-                    <TableCell>SSN</TableCell>
+                    <SortableTableCell
+                      label="ID"
+                      sortKey="id"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Name"
+                      sortKey="name"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Country"
+                      sortKey="country"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Address"
+                      sortKey="address"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="City/State"
+                      sortKey="city_state"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Zipcode"
+                      sortKey="zipcode"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="LinkedIn"
+                      sortKey="linkedin"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="GitHub"
+                      sortKey="github"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="DOB"
+                      sortKey="dob"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="SSN"
+                      sortKey="ssn"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
