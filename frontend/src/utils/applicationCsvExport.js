@@ -18,7 +18,7 @@ export function buildApplicationExportRows(rows) {
   return rows.map((row) => [
     row.profile_id ?? '',
     row.profile_label || '',
-    row.bidder_username || '',
+    row.bidder_name || row.bidder_username || '',
     row.role || '',
     row.company || '',
     row.link || '',

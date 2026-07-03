@@ -16,6 +16,14 @@ def user_can_access_profile(user: User, profile: JobProfile) -> bool:
     return user.id in (profile.bidder_user_id, profile.caller_user_id)
 
 
+def _resolve_application_creator(db: Session, record: JobApplication) -> User | None:
+    """Return the user who was logged in when the application was created."""
+    user_id = record.created_by_user_id or record.bidder_user_id
+    if user_id is None:
+        return None
+    return db.get(User, user_id)
+
+
 def application_to_response(db: Session, record: JobApplication) -> dict:
     profile = get_profile(db, record.profile_id)
     profile_label = ""
@@ -29,16 +37,16 @@ def application_to_response(db: Session, record: JobApplication) -> dict:
         if generation and generation.pdf_path:
             resume_pdf_filename = Path(generation.pdf_path).name
 
-    bidder_username = ""
-    if record.bidder_user_id is not None:
-        bidder = db.get(User, record.bidder_user_id)
-        bidder_username = bidder.username if bidder else ""
+    creator = _resolve_application_creator(db, record)
+    bidder_username = creator.username if creator else ""
+    bidder_name = creator.full_name if creator else ""
 
     return {
         "id": record.id,
         "profile_id": record.profile_id,
         "profile_label": profile_label,
         "bidder_username": bidder_username,
+        "bidder_name": bidder_name,
         "role": record.role,
         "company": record.company,
         "link": record.link,
@@ -126,6 +134,7 @@ def create_application(
         applied=data.applied,
         applied_at=_resolve_applied_fields(data.applied, data.applied_at),
         bidder_user_id=user.id,
+        created_by_user_id=user.id,
     )
     db.add(record)
     db.commit()

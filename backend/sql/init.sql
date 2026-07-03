@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS job_application (
     applied BOOLEAN NOT NULL DEFAULT FALSE,
     applied_at TIMESTAMPTZ,
     bidder_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

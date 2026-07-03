@@ -40,7 +40,7 @@ function ApplicationDetailDialog({ open, application, onClose }) {
         <DetailField label="Role" value={application.role?.trim() || '—'} icon={WorkTwoToneIcon} />
         <DetailField
           label="Bidder"
-          value={application.bidder_username?.trim() || '—'}
+          value={application.bidder_name?.trim() || application.bidder_username?.trim() || '—'}
           icon={PersonPinTwoToneIcon}
         />
         <DetailField label="Applied" icon={CalendarTodayTwoToneIcon}>

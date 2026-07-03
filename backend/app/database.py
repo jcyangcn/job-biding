@@ -13,6 +13,42 @@ class Base(DeclarativeBase):
     pass
 
 
+def _ensure_schema_migrations_table(conn) -> None:
+    conn.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS app_schema_migrations (
+                name VARCHAR(255) PRIMARY KEY,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+    )
+
+
+def _schema_migration_applied(conn, name: str) -> bool:
+    _ensure_schema_migrations_table(conn)
+    return bool(
+        conn.execute(
+            text("SELECT 1 FROM app_schema_migrations WHERE name = :name"),
+            {"name": name},
+        ).scalar()
+    )
+
+
+def _mark_schema_migration_applied(conn, name: str) -> None:
+    conn.execute(
+        text(
+            """
+            INSERT INTO app_schema_migrations (name)
+            VALUES (:name)
+            ON CONFLICT (name) DO NOTHING
+            """
+        ),
+        {"name": name},
+    )
+
+
 def migrate_user_role_column() -> None:
     with engine.begin() as conn:
         col_type = conn.execute(
@@ -202,18 +238,104 @@ def migrate_job_application_columns() -> None:
                 )
             )
 
+        created_by_user_id_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'created_by_user_id'
+                """
+            )
+        ).scalar()
+        if not created_by_user_id_exists:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE job_application
+                    SET created_by_user_id = bidder_user_id
+                    WHERE created_by_user_id IS NULL AND bidder_user_id IS NOT NULL
+                    """
+                )
+            )
+
+
+def repair_application_creator_assignments() -> None:
+    """One-time repair for legacy rows that stored the profile bidder instead of creator."""
+    migration_name = "repair_application_creator_split_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        joy_id = conn.execute(
+            text("SELECT id FROM users WHERE username = 'joy' LIMIT 1")
+        ).scalar()
+        ryan_id = conn.execute(
+            text("SELECT id FROM users WHERE username = 'ryan' LIMIT 1")
+        ).scalar()
+        if joy_id is None or ryan_id is None:
+            _mark_schema_migration_applied(conn, migration_name)
+            return
+
+        conn.execute(
+            text(
+                """
+                WITH ranked AS (
+                    SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS row_num
+                    FROM job_application
+                    WHERE profile_id = 2
+                )
+                UPDATE job_application AS ja
+                SET created_by_user_id = :joy_id,
+                    bidder_user_id = :joy_id
+                FROM ranked AS r
+                WHERE ja.id = r.id
+                  AND r.row_num <= 34
+                """
+            ),
+            {"joy_id": joy_id},
+        )
+        conn.execute(
+            text(
+                """
+                WITH ranked AS (
+                    SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS row_num
+                    FROM job_application
+                    WHERE profile_id = 2
+                )
+                UPDATE job_application AS ja
+                SET created_by_user_id = :ryan_id,
+                    bidder_user_id = :ryan_id
+                FROM ranked AS r
+                WHERE ja.id = r.id
+                  AND r.row_num > 34
+                """
+            ),
+            {"ryan_id": ryan_id},
+        )
         conn.execute(
             text(
                 """
                 UPDATE job_application AS ja
-                SET bidder_user_id = jp.bidder_user_id
+                SET created_by_user_id = jp.bidder_user_id,
+                    bidder_user_id = jp.bidder_user_id
                 FROM job_profile AS jp
                 WHERE ja.profile_id = jp.id
-                  AND ja.bidder_user_id IS NULL
-                  AND jp.bidder_user_id IS NOT NULL
+                  AND ja.profile_id <> 2
+                  AND ja.created_by_user_id IS NULL
                 """
             )
         )
+        _mark_schema_migration_applied(conn, migration_name)
 
 
 def migrate_job_profile_columns() -> None:
@@ -479,6 +601,7 @@ def init_db() -> None:
     migrate_user_role_column()
     migrate_job_identity_columns()
     migrate_job_application_columns()
+    repair_application_creator_assignments()
     migrate_job_profile_columns()
     migrate_answers_to_identity()
     migrate_citizen_columns()

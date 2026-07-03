@@ -48,7 +48,6 @@ import {
 import { createJobApplication, deleteJobApplication, listJobApplications } from 'src/services/jobApplicationApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
-import { uniqueFieldValues } from 'src/utils/tableListFilters';
 
 function formatResumeSource(row) {
   if (row.resume_pdf_filename) {
@@ -64,8 +63,13 @@ function formatResumeSource(row) {
 }
 
 
+function formatBidderLabel(row) {
+  return row.bidder_name || row.bidder_username || '';
+}
+
 const BASE_SEARCH_FIELDS = [
   'id',
+  'bidder_name',
   'bidder_username',
   'role',
   'company',
@@ -74,7 +78,13 @@ const BASE_SEARCH_FIELDS = [
   (row) => formatResumeSource(row)
 ];
 
-const APPLICATION_SELECT_FILTERS = [{ id: 'bidder_username', field: 'bidder_username', emptyValue: '' }];
+const APPLICATION_SELECT_FILTERS = [
+  {
+    id: 'bidder_username',
+    getValue: formatBidderLabel,
+    emptyValue: ''
+  }
+];
 
 function ApplicationsTableView({
   rows,
@@ -124,14 +134,19 @@ function ApplicationsTableView({
     selects: APPLICATION_SELECT_FILTERS
   });
 
-  const bidderOptions = useMemo(
-    () =>
-      uniqueFieldValues(rows, 'bidder_username', { emptyValue: '' }).map((value) => ({
+  const bidderOptions = useMemo(() => {
+    const values = new Set();
+    rows.forEach((row) => {
+      const label = formatBidderLabel(row);
+      values.add(label?.trim() ? label.trim() : '');
+    });
+    return Array.from(values)
+      .sort((a, b) => a.localeCompare(b))
+      .map((value) => ({
         value,
         label: value === '' ? '(Unknown)' : value
-      })),
-    [rows]
-  );
+      }));
+  }, [rows]);
 
   const filterSelects = useMemo(
     () => [
@@ -402,7 +417,7 @@ function ApplicationsTableView({
                   ) : null}
                   <SortableTableCell
                     label="Bidder"
-                    sortKey="bidder_username"
+                    sortKey={(row) => formatBidderLabel(row)}
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
@@ -470,7 +485,7 @@ function ApplicationsTableView({
                       {showProfileColumn ? (
                         <TableCell>{row.profile_label || '—'}</TableCell>
                       ) : null}
-                      <TableCell>{row.bidder_username || '—'}</TableCell>
+                      <TableCell>{formatBidderLabel(row) || '—'}</TableCell>
                       <TableCell>{row.role || '—'}</TableCell>
                       <TableCell>{row.company || '—'}</TableCell>
                       <TableCell onClick={stopPropagation}>
