@@ -19,10 +19,10 @@ import {
   Switch,
   TextField
 } from '@mui/material';
-import DateField from 'src/components/DateField';
+import DateTimeField from 'src/components/DateTimeField';
 import { updateJobApplication } from 'src/services/jobApplicationApi';
 import { listResumeGenerations } from 'src/services/resumeApi';
-import { formatDateValue } from 'src/utils/dateFormat';
+import { appliedAtToIso, formatDateTimeValue } from 'src/utils/dateFormat';
 
 function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const { enqueueSnackbar } = useSnackbar();
@@ -37,7 +37,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     resume_generated_id: '',
     resume_online_link: '',
     applied: false,
-    applied_at: format(new Date(), 'yyyy-MM-dd')
+    applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
   });
 
   useEffect(() => {
@@ -60,7 +60,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       resume_online_link: application.resume_online_link || '',
       applied: Boolean(application.applied),
       applied_at:
-        formatDateValue(application.applied_at) || format(new Date(), 'yyyy-MM-dd')
+        formatDateTimeValue(application.applied_at) || format(new Date(), 'yyyy-MM-dd HH:mm')
     });
 
     listResumeGenerations()
@@ -89,7 +89,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       applied: checked,
       applied_at:
         checked && !current.applied_at
-          ? format(new Date(), 'yyyy-MM-dd')
+          ? format(new Date(), 'yyyy-MM-dd HH:mm')
           : current.applied_at
     }));
   };
@@ -121,7 +121,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
             ? form.resume_online_link.trim()
             : null,
         applied: form.applied,
-        applied_at: form.applied ? new Date(form.applied_at).toISOString() : null
+        applied_at: form.applied ? appliedAtToIso(form.applied_at) : null
       });
       enqueueSnackbar('Application updated', { variant: 'success' });
       onSaved();
@@ -176,14 +176,14 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                 label="Applied"
               />
               {form.applied ? (
-                <DateField
+                <DateTimeField
                   label="Applied at"
                   value={form.applied_at}
                   onChange={(value) =>
                     setForm((current) => ({ ...current, applied_at: value }))
                   }
                   required
-                  sx={{ width: 180 }}
+                  sx={{ width: 210 }}
                 />
               ) : null}
             </Stack>

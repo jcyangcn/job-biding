@@ -22,13 +22,45 @@ def _format_identity_label(identity: JobIdentity | None) -> str:
     return format_identity_label(identity.country, identity.name)
 
 
-def _related_names(db: Session, record: JobProfile) -> tuple[str, str, str]:
+def _normalize_bidder_user_ids(bidder_user_ids: list[int] | None) -> list[int]:
+    if not bidder_user_ids:
+        return []
+    seen: set[int] = set()
+    normalized: list[int] = []
+    for user_id in bidder_user_ids:
+        if user_id in seen:
+            continue
+        seen.add(user_id)
+        normalized.append(user_id)
+    return normalized
+
+
+def profile_access_filter(user_id: int):
+    return or_(
+        JobProfile.bidder_user_ids.contains([user_id]),
+        JobProfile.caller_user_id == user_id,
+    )
+
+
+def _bidder_names_for_ids(db: Session, bidder_user_ids: list[int]) -> tuple[list[str], str]:
+    if not bidder_user_ids:
+        return [], ""
+    users = list(
+        db.scalars(select(User).where(User.id.in_(bidder_user_ids))).all()
+    )
+    id_to_name = {user.id: user.full_name for user in users}
+    names = [id_to_name[user_id] for user_id in bidder_user_ids if user_id in id_to_name]
+    return names, ", ".join(names)
+
+
+def _related_names(db: Session, record: JobProfile) -> tuple[str, list[str], str, str]:
     identity = db.get(JobIdentity, record.identity_id)
-    bidder = db.get(User, record.bidder_user_id)
+    bidder_names, bidder_label = _bidder_names_for_ids(db, record.bidder_user_ids or [])
     caller = db.get(User, record.caller_user_id) if record.caller_user_id else None
     return (
         _format_identity_label(identity),
-        bidder.full_name if bidder else "",
+        bidder_names,
+        bidder_label,
         caller.full_name if caller else "",
     )
 
@@ -46,12 +78,13 @@ def _serialize_resume_detail(detail: ResumeDetail | dict) -> dict:
 
 
 def profile_to_response(db: Session, record: JobProfile, *, include_admin_fields: bool = True) -> dict:
-    identity_name, bidder_name, caller_name = _related_names(db, record)
+    identity_name, bidder_names, bidder_name, caller_name = _related_names(db, record)
     return {
         "id": record.id,
         "identity_id": record.identity_id,
         "identity_name": identity_name,
-        "bidder_user_id": record.bidder_user_id,
+        "bidder_user_ids": record.bidder_user_ids or [],
+        "bidder_names": bidder_names,
         "bidder_name": bidder_name,
         "caller_user_id": record.caller_user_id,
         "caller_name": caller_name,
@@ -75,7 +108,7 @@ def profile_to_response(db: Session, record: JobProfile, *, include_admin_fields
 def user_can_access_profile(user: User, profile: JobProfile) -> bool:
     if user.role == UserRole.admin:
         return True
-    return user.id in (profile.bidder_user_id, profile.caller_user_id)
+    return user.id in (profile.bidder_user_ids or []) or user.id == profile.caller_user_id
 
 
 def _profile_default_resume_root(profile_id: int) -> Path:
@@ -156,13 +189,21 @@ def _remove_profile_default_resume_dir(profile_id: int) -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def _validate_bidder_user_ids(db: Session, bidder_user_ids: list[int] | None) -> list[int]:
+    normalized = _normalize_bidder_user_ids(bidder_user_ids)
+    if not normalized:
+        raise ValueError("At least one bidder is required")
+    for user_id in normalized:
+        if not db.get(User, user_id):
+            raise ValueError("Bidder user not found")
+    return normalized
+
+
 def _validate_refs(db: Session, data: JobProfileCreateRequest) -> None:
     if not db.get(JobIdentity, data.identity_id):
         raise ValueError("Identity not found")
 
-    bidder = db.get(User, data.bidder_user_id)
-    if not bidder:
-        raise ValueError("Bidder user not found")
+    _validate_bidder_user_ids(db, data.bidder_user_ids)
 
     if data.caller_user_id is not None:
         caller = db.get(User, data.caller_user_id)
@@ -172,14 +213,14 @@ def _validate_refs(db: Session, data: JobProfileCreateRequest) -> None:
 
 def _validate_ref_updates(db: Session, updates: dict) -> None:
     identity_id = updates.get("identity_id")
-    bidder_user_id = updates.get("bidder_user_id")
+    bidder_user_ids = updates.get("bidder_user_ids")
     caller_user_id = updates.get("caller_user_id")
 
     if identity_id is not None and not db.get(JobIdentity, identity_id):
         raise ValueError("Identity not found")
 
-    if bidder_user_id is not None and not db.get(User, bidder_user_id):
-        raise ValueError("Bidder user not found")
+    if bidder_user_ids is not None:
+        _validate_bidder_user_ids(db, bidder_user_ids)
 
     if caller_user_id is not None and not db.get(User, caller_user_id):
         raise ValueError("Caller user not found")
@@ -192,12 +233,7 @@ def list_profiles(db: Session) -> list[JobProfile]:
 def list_profiles_for_user(db: Session, user: User) -> list[JobProfile]:
     query = select(JobProfile).order_by(JobProfile.id)
     if user.role != UserRole.admin:
-        query = query.where(
-            or_(
-                JobProfile.bidder_user_id == user.id,
-                JobProfile.caller_user_id == user.id,
-            )
-        )
+        query = query.where(profile_access_filter(user.id))
     return list(db.scalars(query).all())
 
 
@@ -209,7 +245,7 @@ def create_profile(db: Session, data: JobProfileCreateRequest) -> JobProfile:
     _validate_refs(db, data)
     record = JobProfile(
         identity_id=data.identity_id,
-        bidder_user_id=data.bidder_user_id,
+        bidder_user_ids=_normalize_bidder_user_ids(data.bidder_user_ids),
         caller_user_id=data.caller_user_id,
         roles=data.roles,
         email=data.email,
@@ -261,6 +297,8 @@ def update_profile(
             value = None
         if field == "reference_tag" and value == "":
             value = None
+        if field == "bidder_user_ids" and value is not None:
+            value = _normalize_bidder_user_ids(value)
         if field == "resume_detail" and value is not None:
             value = _serialize_resume_detail(value)
         setattr(record, field, value)

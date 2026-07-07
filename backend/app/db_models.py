@@ -1,7 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -70,8 +70,10 @@ class JobProfile(Base):
     identity_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("job_identity.id", ondelete="RESTRICT"), nullable=False
     )
-    bidder_user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    bidder_user_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(Integer),
+        nullable=False,
+        server_default=text("'{}'"),
     )
     caller_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True

@@ -338,6 +338,123 @@ def repair_application_creator_assignments() -> None:
         _mark_schema_migration_applied(conn, migration_name)
 
 
+# Resume PDFs generated while joy created applications (Ryan Cho profile).
+JOY_APPLICATION_RESUME_FILENAMES = frozenset(
+    {
+        "Ryan_Cho_024Eae8.pdf",
+        "Ryan_Cho_030tkge.pdf",
+        "Ryan_Cho_031abVK.pdf",
+        "Ryan_Cho_032UBIT.pdf",
+        "Ryan_Cho_033nKoC.pdf",
+        "Ryan_Cho_034FTHC.pdf",
+        "Ryan_Cho_037ZTQ8.pdf",
+        "Ryan_Cho_039sEcz.pdf",
+        "Ryan_Cho_043YNbt.pdf",
+        "Ryan_Cho_044ptQj.pdf",
+        "Ryan_Cho_046LpV5.pdf",
+        "Ryan_Cho_047sjLr.pdf",
+        "Ryan_Cho_048iFmT.pdf",
+        "Ryan_Cho_049BD8F.pdf",
+        "Ryan_Cho_051tvqj.pdf",
+        "Ryan_Cho_052J4u5.pdf",
+        "Ryan_Cho_053ryvs.pdf",
+        "Ryan_Cho_054Xw12.pdf",
+        "Ryan_Cho_055DpP0.pdf",
+        "Ryan_Cho_058IXgO.pdf",
+        "Ryan_Cho_058lXgO.pdf",
+        "Ryan_Cho_059NbMo.pdf",
+        "Ryan_Cho_060rnLz.pdf",
+        "Ryan_Cho_061vUYH.pdf",
+        "Ryan_Cho_062aKZE.pdf",
+        "Ryan_Cho_063GZnm.pdf",
+        "Ryan_Cho_064XyW3.pdf",
+        "Ryan_Cho_065Y4na.pdf",
+        "Ryan_Cho_066Lnp6.pdf",
+        "Ryan_Cho_067nJWV.pdf",
+        "Ryan_Cho_0284vv5.pdf",
+        "Ryan_Cho_0284wV5.pdf",
+        "Ryan_Cho_0360Fpa.pdf",
+        "Ryan_Cho_0428jHh.pdf",
+        "Ryan_Cho_0454cvl.pdf",
+        "Ryan_Cho_0577lya.pdf",
+        "Ryan_Cho_05645Ak.pdf",
+    }
+)
+
+
+def repair_application_creator_by_resume_list() -> None:
+    """Assign application creator from joy's known generated-resume PDF list."""
+    migration_name = "repair_application_creator_by_resume_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        joy_id = conn.execute(
+            text("SELECT id FROM users WHERE username = 'joy' LIMIT 1")
+        ).scalar()
+        ryan_id = conn.execute(
+            text("SELECT id FROM users WHERE username = 'ryan' LIMIT 1")
+        ).scalar()
+        if joy_id is None or ryan_id is None:
+            _mark_schema_migration_applied(conn, migration_name)
+            return
+
+        resume_names = list(JOY_APPLICATION_RESUME_FILENAMES)
+        conn.execute(
+            text(
+                """
+                UPDATE job_application AS ja
+                SET created_by_user_id = :joy_id,
+                    bidder_user_id = :joy_id
+                FROM resume_generations AS rg
+                WHERE ja.resume_generated_id = rg.id
+                  AND ja.profile_id = 2
+                  AND regexp_replace(replace(rg.pdf_path, E'\\\\', '/'), '^.*/', '') = ANY(:resume_names)
+                """
+            ),
+            {"joy_id": joy_id, "resume_names": resume_names},
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE job_application AS ja
+                SET created_by_user_id = :ryan_id,
+                    bidder_user_id = :ryan_id
+                FROM resume_generations AS rg
+                WHERE ja.resume_generated_id = rg.id
+                  AND ja.profile_id = 2
+                  AND regexp_replace(replace(rg.pdf_path, E'\\\\', '/'), '^.*/', '') <> ALL(:resume_names)
+                """
+            ),
+            {"ryan_id": ryan_id, "resume_names": resume_names},
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE job_application
+                SET created_by_user_id = :ryan_id,
+                    bidder_user_id = :ryan_id
+                WHERE profile_id = 2
+                  AND resume_generated_id IS NULL
+                """
+            ),
+            {"ryan_id": ryan_id},
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE job_application AS ja
+                SET created_by_user_id = jp.bidder_user_id,
+                    bidder_user_id = jp.bidder_user_id
+                FROM job_profile AS jp
+                WHERE ja.profile_id = jp.id
+                  AND ja.profile_id <> 2
+                """
+            )
+        )
+        _mark_schema_migration_applied(conn, migration_name)
+
+
 def migrate_job_profile_columns() -> None:
     columns = {
         "reference_tag": "VARCHAR(255)",
@@ -400,6 +517,76 @@ def migrate_job_profile_columns() -> None:
                     "ALTER TABLE job_profile ALTER COLUMN caller_user_id DROP NOT NULL"
                 )
             )
+
+
+def migrate_profile_bidder_user_ids() -> None:
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_profile'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            return
+
+        new_column_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_profile'
+                  AND column_name = 'bidder_user_ids'
+                """
+            )
+        ).scalar()
+        if new_column_exists:
+            return
+
+        old_column_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_profile'
+                  AND column_name = 'bidder_user_id'
+                """
+            )
+        ).scalar()
+
+        conn.execute(
+            text(
+                """
+                ALTER TABLE job_profile
+                ADD COLUMN bidder_user_ids INTEGER[] NOT NULL DEFAULT '{}'
+                """
+            )
+        )
+
+        if old_column_exists:
+            conn.execute(
+                text(
+                    """
+                    UPDATE job_profile
+                    SET bidder_user_ids = ARRAY[bidder_user_id]
+                    WHERE bidder_user_id IS NOT NULL
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_profile
+                    DROP CONSTRAINT IF EXISTS job_profile_bidder_user_id_fkey
+                    """
+                )
+            )
+            conn.execute(text("ALTER TABLE job_profile DROP COLUMN bidder_user_id"))
 
 
 def migrate_answers_to_identity() -> None:
@@ -595,6 +782,7 @@ def init_db() -> None:
     from app import db_models  # noqa: F401
     from app.auth import seed_default_users
     from app.config import ensure_storage_dirs
+    from app.seed_test_data import seed_test_identity_profile
 
     ensure_storage_dirs()
     Base.metadata.create_all(bind=engine)
@@ -602,11 +790,14 @@ def init_db() -> None:
     migrate_job_identity_columns()
     migrate_job_application_columns()
     repair_application_creator_assignments()
+    repair_application_creator_by_resume_list()
     migrate_job_profile_columns()
+    migrate_profile_bidder_user_ids()
     migrate_answers_to_identity()
     migrate_citizen_columns()
     with SessionLocal() as db:
         seed_default_users(db)
+        seed_test_identity_profile(db)
 
 
 def get_db() -> Generator[Session, None, None]:

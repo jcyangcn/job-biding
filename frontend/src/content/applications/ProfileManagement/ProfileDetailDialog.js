@@ -78,7 +78,11 @@ function ProfileDetailDialog({ open, profile, onClose }) {
     <DetailDialog open={open} onClose={onClose} title={title} caption={caption} maxWidth="lg">
       <Grid container spacing={2}>
         <DetailField label="Identity" value={profile.identity_name} icon={PersonPinTwoToneIcon} />
-        <DetailField label="Bidder" value={profile.bidder_name} icon={WorkTwoToneIcon} />
+        <DetailField
+          label="Bidders"
+          value={profile.bidder_name || profile.bidder_names?.join(', ') || '—'}
+          icon={WorkTwoToneIcon}
+        />
         <DetailField label="Caller" value={profile.caller_name || '—'} icon={WorkTwoToneIcon} />
         <DetailField label="Roles" value={profile.roles || '—'} icon={WorkTwoToneIcon} />
         <DetailField label="Reference tag" value={profile.reference_tag || '—'} icon={TagTwoToneIcon} />

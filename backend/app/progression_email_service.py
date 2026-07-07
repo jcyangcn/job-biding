@@ -7,7 +7,7 @@ from app.application_service import user_can_access_profile
 from app.db_models import JobIdentity, JobProgressionEmail, JobProfile, User
 from app.user_roles import UserRole
 from app.models import JobProgressionEmailCreateRequest, JobProgressionEmailUpdateRequest
-from app.profile_service import _format_identity_label, get_profile
+from app.profile_service import _format_identity_label, get_profile, profile_access_filter
 from app.progression_email_enums import (
     PROGRESSION_EMAIL_STATUS_VALUES,
     PROGRESSION_EMAIL_TYPE_VALUES,
@@ -108,12 +108,7 @@ def list_progression_emails_for_user(db: Session, user: User) -> list[JobProgres
         db.scalars(
             select(JobProgressionEmail)
             .join(JobProfile, JobProgressionEmail.profile_id == JobProfile.id)
-            .where(
-                or_(
-                    JobProfile.bidder_user_id == user.id,
-                    JobProfile.caller_user_id == user.id,
-                )
-            )
+            .where(profile_access_filter(user.id))
             .order_by(
                 JobProgressionEmail.email_date.desc(),
                 JobProgressionEmail.id.desc(),

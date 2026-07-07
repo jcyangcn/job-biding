@@ -31,7 +31,7 @@ import {
   useTheme
 } from '@mui/material';
 import { format } from 'date-fns';
-import DateField from 'src/components/DateField';
+import DateTimeField from 'src/components/DateTimeField';
 import ArrowBackTwoToneIcon from '@mui/icons-material/ArrowBackTwoTone';
 import CloseIcon from '@mui/icons-material/Close';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
@@ -48,7 +48,7 @@ import {
   generateResumePdf,
   listResumeGenerations
 } from 'src/services/resumeApi';
-import { formatDateTime } from 'src/utils/dateFormat';
+import { appliedAtToIso, formatDateTime } from 'src/utils/dateFormat';
 import { isDuplicateCompanyName } from 'src/utils/normalizeCompanyName';
 
 const compactButtonSx = {
@@ -128,7 +128,7 @@ function ApplicationDetails() {
     resume_generated_id: '',
     resume_online_link: '',
     applied: false,
-    applied_at: format(new Date(), 'yyyy-MM-dd')
+    applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
   });
 
   const selectedGeneration = resumeGenerations.find(
@@ -244,7 +244,7 @@ function ApplicationDetails() {
     setForm((current) => ({
       ...current,
       applied: true,
-      applied_at: current.applied_at || format(new Date(), 'yyyy-MM-dd')
+      applied_at: current.applied_at || format(new Date(), 'yyyy-MM-dd HH:mm')
     }));
     setAppliedConfirmOpen(false);
   };
@@ -345,7 +345,7 @@ function ApplicationDetails() {
             ? form.resume_online_link.trim()
             : null,
         applied: form.applied,
-        applied_at: form.applied ? new Date(form.applied_at).toISOString() : null
+        applied_at: form.applied ? appliedAtToIso(form.applied_at) : null
       });
       notify('Application saved', { variant: 'success' });
       navigate(`/applications/job-applications/${profile.id}`);
@@ -635,7 +635,7 @@ function ApplicationDetails() {
                       sx={{ m: 0 }}
                     />
                     {form.applied ? (
-                      <DateField
+                      <DateTimeField
                         size="small"
                         label="Applied at"
                         value={form.applied_at}
@@ -643,7 +643,7 @@ function ApplicationDetails() {
                           setForm((current) => ({ ...current, applied_at: value }))
                         }
                         required
-                        sx={{ width: 150 }}
+                        sx={{ width: 210 }}
                       />
                     ) : null}
                   </Box>

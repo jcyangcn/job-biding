@@ -222,7 +222,7 @@ class ResumeDetail(BaseModel):
 
 class JobProfileCreateRequest(BaseModel):
     identity_id: int
-    bidder_user_id: int
+    bidder_user_ids: list[int] = Field(min_length=1)
     caller_user_id: int | None = None
     roles: str = Field(default="", max_length=255)
     email: str = Field(min_length=1, max_length=255)
@@ -240,7 +240,7 @@ class JobProfileCreateRequest(BaseModel):
 
 class JobProfileUpdateRequest(BaseModel):
     identity_id: int | None = None
-    bidder_user_id: int | None = None
+    bidder_user_ids: list[int] | None = Field(default=None, min_length=1)
     caller_user_id: int | None = None
     roles: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, min_length=1, max_length=255)
@@ -260,7 +260,8 @@ class JobProfileResponse(BaseModel):
     id: int
     identity_id: int
     identity_name: str
-    bidder_user_id: int
+    bidder_user_ids: list[int]
+    bidder_names: list[str]
     bidder_name: str
     caller_user_id: int | None = None
     caller_name: str

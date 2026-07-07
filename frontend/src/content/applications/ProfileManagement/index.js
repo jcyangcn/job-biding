@@ -60,7 +60,7 @@ import {
 
 const emptyForm = {
   identity_id: '',
-  bidder_user_id: '',
+  bidder_user_ids: [],
   caller_user_id: '',
   roles: '',
   reference_tag: '',
@@ -80,6 +80,7 @@ const PROFILE_SEARCH_FIELDS = [
   'id',
   'identity_name',
   'bidder_name',
+  'bidder_names',
   'caller_name',
   'roles',
   'reference_tag',
@@ -167,9 +168,9 @@ function ProfileManagement() {
     [identities, form.identity_id]
   );
 
-  const selectedBidder = useMemo(
-    () => users.find((user) => user.id === form.bidder_user_id) || null,
-    [users, form.bidder_user_id]
+  const selectedBidders = useMemo(
+    () => users.filter((user) => form.bidder_user_ids.includes(user.id)),
+    [users, form.bidder_user_ids]
   );
   const selectedCaller = useMemo(
     () => users.find((user) => user.id === form.caller_user_id) || null,
@@ -214,7 +215,11 @@ function ProfileManagement() {
     setEditingRecord(record);
     setForm({
       identity_id: record.identity_id,
-      bidder_user_id: record.bidder_user_id,
+      bidder_user_ids: record.bidder_user_ids?.length
+        ? record.bidder_user_ids
+        : record.bidder_user_id
+          ? [record.bidder_user_id]
+          : [],
       caller_user_id: record.caller_user_id || '',
       roles: record.roles,
       reference_tag: record.reference_tag || '',
@@ -253,7 +258,7 @@ function ProfileManagement() {
 
   const buildPayload = () => ({
     identity_id: form.identity_id,
-    bidder_user_id: form.bidder_user_id,
+    bidder_user_ids: form.bidder_user_ids,
     caller_user_id: form.caller_user_id || null,
     roles: form.roles.trim(),
     reference_tag: form.reference_tag.trim() || null,
@@ -272,11 +277,11 @@ function ProfileManagement() {
   const handleSave = async () => {
     if (
       !form.identity_id ||
-      !form.bidder_user_id ||
+      !form.bidder_user_ids?.length ||
       !form.email.trim() ||
       !form.email_password
     ) {
-      enqueueSnackbar('Identity, bidder, email, and email password are required', {
+      enqueueSnackbar('Identity, at least one bidder, email, and email password are required', {
         variant: 'warning'
       });
       return;
@@ -549,11 +554,15 @@ function ProfileManagement() {
             )}
           />
           <Autocomplete
+            multiple
             fullWidth
             options={users}
-            value={selectedBidder}
+            value={selectedBidders}
             onChange={(_, value) =>
-              setForm((current) => ({ ...current, bidder_user_id: value?.id || '' }))
+              setForm((current) => ({
+                ...current,
+                bidder_user_ids: value.map((user) => user.id)
+              }))
             }
             getOptionLabel={(option) => option.full_name}
             isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -561,7 +570,7 @@ function ProfileManagement() {
             openOnFocus
             disablePortal
             renderInput={(params) => (
-              <TextField {...params} margin="normal" label="Bidder" required />
+              <TextField {...params} margin="normal" label="Bidders" required />
             )}
           />
           <Autocomplete

@@ -1,19 +1,18 @@
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db_models import JobApplication, JobIdentity, JobProfile, ResumeGeneration, User
 from app.models import JobApplicationCreateRequest, JobApplicationUpdateRequest
-from app.profile_service import _format_identity_label, get_profile
+from app.profile_service import (
+    _format_identity_label,
+    get_profile,
+    profile_access_filter,
+    user_can_access_profile,
+)
 from app.user_roles import UserRole
-
-
-def user_can_access_profile(user: User, profile: JobProfile) -> bool:
-    if user.role == UserRole.admin:
-        return True
-    return user.id in (profile.bidder_user_id, profile.caller_user_id)
 
 
 def _resolve_application_creator(db: Session, record: JobApplication) -> User | None:
@@ -186,12 +185,7 @@ def list_applications_for_user(db: Session, user: User) -> list[JobApplication]:
         db.scalars(
             select(JobApplication)
             .join(JobProfile, JobApplication.profile_id == JobProfile.id)
-            .where(
-                or_(
-                    JobProfile.bidder_user_id == user.id,
-                    JobProfile.caller_user_id == user.id,
-                )
-            )
+            .where(profile_access_filter(user.id))
             .order_by(
                 JobApplication.applied_at.desc().nullslast(),
                 JobApplication.id.desc(),

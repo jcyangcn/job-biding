@@ -1,4 +1,6 @@
-import { format, isValid, parseISO } from 'date-fns';
+import { format, isValid, parse, parseISO } from 'date-fns';
+
+const DATETIME_INPUT_FORMAT = 'yyyy-MM-dd HH:mm';
 
 function parseDateValue(value) {
   if (!value) return null;
@@ -9,6 +11,11 @@ function parseDateValue(value) {
 
   const text = String(value).trim();
   if (!text) return null;
+
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(text)) {
+    const parsed = parse(text, DATETIME_INPUT_FORMAT, new Date());
+    return isValid(parsed) ? parsed : null;
+  }
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
     const isoDate = parseISO(text);
@@ -44,6 +51,19 @@ export function formatDateTimeValue(value) {
   if (!value) return '';
   const formatted = formatDateTime(value);
   return formatted === '—' ? '' : formatted;
+}
+
+export function appliedAtToIso(value) {
+  if (!value) return null;
+
+  const text = String(value).trim();
+  if (!text) return null;
+
+  const fromFormat = parse(text, DATETIME_INPUT_FORMAT, new Date());
+  if (isValid(fromFormat)) return fromFormat.toISOString();
+
+  const date = parseDateValue(value);
+  return date ? date.toISOString() : null;
 }
 
 export function formatMonthYear(value) {

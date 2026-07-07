@@ -1,8 +1,9 @@
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db_models import JobIdentity, JobProfile, User
 from app.models import JobIdentityCreateRequest, JobIdentityUpdateRequest
+from app.profile_service import profile_access_filter
 from app.user_roles import UserRole
 
 
@@ -35,10 +36,7 @@ def user_can_access_identity(db: Session, user: User, identity_id: int) -> bool:
         .select_from(JobProfile)
         .where(
             JobProfile.identity_id == identity_id,
-            or_(
-                JobProfile.bidder_user_id == user.id,
-                JobProfile.caller_user_id == user.id,
-            ),
+            profile_access_filter(user.id),
         )
     )
     return (count or 0) > 0
@@ -50,12 +48,7 @@ def list_identities_for_user(db: Session, user: User) -> list[JobIdentity]:
 
     identity_ids = db.scalars(
         select(JobProfile.identity_id)
-        .where(
-            or_(
-                JobProfile.bidder_user_id == user.id,
-                JobProfile.caller_user_id == user.id,
-            )
-        )
+        .where(profile_access_filter(user.id))
         .distinct()
     ).all()
     if not identity_ids:

@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS job_identity (
 CREATE TABLE IF NOT EXISTS job_profile (
     id SERIAL PRIMARY KEY,
     identity_id INTEGER NOT NULL REFERENCES job_identity(id) ON DELETE RESTRICT,
-    bidder_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    bidder_user_ids INTEGER[] NOT NULL DEFAULT '{}',
     caller_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
     roles VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
