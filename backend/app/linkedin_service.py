@@ -35,6 +35,7 @@ def linkedin_account_to_response(record: LinkedInAccount) -> dict:
     return {
         "id": record.id,
         "title": record.title,
+        "country": record.country,
         "email": record.email,
         "email_password": record.email_password,
         "email_recovery_email": record.email_recovery_email,
@@ -78,6 +79,7 @@ def get_linkedin_account(db: Session, account_id: int) -> LinkedInAccount | None
 def _apply_text_fields(record: LinkedInAccount, data: dict) -> None:
     text_fields = (
         "title",
+        "country",
         "email",
         "email_password",
         "email_recovery_email",
@@ -118,6 +120,8 @@ def _apply_text_fields(record: LinkedInAccount, data: dict) -> None:
         value = data[field]
         if field == "title" and isinstance(value, str):
             value = value.strip()
+        if field == "country" and isinstance(value, str):
+            value = value.strip()
         if field == "email" and isinstance(value, str):
             value = value.strip()
         if field == "email_password" and isinstance(value, str):
@@ -134,6 +138,7 @@ def _apply_text_fields(record: LinkedInAccount, data: dict) -> None:
 def create_linkedin_account(db: Session, data: LinkedInAccountCreateRequest) -> LinkedInAccount:
     record = LinkedInAccount(
         title=data.title.strip(),
+        country=data.country.strip(),
         email=data.email.strip(),
         email_password=data.email_password.strip(),
         email_recovery_email=_optional_text(data.email_recovery_email),

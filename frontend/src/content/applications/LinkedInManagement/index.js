@@ -31,10 +31,14 @@ import {
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
+import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import OpenInNewTwoToneIcon from '@mui/icons-material/OpenInNewTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
+import CountrySelectField from 'src/components/CountrySelectField';
+import { CountryFlag } from 'src/components/CountryLabel';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
@@ -44,15 +48,24 @@ import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
 import useTableSort from 'src/hooks/useTableSort';
 import { LINKEDIN_NEED_ACTIONS, LINKEDIN_STATUSES } from 'src/data/linkedinOptions';
+import COUNTRIES from 'src/data/countries';
+import { getCountryCode } from 'src/data/countryCodes';
 import {
   createLinkedInAccount,
   deleteLinkedInAccount,
   deleteLinkedInImage,
+  getLinkedInAccount,
+  importLinkedInAccountsCsv,
   listLinkedInAccounts,
   updateLinkedInAccount,
   uploadLinkedInImage
 } from 'src/services/linkedinApi';
 import { formatDate, formatDateTime } from 'src/utils/dateFormat';
+import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
+import {
+  LINKEDIN_CSV_HEADERS,
+  buildLinkedInExportRows
+} from 'src/utils/linkedinCsvExport';
 import LinkedInDetailDialog from './LinkedInDetailDialog';
 import LinkedInAccountTile from './LinkedInAccountTile';
 import LinkedInViewModeMenu from './LinkedInViewModeMenu';
@@ -71,6 +84,7 @@ const LINKEDIN_SELECT_FILTERS = [
 const LINKEDIN_SEARCH_FIELDS = [
   'id',
   'title',
+  'country',
   'email',
   'email_recovery_email',
   'recovery_email',
@@ -93,10 +107,14 @@ function LinkedInManagement() {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const imageInputRef = useRef(null);
+  const csvInputRef = useRef(null);
   useSetPageHeader('LinkedIn Management', 'Manage LinkedIn accounts, proxies, and sales records');
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -190,6 +208,13 @@ function LinkedInManagement() {
     [editingRecord]
   );
 
+  const countryOptions = useMemo(() => {
+    if (form.country && !COUNTRIES.includes(form.country)) {
+      return [form.country, ...COUNTRIES];
+    }
+    return COUNTRIES;
+  }, [form.country]);
+
   const loadAccounts = useCallback(async () => {
     setLoading(true);
     try {
@@ -221,17 +246,24 @@ function LinkedInManagement() {
     setDialogOpen(true);
   };
 
-  const openEditDialog = (record) => {
+  const openEditDialog = async (record) => {
     closeDetail();
-    const latest = rows.find((row) => row.id === record.id) || record;
-    setEditingRecord(latest);
-    setForm(linkedInRecordToForm(latest));
-    setPendingFile(null);
-    setRemoveExistingImage(false);
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
+    setLoadingEdit(true);
+    try {
+      const latest = await getLinkedInAccount(record.id);
+      setEditingRecord(latest);
+      setForm(linkedInRecordToForm(latest));
+      setPendingFile(null);
+      setRemoveExistingImage(false);
+      if (imageInputRef.current) {
+        imageInputRef.current.value = '';
+      }
+      setDialogOpen(true);
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to load LinkedIn account', { variant: 'error' });
+    } finally {
+      setLoadingEdit(false);
     }
-    setDialogOpen(true);
   };
 
   const closeDialog = () => {
@@ -272,10 +304,27 @@ function LinkedInManagement() {
       enqueueSnackbar('Title is required', { variant: 'warning' });
       return;
     }
+    if (!form.country?.trim()) {
+      enqueueSnackbar('Country is required', { variant: 'warning' });
+      return;
+    }
+    if (!COUNTRIES.includes(form.country)) {
+      enqueueSnackbar('Please select a country from the list', { variant: 'warning' });
+      return;
+    }
 
     setSaving(true);
     try {
-      const payload = buildLinkedInPayload(form, { isEdit: Boolean(editingRecord) });
+      const payload = buildLinkedInPayload(form, {
+        isEdit: Boolean(editingRecord),
+        storedValues: editingRecord
+          ? {
+              email_password: editingRecord.email_password,
+              recovery_email_password: editingRecord.recovery_email_password,
+              linkedin_password: editingRecord.linkedin_password
+            }
+          : null
+      });
       let saved = editingRecord
         ? await updateLinkedInAccount(editingRecord.id, payload)
         : await createLinkedInAccount(payload);
@@ -321,6 +370,67 @@ function LinkedInManagement() {
     }
   };
 
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      const exportRows = await listLinkedInAccounts();
+      if (!exportRows.length) {
+        enqueueSnackbar('No LinkedIn accounts to export', { variant: 'info' });
+        return;
+      }
+
+      const datePart = new Date().toISOString().slice(0, 10);
+      downloadCsv(
+        sanitizeCsvFilename(`linkedin-accounts-${datePart}.csv`),
+        LINKEDIN_CSV_HEADERS,
+        buildLinkedInExportRows(exportRows)
+      );
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to export CSV', { variant: 'error' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    csvInputRef.current?.click();
+  };
+
+  const handleImportFileSelected = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const result = await importLinkedInAccountsCsv(file);
+      const { created = 0, updated = 0, failed = 0, errors = [] } = result || {};
+
+      if (created || updated) {
+        await loadAccounts();
+      }
+
+      if ((created || updated) && failed) {
+        enqueueSnackbar(
+          `Imported ${created} new and updated ${updated}; ${failed} failed${
+            errors[0] ? `: ${errors[0]}` : ''
+          }`,
+          { variant: 'warning' }
+        );
+      } else if (failed) {
+        enqueueSnackbar(errors[0] || 'Import failed', { variant: 'error' });
+      } else {
+        enqueueSnackbar(`Imported ${created} new and updated ${updated} account(s)`, {
+          variant: 'success'
+        });
+      }
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to import CSV', { variant: 'error' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const existingImage =
     editingRecord?.image && !removeExistingImage ? editingRecord.image : null;
 
@@ -348,16 +458,39 @@ function LinkedInManagement() {
             totalCount={rows.length}
             actions={
               <>
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  hidden
+                  onChange={handleImportFileSelected}
+                />
                 <LinkedInViewModeMenu
                   value={viewMode}
                   onChange={setViewMode}
-                  disabled={loading || saving}
+                  disabled={loading || saving || importing || exporting}
                 />
+                <Button
+                  variant="outlined"
+                  startIcon={<FileUploadTwoToneIcon />}
+                  onClick={handleImportClick}
+                  disabled={loading || saving || importing || exporting}
+                >
+                  {importing ? 'Importing…' : 'Import'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<FileDownloadTwoToneIcon />}
+                  onClick={handleExportCsv}
+                  disabled={loading || saving || importing || exporting}
+                >
+                  {exporting ? 'Exporting…' : 'Export'}
+                </Button>
                 <Button
                   variant="outlined"
                   startIcon={<RefreshTwoToneIcon />}
                   onClick={loadAccounts}
-                  disabled={loading || saving}
+                  disabled={loading || saving || importing || exporting}
                 >
                   Refresh
                 </Button>
@@ -365,7 +498,7 @@ function LinkedInManagement() {
                   variant="contained"
                   startIcon={<AddTwoToneIcon />}
                   onClick={openCreateDialog}
-                  disabled={saving}
+                  disabled={saving || importing || exporting}
                 >
                   Add LinkedIn
                 </Button>
@@ -384,6 +517,13 @@ function LinkedInManagement() {
                     <SortableTableCell
                       label="ID"
                       sortKey="id"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Country"
+                      sortKey="country"
                       sortField={sortField}
                       sortDirection={sortDirection}
                       onSort={handleSort}
@@ -457,15 +597,15 @@ function LinkedInManagement() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={11}>Loading…</TableCell>
+                      <TableCell colSpan={12}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11}>No LinkedIn accounts yet.</TableCell>
+                      <TableCell colSpan={12}>No LinkedIn accounts yet.</TableCell>
                     </TableRow>
                   ) : filteredRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11}>No LinkedIn accounts match your filters.</TableCell>
+                      <TableCell colSpan={12}>No LinkedIn accounts match your filters.</TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
@@ -481,6 +621,23 @@ function LinkedInManagement() {
                         onClick={() => openDetail(row)}
                       >
                         <TableCell>{row.id}</TableCell>
+                        <TableCell>
+                          {row.country ? (
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              spacing={0.75}
+                              title={row.country}
+                            >
+                              <CountryFlag country={row.country} height={12} />
+                              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                {getCountryCode(row.country)}
+                              </Typography>
+                            </Stack>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Typography variant="body2" fontWeight={600} noWrap title={row.title || '—'}>
                             {row.title || '—'}
@@ -537,7 +694,7 @@ function LinkedInManagement() {
                             <IconButton
                               color="primary"
                               onClick={() => openEditDialog(row)}
-                              disabled={saving}
+                              disabled={saving || loadingEdit}
                             >
                               <EditTwoToneIcon />
                             </IconButton>
@@ -607,19 +764,42 @@ function LinkedInManagement() {
                 Organize credentials, proxy setup, and account status in one place.
               </Typography>
             </Stack>
-            <TextField
-              label="Title"
-              required
-              fullWidth
-              size="small"
-              value={form.title}
-              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              placeholder="Account name or reference"
-              disabled={saving}
-            />
+            <Grid container spacing={1.5} alignItems="center">
+              <Grid item xs={12} sm={4} md={3}>
+                <CountrySelectField
+                  options={countryOptions}
+                  value={form.country}
+                  onChange={(value) => setForm((current) => ({ ...current, country: value }))}
+                  margin="none"
+                  size="small"
+                  required
+                  disabled={saving || loadingEdit}
+                />
+              </Grid>
+              <Grid item xs={12} sm={8} md={9}>
+                <TextField
+                  label="Title"
+                  required
+                  fullWidth
+                  size="small"
+                  margin="none"
+                  value={form.title}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, title: event.target.value }))
+                  }
+                  placeholder="Account name or reference"
+                  disabled={saving || loadingEdit}
+                />
+              </Grid>
+            </Grid>
           </Stack>
         </DialogTitle>
         <DialogContent dividers sx={{ bgcolor: 'background.default' }}>
+          {loadingEdit ? (
+            <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+              Loading account…
+            </Typography>
+          ) : (
           <LinkedInFormFields
             key={editingRecord?.id ?? 'new'}
             form={form}
@@ -642,6 +822,7 @@ function LinkedInManagement() {
             onRemoveExistingImage={handleRemoveExistingImage}
             imageInputRef={imageInputRef}
           />
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2, bgcolor: 'background.paper' }}>
           <Button onClick={closeDialog} disabled={saving}>
@@ -684,7 +865,7 @@ function LinkedInManagement() {
         onClose={closeDetail}
         onEdit={openEditDialog}
         onDelete={confirmDelete}
-        disabled={saving}
+        disabled={saving || loadingEdit}
       />
     </>
   );

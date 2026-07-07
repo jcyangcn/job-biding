@@ -44,6 +44,10 @@ export function listLinkedInAccounts() {
   return requestJson('/api/linkedin-accounts');
 }
 
+export function getLinkedInAccount(accountId) {
+  return requestJson(`/api/linkedin-accounts/${accountId}`);
+}
+
 export function createLinkedInAccount(payload) {
   return requestJson('/api/linkedin-accounts', {
     method: 'POST',
@@ -97,4 +101,59 @@ export async function fetchLinkedInImageBlob(accountId, filename) {
   }
 
   return response.blob();
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+function parseContentDispositionFilename(headerValue) {
+  if (!headerValue) return null;
+  const utfMatch = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) {
+    return decodeURIComponent(utfMatch[1]);
+  }
+  const plainMatch = headerValue.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] || null;
+}
+
+export async function exportLinkedInAccountsCsv() {
+  const response = await fetch(`${getApiBase()}/api/linkedin-accounts/export`, {
+    headers: authHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  const blob = await response.blob();
+  const filename =
+    parseContentDispositionFilename(response.headers.get('Content-Disposition')) ||
+    `linkedin-accounts-${new Date().toISOString().slice(0, 10)}.csv`;
+  downloadBlob(blob, filename);
+}
+
+export async function importLinkedInAccountsCsv(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${getApiBase()}/api/linkedin-accounts/import`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
 }

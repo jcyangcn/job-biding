@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -40,6 +41,7 @@ from app.citizen_service import (
     resolve_citizen_review_file_path,
     update_citizen,
 )
+from app.linkedin_csv_service import export_linkedin_accounts_csv, import_linkedin_accounts_csv
 from app.linkedin_service import (
     create_linkedin_account,
     delete_linkedin_account,
@@ -109,6 +111,7 @@ from app.models import (
     CitizenResponse,
     CitizenUpdateRequest,
     LinkedInAccountCreateRequest,
+    LinkedInAccountImportResponse,
     LinkedInAccountResponse,
     LinkedInAccountUpdateRequest,
 )
@@ -689,6 +692,55 @@ def create_linkedin_account_endpoint(
     _: User = Depends(require_admin),
 ):
     record = create_linkedin_account(db, request)
+    return linkedin_account_to_response(record)
+
+
+@app.get("/api/linkedin-accounts/export")
+def export_linkedin_accounts_csv_endpoint(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    csv_text = export_linkedin_accounts_csv(db)
+    filename = f"linkedin-accounts-{datetime.now().date().isoformat()}.csv"
+    return Response(
+        content="\ufeff" + csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/api/linkedin-accounts/import", response_model=LinkedInAccountImportResponse)
+async def import_linkedin_accounts_csv_endpoint(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    content_bytes = await file.read()
+    if not content_bytes:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    try:
+        content = content_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="CSV must be UTF-8 encoded") from exc
+
+    try:
+        result = import_linkedin_accounts_csv(db, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return LinkedInAccountImportResponse.model_validate(result)
+
+
+@app.get("/api/linkedin-accounts/{account_id}", response_model=LinkedInAccountResponse)
+def get_linkedin_account_endpoint(
+    account_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_linkedin_account(db, account_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="LinkedIn account not found")
     return linkedin_account_to_response(record)
 
 

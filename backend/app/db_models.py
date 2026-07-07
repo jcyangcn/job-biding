@@ -190,6 +190,9 @@ class LinkedInAccount(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False, server_default="", default="")
+    country: Mapped[str] = mapped_column(
+        String(100), nullable=False, server_default="United States", default="United States"
+    )
     email: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     email_password: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     email_recovery_email: Mapped[str | None] = mapped_column(String(255), nullable=True)

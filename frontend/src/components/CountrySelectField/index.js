@@ -10,17 +10,21 @@ function CountrySelectField({
   required = false,
   margin = 'normal',
   placeholder = 'Search country...',
-  fullWidth = true
+  fullWidth = true,
+  disabled = false,
+  size = 'medium'
 }) {
   return (
     <Autocomplete
       fullWidth={fullWidth}
+      size={size}
       options={options}
       value={value || null}
       onChange={(_, newValue) => onChange(newValue || '')}
       autoHighlight
       openOnFocus
       disablePortal
+      disabled={disabled}
       renderOption={(props, option) => (
         <Box component="li" {...props} key={option} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <CountryFlag country={option} />
@@ -31,9 +35,11 @@ function CountrySelectField({
         <TextField
           {...params}
           margin={margin}
+          size={size}
           label={label}
           placeholder={placeholder}
           required={required}
+          disabled={disabled}
           InputProps={{
             ...params.InputProps,
             startAdornment: value ? (
@@ -61,7 +67,9 @@ CountrySelectField.propTypes = {
   required: PropTypes.bool,
   margin: PropTypes.string,
   placeholder: PropTypes.string,
-  fullWidth: PropTypes.bool
+  fullWidth: PropTypes.bool,
+  disabled: PropTypes.bool,
+  size: PropTypes.oneOf(['small', 'medium'])
 };
 
 export default CountrySelectField;

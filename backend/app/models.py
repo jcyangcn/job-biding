@@ -411,6 +411,7 @@ LinkedInNeedActionLiteral = Literal["None", "Need Reverify"]
 
 class LinkedInAccountCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
+    country: str = Field(default="United States", min_length=1, max_length=100)
     email: str = Field(default="", max_length=255)
     email_password: str = Field(default="", max_length=255)
     email_recovery_email: str | None = Field(default=None, max_length=255)
@@ -439,6 +440,7 @@ class LinkedInAccountCreateRequest(BaseModel):
 
 class LinkedInAccountUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
+    country: str | None = Field(default=None, min_length=1, max_length=100)
     email: str | None = Field(default=None, max_length=255)
     email_password: str | None = Field(default=None, max_length=255)
     email_recovery_email: str | None = Field(default=None, max_length=255)
@@ -468,6 +470,7 @@ class LinkedInAccountUpdateRequest(BaseModel):
 class LinkedInAccountResponse(BaseModel):
     id: int
     title: str
+    country: str
     email: str
     email_password: str
     email_recovery_email: str | None = None
@@ -495,3 +498,10 @@ class LinkedInAccountResponse(BaseModel):
     logs: str
     created_at: datetime
     updated_at: datetime
+
+
+class LinkedInAccountImportResponse(BaseModel):
+    created: int
+    updated: int
+    failed: int
+    errors: list[str] = []

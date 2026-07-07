@@ -848,6 +848,39 @@ def migrate_linkedin_status_values() -> None:
         )
 
 
+def migrate_linkedin_country_column() -> None:
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'linkedin_account'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            return
+
+        country_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'linkedin_account'
+                  AND column_name = 'country'
+                """
+            )
+        ).scalar()
+        if not country_exists:
+            conn.execute(
+                text(
+                    "ALTER TABLE linkedin_account ADD COLUMN country VARCHAR(100) NOT NULL DEFAULT 'United States'"
+                )
+            )
+
+
 def init_db() -> None:
     from app import db_models  # noqa: F401
     from app.auth import seed_default_users
@@ -867,6 +900,7 @@ def init_db() -> None:
     migrate_citizen_columns()
     migrate_linkedin_account_columns()
     migrate_linkedin_status_values()
+    migrate_linkedin_country_column()
     with SessionLocal() as db:
         seed_default_users(db)
         seed_test_identity_profile(db)

@@ -35,6 +35,7 @@ import {
   LINKEDIN_PROVIDERS,
   LINKEDIN_STATUSES
 } from 'src/data/linkedinOptions';
+import { DEFAULT_COUNTRY } from 'src/data/countries';
 import { formatDateTime } from 'src/utils/dateFormat';
 import LinkedInImageThumb from './LinkedInImageThumb';
 
@@ -104,7 +105,10 @@ FieldCell.propTypes = {
 };
 
 function PasswordField({ label, value, onChange, required, helperText, copyValue }) {
-  const copyText = value?.trim() || copyValue?.trim() || '';
+  const storedValue = copyValue ?? '';
+  const hasFormValue = value !== '' && value != null;
+  const displayValue = hasFormValue ? value : storedValue;
+  const copyText = String(displayValue ?? '').trim() || String(storedValue ?? '').trim();
 
   return (
     <TextField
@@ -113,7 +117,7 @@ function PasswordField({ label, value, onChange, required, helperText, copyValue
       fullWidth
       size="small"
       type="text"
-      value={value}
+      value={displayValue}
       onChange={onChange}
       helperText={helperText}
       autoComplete="off"
@@ -521,7 +525,6 @@ function LinkedInFormFields({
                   value={form.email_password}
                   onChange={setField('email_password')}
                   copyValue={storedValues?.email_password}
-                  helperText={createdAt ? 'Leave blank to keep the current password' : undefined}
                 />
               </FieldCell>
               <FieldCell>
@@ -598,7 +601,6 @@ function LinkedInFormFields({
                     value={form.linkedin_password}
                     onChange={setField('linkedin_password')}
                     copyValue={storedValues?.linkedin_password}
-                    helperText={createdAt ? 'Leave blank to keep the current password' : undefined}
                   />
                   <CopyableTextField
                     label="LinkedIn profile link"
@@ -851,6 +853,7 @@ LinkedInFormFields.propTypes = {
 export function createEmptyLinkedInForm() {
   return {
     title: 'US_template',
+    country: DEFAULT_COUNTRY,
     email: '',
     email_password: '',
     email_recovery_email: '',
@@ -884,18 +887,19 @@ export function linkedInRecordToForm(record) {
   }
 
   return {
-    title: record.title || '',
-    email: record.email || '',
-    email_password: '',
-    email_recovery_email: record.email_recovery_email || '',
+    title: record.title ?? '',
+    country: record.country ?? DEFAULT_COUNTRY,
+    email: record.email ?? '',
+    email_password: record.email_password ?? '',
+    email_recovery_email: record.email_recovery_email ?? '',
     email_secured: Boolean(record.email_secured),
-    recovery_email: record.recovery_email || '',
-    recovery_email_password: '',
-    recovery_email_recovery: record.recovery_email_recovery || '',
-    linkedin_email: record.linkedin_email || '',
-    linkedin_password: '',
-    linkedin_link: record.linkedin_link || '',
-    second_email: record.second_email || '',
+    recovery_email: record.recovery_email ?? '',
+    recovery_email_password: record.recovery_email_password ?? '',
+    recovery_email_recovery: record.recovery_email_recovery ?? '',
+    linkedin_email: record.linkedin_email ?? '',
+    linkedin_password: record.linkedin_password ?? '',
+    linkedin_link: record.linkedin_link ?? '',
+    second_email: record.second_email ?? '',
     linkedin_secured: Boolean(record.linkedin_secured),
     browser: record.browser || '',
     profile_no: record.profile_no ?? '',
@@ -912,9 +916,10 @@ export function linkedInRecordToForm(record) {
   };
 }
 
-export function buildLinkedInPayload(form, { isEdit = false } = {}) {
+export function buildLinkedInPayload(form, { isEdit = false, storedValues = null } = {}) {
   const payload = {
     title: form.title.trim(),
+    country: form.country.trim(),
     email: form.email.trim(),
     email_recovery_email: form.email_recovery_email.trim() || null,
     email_secured: Boolean(form.email_secured),
@@ -945,6 +950,8 @@ export function buildLinkedInPayload(form, { isEdit = false } = {}) {
       payload[field] = value;
     } else if (!isEdit) {
       payload[field] = '';
+    } else if (storedValues?.[field]?.trim()) {
+      payload[field] = storedValues[field].trim();
     }
   });
 
