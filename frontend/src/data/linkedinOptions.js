@@ -7,8 +7,8 @@ export const LINKEDIN_PROVIDERS = [
 export const LINKEDIN_STATUSES = [
   { value: 'Pending', label: 'Pending' },
   { value: 'Created', label: 'Created' },
-  { value: 'Secured', label: 'Secured' },
   { value: 'Renting', label: 'Renting' },
+  { value: 'Sold', label: 'Sold' },
   { value: 'Suspended', label: 'Suspended' }
 ];
 
@@ -24,10 +24,10 @@ export function getLinkedInStatusColor(status) {
   switch (status) {
     case 'Created':
       return 'info';
-    case 'Secured':
-      return 'success';
     case 'Renting':
       return 'warning';
+    case 'Sold':
+      return 'success';
     case 'Suspended':
       return 'error';
     case 'Pending':

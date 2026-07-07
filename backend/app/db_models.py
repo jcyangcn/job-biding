@@ -189,7 +189,8 @@ class LinkedInAccount(Base):
     __tablename__ = "linkedin_account"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, server_default="", default="")
+    email: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     email_password: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     email_recovery_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email_secured: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

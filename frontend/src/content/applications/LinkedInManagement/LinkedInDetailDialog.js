@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import {
   Box,
+  Button,
   Chip,
   Divider,
   Grid,
@@ -8,6 +9,8 @@ import {
   Stack,
   Typography
 } from '@mui/material';
+import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
+import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import MailTwoToneIcon from '@mui/icons-material/MailTwoTone';
 import PersonTwoToneIcon from '@mui/icons-material/PersonTwoTone';
@@ -43,13 +46,13 @@ function displayValue(value) {
   return text || '—';
 }
 
-function LinkedInDetailDialog({ open, account, onClose }) {
+function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabled = false }) {
   if (!account) {
     return null;
   }
 
-  const title = account.email || 'LinkedIn account details';
-  const caption = [account.linkedin_email, account.provider].filter(Boolean).join(' · ');
+  const title = account.title || account.email || 'LinkedIn account details';
+  const caption = [account.email, account.linkedin_email, account.provider].filter(Boolean).join(' · ');
 
   return (
     <DetailDialog open={open} title={title} caption={caption || undefined} onClose={onClose} maxWidth="md">
@@ -191,6 +194,32 @@ function LinkedInDetailDialog({ open, account, onClose }) {
       ) : null}
 
       {account.logs ? <DetailTextSection title="Logs" text={account.logs} /> : null}
+
+      {onEdit || onDelete ? (
+        <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+          {onEdit ? (
+            <Button
+              variant="outlined"
+              startIcon={<EditTwoToneIcon />}
+              onClick={() => onEdit(account)}
+              disabled={disabled}
+            >
+              Edit
+            </Button>
+          ) : null}
+          {onDelete ? (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteTwoToneIcon />}
+              onClick={() => onDelete(account)}
+              disabled={disabled}
+            >
+              Delete
+            </Button>
+          ) : null}
+        </Stack>
+      ) : null}
     </DetailDialog>
   );
 }
@@ -198,7 +227,10 @@ function LinkedInDetailDialog({ open, account, onClose }) {
 LinkedInDetailDialog.propTypes = {
   open: PropTypes.bool.isRequired,
   account: PropTypes.object,
-  onClose: PropTypes.func.isRequired
+  onClose: PropTypes.func.isRequired,
+  onEdit: PropTypes.func,
+  onDelete: PropTypes.func,
+  disabled: PropTypes.bool
 };
 
 export default LinkedInDetailDialog;

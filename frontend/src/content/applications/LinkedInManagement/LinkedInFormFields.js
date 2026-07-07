@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { useSnackbar } from 'notistack';
 import {
   Box,
+  Button,
   Chip,
   FormControl,
   FormControlLabel,
@@ -17,11 +18,14 @@ import {
   Tab,
   Tabs,
   TextField,
-  Typography
+  Typography,
+  alpha,
+  useTheme
 } from '@mui/material';
 import CloudUploadTwoToneIcon from '@mui/icons-material/CloudUploadTwoTone';
 import ContentPasteTwoToneIcon from '@mui/icons-material/ContentPasteTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import CopyableTextField, { CopyFieldAdornment } from 'src/components/CopyableTextField';
 import DateField from 'src/components/DateField';
 import {
@@ -81,11 +85,11 @@ SectionCard.propTypes = {
   children: PropTypes.node.isRequired
 };
 
-function FieldCell({ children, xs = 12, sm }) {
+function FieldCell({ children, xs = 12, sm, md, sx }) {
   const smValue = sm ?? (xs === 12 ? 12 : 6);
 
   return (
-    <Grid item xs={xs} sm={smValue}>
+    <Grid item xs={xs} sm={smValue} md={md} sx={sx}>
       {children}
     </Grid>
   );
@@ -94,7 +98,9 @@ function FieldCell({ children, xs = 12, sm }) {
 FieldCell.propTypes = {
   children: PropTypes.node.isRequired,
   xs: PropTypes.number,
-  sm: PropTypes.number
+  sm: PropTypes.number,
+  md: PropTypes.number,
+  sx: PropTypes.object
 };
 
 function PasswordField({ label, value, onChange, required, helperText, copyValue }) {
@@ -129,6 +135,217 @@ PasswordField.propTypes = {
   required: PropTypes.bool,
   helperText: PropTypes.string,
   copyValue: PropTypes.string
+};
+
+function LinkedInScreenshotField({
+  screenshotPasteRef,
+  pendingPreviewUrl,
+  existingImage,
+  editingRecordId,
+  imageInputRef,
+  onPendingFileChange,
+  onPaste,
+  onPasteFromClipboard,
+  onFileSelect,
+  hasScreenshot,
+  onClear,
+  onRemoveExistingImage,
+  pendingFile
+}) {
+  const theme = useTheme();
+  const [dragOver, setDragOver] = useState(false);
+  const fileName = pendingFile?.name || existingImage?.original_name;
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    setDragOver(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) {
+      onFileSelect(file);
+    }
+  };
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 2,
+        width: '100%',
+        maxWidth: 360,
+        borderRadius: 2,
+        bgcolor: alpha(theme.palette.primary.main, 0.02),
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
+      <Stack spacing={1.5} sx={{ flex: 1 }}>
+        <Stack direction="row" alignItems="baseline" justifyContent="space-between" gap={1}>
+          <Typography variant="subtitle2" fontWeight={700}>
+            Screenshot
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Optional · max 10MB
+          </Typography>
+        </Stack>
+
+        <Box
+          ref={screenshotPasteRef}
+          tabIndex={0}
+          role="button"
+          aria-label="Screenshot preview. Drag and drop, paste with Ctrl+V, or upload an image."
+          onPaste={onPaste}
+          onDrop={handleDrop}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onClick={() => {
+            if (!hasScreenshot) {
+              imageInputRef.current?.click();
+              return;
+            }
+            screenshotPasteRef.current?.focus();
+          }}
+          sx={{
+            flex: 1,
+            minHeight: 240,
+            borderRadius: 2,
+            border: '2px dashed',
+            borderColor: dragOver ? 'primary.main' : 'divider',
+            bgcolor: dragOver
+              ? alpha(theme.palette.primary.main, 0.08)
+              : alpha(theme.palette.background.default, 0.8),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            cursor: 'pointer',
+            transition: 'border-color 0.2s ease, background-color 0.2s ease',
+            '&:focus': {
+              outline: '2px solid',
+              outlineColor: 'primary.main',
+              outlineOffset: 2
+            },
+            '&:hover': {
+              borderColor: 'primary.main',
+              bgcolor: alpha(theme.palette.primary.main, 0.04)
+            }
+          }}
+        >
+          {pendingPreviewUrl ? (
+            <Box
+              component="img"
+              src={pendingPreviewUrl}
+              alt="Screenshot preview"
+              sx={{
+                width: '100%',
+                height: '100%',
+                maxHeight: 280,
+                objectFit: 'contain',
+                p: 1,
+                pointerEvents: 'none'
+              }}
+            />
+          ) : existingImage && editingRecordId ? (
+            <Box
+              sx={{
+                width: '100%',
+                height: '100%',
+                minHeight: 220,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                p: 1
+              }}
+            >
+              <LinkedInImageThumb accountId={editingRecordId} image={existingImage} size={280} />
+            </Box>
+          ) : (
+            <Stack spacing={1} alignItems="center" sx={{ px: 2, py: 3, textAlign: 'center' }}>
+              <ImageOutlinedIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+              <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                Drop image here
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                or click to browse · Ctrl+V to paste
+              </Typography>
+            </Stack>
+          )}
+        </Box>
+
+        {fileName ? (
+          <Typography variant="caption" color="text.secondary" noWrap title={fileName}>
+            {fileName}
+          </Typography>
+        ) : (
+          <Typography variant="caption" color="text.secondary">
+            PNG, JPG, WEBP, GIF, or BMP
+          </Typography>
+        )}
+
+        <input ref={imageInputRef} type="file" accept="image/*" hidden onChange={onPendingFileChange} />
+
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<CloudUploadTwoToneIcon />}
+            onClick={(event) => {
+              event.stopPropagation();
+              imageInputRef.current?.click();
+            }}
+          >
+            Upload
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<ContentPasteTwoToneIcon />}
+            onClick={(event) => {
+              event.stopPropagation();
+              onPasteFromClipboard();
+            }}
+          >
+            Paste
+          </Button>
+          {hasScreenshot ? (
+            <Button
+              size="small"
+              color="error"
+              variant="outlined"
+              startIcon={<DeleteTwoToneIcon />}
+              onClick={(event) => {
+                event.stopPropagation();
+                onClear();
+                if (existingImage) {
+                  onRemoveExistingImage?.();
+                }
+              }}
+            >
+              Remove
+            </Button>
+          ) : null}
+        </Stack>
+      </Stack>
+    </Paper>
+  );
+}
+
+LinkedInScreenshotField.propTypes = {
+  screenshotPasteRef: PropTypes.object.isRequired,
+  pendingPreviewUrl: PropTypes.string,
+  existingImage: PropTypes.object,
+  editingRecordId: PropTypes.number,
+  imageInputRef: PropTypes.object.isRequired,
+  onPendingFileChange: PropTypes.func.isRequired,
+  onPaste: PropTypes.func.isRequired,
+  onPasteFromClipboard: PropTypes.func.isRequired,
+  onFileSelect: PropTypes.func.isRequired,
+  hasScreenshot: PropTypes.bool.isRequired,
+  onClear: PropTypes.func.isRequired,
+  onRemoveExistingImage: PropTypes.func,
+  pendingFile: PropTypes.object
 };
 
 function LinkedInFormFields({
@@ -291,12 +508,20 @@ function LinkedInFormFields({
               <FieldCell>
                 <CopyableTextField
                   label="Email"
-                  required
                   fullWidth
                   size="small"
                   value={form.email}
                   onChange={setField('email')}
                   placeholder="example@domain.com"
+                />
+              </FieldCell>
+              <FieldCell>
+                <PasswordField
+                  label="Email password"
+                  value={form.email_password}
+                  onChange={setField('email_password')}
+                  copyValue={storedValues?.email_password}
+                  helperText={createdAt ? 'Leave blank to keep the current password' : undefined}
                 />
               </FieldCell>
               <FieldCell>
@@ -307,16 +532,6 @@ function LinkedInFormFields({
                   value={form.email_recovery_email}
                   onChange={setField('email_recovery_email')}
                   placeholder="recovery@domain.com"
-                />
-              </FieldCell>
-              <FieldCell>
-                <PasswordField
-                  label="Email password"
-                  required={!createdAt}
-                  value={form.email_password}
-                  onChange={setField('email_password')}
-                  copyValue={storedValues?.email_password}
-                  helperText={createdAt ? 'Leave blank to keep the current password' : undefined}
                 />
               </FieldCell>
               <FieldCell>
@@ -367,55 +582,74 @@ function LinkedInFormFields({
           </Grid>
 
           <Grid item xs={12}>
-            <SectionCard title="LinkedIn account" subtitle="LinkedIn login and profile URL">
-              <FieldCell>
-                <CopyableTextField
-                  label="LinkedIn email"
-                  fullWidth
-                  size="small"
-                  value={form.linkedin_email}
-                  onChange={setField('linkedin_email')}
-                  placeholder="linked@domain.com"
-                />
+            <SectionCard title="LinkedIn account" subtitle="LinkedIn login, profile, and screenshot">
+              <FieldCell xs={12} md={6}>
+                <Stack spacing={2}>
+                  <CopyableTextField
+                    label="LinkedIn email"
+                    fullWidth
+                    size="small"
+                    value={form.linkedin_email}
+                    onChange={setField('linkedin_email')}
+                    placeholder="linked@domain.com"
+                  />
+                  <PasswordField
+                    label="LinkedIn password"
+                    value={form.linkedin_password}
+                    onChange={setField('linkedin_password')}
+                    copyValue={storedValues?.linkedin_password}
+                    helperText={createdAt ? 'Leave blank to keep the current password' : undefined}
+                  />
+                  <CopyableTextField
+                    label="LinkedIn profile link"
+                    fullWidth
+                    size="small"
+                    value={form.linkedin_link}
+                    onChange={setField('linkedin_link')}
+                    placeholder="https://www.linkedin.com/in/username"
+                  />
+                  <TextField
+                    label="Second email"
+                    fullWidth
+                    size="small"
+                    value={form.second_email}
+                    onChange={setField('second_email')}
+                    placeholder="alt@domain.com"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={Boolean(form.linkedin_secured)}
+                        onChange={setBooleanField('linkedin_secured')}
+                      />
+                    }
+                    label="LinkedIn secured"
+                  />
+                </Stack>
               </FieldCell>
-              <FieldCell>
-                <TextField
-                  label="Second email"
-                  fullWidth
-                  size="small"
-                  value={form.second_email}
-                  onChange={setField('second_email')}
-                  placeholder="alt@domain.com"
-                />
-              </FieldCell>
-              <FieldCell>
-                <PasswordField
-                  label="LinkedIn password"
-                  value={form.linkedin_password}
-                  onChange={setField('linkedin_password')}
-                  copyValue={storedValues?.linkedin_password}
-                  helperText={createdAt ? 'Leave blank to keep the current password' : undefined}
-                />
-              </FieldCell>
-              <FieldCell>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={Boolean(form.linkedin_secured)}
-                      onChange={setBooleanField('linkedin_secured')}
-                    />
-                  }
-                  label="LinkedIn secured"
-                />
-              </FieldCell>
-              <FieldCell xs={12}>
-                <CopyableTextField
-                  label="LinkedIn profile link"
-                  fullWidth
-                  size="small"
-                  value={form.linkedin_link}
-                  onChange={setField('linkedin_link')}
-                  placeholder="https://www.linkedin.com/in/username"
+              <FieldCell
+                xs={12}
+                md={6}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <LinkedInScreenshotField
+                  screenshotPasteRef={screenshotPasteRef}
+                  pendingPreviewUrl={pendingPreviewUrl}
+                  existingImage={existingImage}
+                  editingRecordId={editingRecordId}
+                  imageInputRef={imageInputRef}
+                  onPendingFileChange={onPendingFileChange}
+                  onPaste={handleScreenshotPaste}
+                  onPasteFromClipboard={handlePasteFromClipboard}
+                  onFileSelect={selectPendingFile}
+                  hasScreenshot={hasScreenshot}
+                  onClear={clearPendingFile}
+                  onRemoveExistingImage={onRemoveExistingImage}
+                  pendingFile={pendingFile}
                 />
               </FieldCell>
             </SectionCard>
@@ -461,9 +695,6 @@ function LinkedInFormFields({
                     value={form.provider || ''}
                     onChange={(event) => setForm((current) => ({ ...current, provider: event.target.value }))}
                   >
-                    <MenuItem value="">
-                      <em>Not set</em>
-                    </MenuItem>
                     {LINKEDIN_PROVIDERS.map((option) => (
                       <MenuItem key={option.value} value={option.value}>
                         {option.label}
@@ -581,101 +812,7 @@ function LinkedInFormFields({
             </SectionCard>
           </Grid>
 
-          <Grid item xs={12} md={6}>
-            <SectionCard title="Screenshot" subtitle="Optional account screenshot (max 10MB)">
-              <FieldCell xs={12}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
-                  <Box
-                    ref={screenshotPasteRef}
-                    tabIndex={0}
-                    role="button"
-                    aria-label="Screenshot preview. Press Ctrl+V to paste an image."
-                    onPaste={handleScreenshotPaste}
-                    sx={{
-                      width: 120,
-                      height: 120,
-                      borderRadius: 2,
-                      border: '1px dashed',
-                      borderColor: 'divider',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                      bgcolor: 'background.default',
-                      flexShrink: 0,
-                      cursor: 'pointer',
-                      '&:focus': {
-                        outline: '2px solid',
-                        outlineColor: 'primary.main',
-                        outlineOffset: 2
-                      }
-                    }}
-                    onClick={() => screenshotPasteRef.current?.focus()}
-                  >
-                    {pendingPreviewUrl ? (
-                      <Box
-                        component="img"
-                        src={pendingPreviewUrl}
-                        alt="Pending upload preview"
-                        sx={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
-                      />
-                    ) : existingImage && editingRecordId ? (
-                      <LinkedInImageThumb accountId={editingRecordId} image={existingImage} size={120} />
-                    ) : (
-                      <CloudUploadTwoToneIcon color="disabled" />
-                    )}
-                  </Box>
-                  <Stack spacing={1} sx={{ flex: 1 }}>
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/*"
-                      hidden
-                      onChange={onPendingFileChange}
-                    />
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      <Chip
-                        clickable
-                        icon={<CloudUploadTwoToneIcon />}
-                        label="Choose image"
-                        onClick={() => imageInputRef.current?.click()}
-                        variant="outlined"
-                      />
-                      <Chip
-                        clickable
-                        icon={<ContentPasteTwoToneIcon />}
-                        label="Paste image"
-                        onClick={handlePasteFromClipboard}
-                        variant="outlined"
-                      />
-                      {hasScreenshot ? (
-                        <Chip
-                          clickable
-                          icon={<DeleteTwoToneIcon />}
-                          label="Remove"
-                          color="error"
-                          variant="outlined"
-                          onClick={() => {
-                            clearPendingFile();
-                            if (existingImage) {
-                              onRemoveExistingImage?.();
-                            }
-                          }}
-                        />
-                      ) : null}
-                    </Stack>
-                    <Typography variant="caption" color="text.secondary">
-                      {pendingFile?.name ||
-                        existingImage?.original_name ||
-                        'PNG, JPG, WEBP up to 10MB — choose a file or click the preview and press Ctrl+V'}
-                    </Typography>
-                  </Stack>
-                </Stack>
-              </FieldCell>
-            </SectionCard>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12}>
             <SectionCard title="Activity log" subtitle="Notes and history for this account">
               <FieldCell xs={12}>
                 <TextField
@@ -713,6 +850,7 @@ LinkedInFormFields.propTypes = {
 
 export function createEmptyLinkedInForm() {
   return {
+    title: 'US_template',
     email: '',
     email_password: '',
     email_recovery_email: '',
@@ -727,7 +865,7 @@ export function createEmptyLinkedInForm() {
     linkedin_secured: false,
     browser: '',
     profile_no: '',
-    provider: '',
+    provider: LINKEDIN_PROVIDERS[0]?.value || '',
     order_id: '',
     proxy_info: '',
     proxy_expired_by: '',
@@ -746,6 +884,7 @@ export function linkedInRecordToForm(record) {
   }
 
   return {
+    title: record.title || '',
     email: record.email || '',
     email_password: '',
     email_recovery_email: record.email_recovery_email || '',
@@ -760,7 +899,7 @@ export function linkedInRecordToForm(record) {
     linkedin_secured: Boolean(record.linkedin_secured),
     browser: record.browser || '',
     profile_no: record.profile_no ?? '',
-    provider: record.provider || '',
+    provider: record.provider || LINKEDIN_PROVIDERS[0]?.value || '',
     order_id: record.order_id || '',
     proxy_info: record.proxy_info || '',
     proxy_expired_by: record.proxy_expired_by || '',
@@ -775,14 +914,13 @@ export function linkedInRecordToForm(record) {
 
 export function buildLinkedInPayload(form, { isEdit = false } = {}) {
   const payload = {
+    title: form.title.trim(),
     email: form.email.trim(),
     email_recovery_email: form.email_recovery_email.trim() || null,
     email_secured: Boolean(form.email_secured),
     recovery_email: form.recovery_email.trim() || null,
-    recovery_email_password: form.recovery_email_password.trim() || null,
     recovery_email_recovery: form.recovery_email_recovery.trim() || null,
     linkedin_email: form.linkedin_email.trim() || null,
-    linkedin_password: form.linkedin_password.trim() || null,
     linkedin_link: form.linkedin_link.trim() || null,
     second_email: form.second_email.trim() || null,
     linkedin_secured: Boolean(form.linkedin_secured),
@@ -800,11 +938,15 @@ export function buildLinkedInPayload(form, { isEdit = false } = {}) {
     logs: form.logs || ''
   };
 
-  if (form.email_password.trim()) {
-    payload.email_password = form.email_password.trim();
-  } else if (!isEdit) {
-    payload.email_password = '';
-  }
+  const passwordFields = ['email_password', 'linkedin_password', 'recovery_email_password'];
+  passwordFields.forEach((field) => {
+    const value = form[field]?.trim();
+    if (value) {
+      payload[field] = value;
+    } else if (!isEdit) {
+      payload[field] = '';
+    }
+  });
 
   return payload;
 }

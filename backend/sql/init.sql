@@ -110,7 +110,8 @@ CREATE TABLE IF NOT EXISTS citizen (
 
 CREATE TABLE IF NOT EXISTS linkedin_account (
     id SERIAL PRIMARY KEY,
-    email VARCHAR(255) NOT NULL,
+    title VARCHAR(255) NOT NULL DEFAULT '',
+    email VARCHAR(255) NOT NULL DEFAULT '',
     email_password VARCHAR(255) NOT NULL DEFAULT '',
     email_recovery_email VARCHAR(255),
     email_secured BOOLEAN NOT NULL DEFAULT FALSE,

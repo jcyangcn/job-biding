@@ -778,6 +778,76 @@ def migrate_citizen_columns() -> None:
             conn.execute(text("ALTER TABLE citizen DROP COLUMN status"))
 
 
+def migrate_linkedin_account_columns() -> None:
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'linkedin_account'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            return
+
+        title_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'linkedin_account'
+                  AND column_name = 'title'
+                """
+            )
+        ).scalar()
+        if not title_exists:
+            conn.execute(
+                text(
+                    "ALTER TABLE linkedin_account ADD COLUMN title VARCHAR(255) NOT NULL DEFAULT ''"
+                )
+            )
+
+        conn.execute(
+            text(
+                """
+                UPDATE linkedin_account
+                SET title = email
+                WHERE (title IS NULL OR title = '')
+                  AND email IS NOT NULL
+                  AND email <> ''
+                """
+            )
+        )
+
+
+def migrate_linkedin_status_values() -> None:
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'linkedin_account'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            return
+
+        conn.execute(
+            text(
+                """
+                UPDATE linkedin_account
+                SET status = 'Sold'
+                WHERE status = 'Secured'
+                """
+            )
+        )
+
+
 def init_db() -> None:
     from app import db_models  # noqa: F401
     from app.auth import seed_default_users
@@ -795,6 +865,8 @@ def init_db() -> None:
     migrate_profile_bidder_user_ids()
     migrate_answers_to_identity()
     migrate_citizen_columns()
+    migrate_linkedin_account_columns()
+    migrate_linkedin_status_values()
     with SessionLocal() as db:
         seed_default_users(db)
         seed_test_identity_profile(db)

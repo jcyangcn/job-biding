@@ -12,9 +12,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Grid,
   IconButton,
   Link,
   Stack,
+  TextField,
   Table,
   TableBody,
   TableCell,
@@ -41,11 +43,7 @@ import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
 import useTableSort from 'src/hooks/useTableSort';
-import {
-  LINKEDIN_NEED_ACTIONS,
-  LINKEDIN_PROVIDERS,
-  LINKEDIN_STATUSES
-} from 'src/data/linkedinOptions';
+import { LINKEDIN_NEED_ACTIONS, LINKEDIN_STATUSES } from 'src/data/linkedinOptions';
 import {
   createLinkedInAccount,
   deleteLinkedInAccount,
@@ -56,6 +54,8 @@ import {
 } from 'src/services/linkedinApi';
 import { formatDate, formatDateTime } from 'src/utils/dateFormat';
 import LinkedInDetailDialog from './LinkedInDetailDialog';
+import LinkedInAccountTile from './LinkedInAccountTile';
+import LinkedInViewModeMenu from './LinkedInViewModeMenu';
 import LinkedInFormFields, {
   buildLinkedInPayload,
   createEmptyLinkedInForm,
@@ -65,12 +65,12 @@ import LinkedInStatusLabel from './LinkedInStatusLabel';
 
 const LINKEDIN_SELECT_FILTERS = [
   { id: 'status', field: 'status' },
-  { id: 'provider', field: 'provider', emptyValue: '' },
   { id: 'need_action', field: 'need_action' }
 ];
 
 const LINKEDIN_SEARCH_FIELDS = [
   'id',
+  'title',
   'email',
   'email_recovery_email',
   'recovery_email',
@@ -84,6 +84,10 @@ const LINKEDIN_SEARCH_FIELDS = [
   'renting_to',
   'logs'
 ];
+
+const TILE_ROWS_PER_PAGE = 12;
+const TILE_ROWS_PER_PAGE_OPTIONS = [12, 24, 36];
+const TABLE_ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
 function LinkedInManagement() {
   const theme = useTheme();
@@ -101,6 +105,7 @@ function LinkedInManagement() {
   const [pendingFile, setPendingFile] = useState(null);
   const [removeExistingImage, setRemoveExistingImage] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState('table');
 
   const {
     open: detailOpen,
@@ -113,19 +118,13 @@ function LinkedInManagement() {
   const {
     search,
     setSearch,
-    dateFrom,
-    setDateFrom,
-    dateTo,
-    setDateTo,
     selectValues,
     setSelectValue,
     filteredRows,
     clearFilters,
-    hasActiveFilters,
-    showDateRange
+    hasActiveFilters
   } = useTableListFilters(rows, {
     searchFields: LINKEDIN_SEARCH_FIELDS,
-    dateField: 'created_at',
     selects: LINKEDIN_SELECT_FILTERS
   });
 
@@ -138,7 +137,16 @@ function LinkedInManagement() {
     handlePageChange,
     handleLimitChange,
     rowsPerPageOptions
-  } = useTablePagination(sortedRows);
+  } = useTablePagination(sortedRows, {
+    defaultLimit: viewMode === 'tile' ? TILE_ROWS_PER_PAGE : 10,
+    rowsPerPageOptions: viewMode === 'tile' ? TILE_ROWS_PER_PAGE_OPTIONS : TABLE_ROWS_PER_PAGE_OPTIONS
+  });
+
+  useEffect(() => {
+    handleLimitChange({
+      target: { value: String(viewMode === 'tile' ? TILE_ROWS_PER_PAGE : 10) }
+    });
+  }, [viewMode, handleLimitChange]);
 
   const filterSelects = useMemo(
     () => [
@@ -150,13 +158,6 @@ function LinkedInManagement() {
         options: LINKEDIN_STATUSES
       },
       {
-        id: 'provider',
-        label: 'Provider',
-        value: selectValues.provider,
-        onChange: (value) => setSelectValue('provider', value),
-        options: LINKEDIN_PROVIDERS
-      },
-      {
         id: 'need_action',
         label: 'Need action',
         value: selectValues.need_action,
@@ -164,22 +165,18 @@ function LinkedInManagement() {
         options: LINKEDIN_NEED_ACTIONS
       }
     ],
-    [selectValues.status, selectValues.provider, selectValues.need_action, setSelectValue]
+    [selectValues.status, selectValues.need_action, setSelectValue]
   );
 
   const summary = useMemo(() => {
     const counts = {
       total: rows.length,
       actionRequired: 0,
-      renting: 0,
       secured: 0
     };
     rows.forEach((row) => {
       if (row.need_action === 'Need Reverify') {
         counts.actionRequired += 1;
-      }
-      if (row.status === 'Renting') {
-        counts.renting += 1;
       }
       if (row.email_secured || row.linkedin_secured) {
         counts.secured += 1;
@@ -226,8 +223,9 @@ function LinkedInManagement() {
 
   const openEditDialog = (record) => {
     closeDetail();
-    setEditingRecord(record);
-    setForm(linkedInRecordToForm(record));
+    const latest = rows.find((row) => row.id === record.id) || record;
+    setEditingRecord(latest);
+    setForm(linkedInRecordToForm(latest));
     setPendingFile(null);
     setRemoveExistingImage(false);
     if (imageInputRef.current) {
@@ -270,12 +268,8 @@ function LinkedInManagement() {
   };
 
   const handleSave = async () => {
-    if (!form.email.trim()) {
-      enqueueSnackbar('Email is required', { variant: 'warning' });
-      return;
-    }
-    if (!editingRecord && !form.email_password.trim()) {
-      enqueueSnackbar('Email password is required', { variant: 'warning' });
+    if (!form.title.trim()) {
+      enqueueSnackbar('Title is required', { variant: 'warning' });
       return;
     }
 
@@ -339,7 +333,6 @@ function LinkedInManagement() {
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
           <Chip label={`${summary.total} accounts`} color="primary" variant="outlined" />
           <Chip label={`${summary.actionRequired} need action`} color="warning" variant="outlined" />
-          <Chip label={`${summary.renting} renting`} color="info" variant="outlined" />
           <Chip label={`${summary.secured} secured`} color="success" variant="outlined" />
         </Stack>
 
@@ -347,14 +340,7 @@ function LinkedInManagement() {
           <TableListFilters
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search email, LinkedIn, proxy, sales…"
-            showDateRange={showDateRange}
-            dateFrom={dateFrom}
-            dateTo={dateTo}
-            onDateFromChange={setDateFrom}
-            onDateToChange={setDateTo}
-            dateFromLabel="Created from"
-            dateToLabel="Created to"
+            searchPlaceholder="Search title, email, LinkedIn, proxy, sales…"
             selects={filterSelects}
             onClear={clearFilters}
             hasActiveFilters={hasActiveFilters}
@@ -362,6 +348,11 @@ function LinkedInManagement() {
             totalCount={rows.length}
             actions={
               <>
+                <LinkedInViewModeMenu
+                  value={viewMode}
+                  onChange={setViewMode}
+                  disabled={loading || saving}
+                />
                 <Button
                   variant="outlined"
                   startIcon={<RefreshTwoToneIcon />}
@@ -385,6 +376,7 @@ function LinkedInManagement() {
 
         <Card>
           <CardContent>
+            {viewMode === 'table' ? (
             <TableContainer>
               <Table>
                 <TableHead>
@@ -397,7 +389,14 @@ function LinkedInManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
-                      label="Account"
+                      label="Title"
+                      sortKey="title"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Email"
                       sortKey="email"
                       sortField={sortField}
                       sortDirection={sortDirection}
@@ -458,15 +457,15 @@ function LinkedInManagement() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9}>Loading…</TableCell>
+                      <TableCell colSpan={11}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9}>No LinkedIn accounts yet.</TableCell>
+                      <TableCell colSpan={11}>No LinkedIn accounts yet.</TableCell>
                     </TableRow>
                   ) : filteredRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9}>No LinkedIn accounts match your filters.</TableCell>
+                      <TableCell colSpan={11}>No LinkedIn accounts match your filters.</TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
@@ -483,8 +482,13 @@ function LinkedInManagement() {
                       >
                         <TableCell>{row.id}</TableCell>
                         <TableCell>
-                          <Typography variant="body2" fontWeight={600}>
-                            {row.email}
+                          <Typography variant="body2" fontWeight={600} noWrap title={row.title || '—'}>
+                            {row.title || '—'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" noWrap title={row.email || '—'}>
+                            {row.email || '—'}
                           </Typography>
                           {row.renting_to ? (
                             <Typography variant="caption" color="text.secondary" display="block">
@@ -554,6 +558,27 @@ function LinkedInManagement() {
                 </TableBody>
               </Table>
             </TableContainer>
+            ) : loading ? (
+              <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+                Loading…
+              </Typography>
+            ) : rows.length === 0 ? (
+              <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+                No LinkedIn accounts yet.
+              </Typography>
+            ) : filteredRows.length === 0 ? (
+              <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+                No LinkedIn accounts match your filters.
+              </Typography>
+            ) : (
+              <Grid container spacing={2}>
+                {paginatedRows.map((row) => (
+                  <Grid item xs={12} sm={6} md={3} key={row.id}>
+                    <LinkedInAccountTile account={row} onView={openDetail} />
+                  </Grid>
+                ))}
+              </Grid>
+            )}
             <TablePaginationFooter
               count={filteredRows.length}
               page={page}
@@ -575,15 +600,28 @@ function LinkedInManagement() {
         PaperProps={{ sx: { minHeight: '70vh' } }}
       >
         <DialogTitle>
-          <Stack spacing={0.5}>
-            <Typography variant="h4">{dialogTitle}</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Organize credentials, proxy setup, and account status in one place.
-            </Typography>
+          <Stack spacing={1.5}>
+            <Stack spacing={0.5}>
+              <Typography variant="h4">{dialogTitle}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Organize credentials, proxy setup, and account status in one place.
+              </Typography>
+            </Stack>
+            <TextField
+              label="Title"
+              required
+              fullWidth
+              size="small"
+              value={form.title}
+              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+              placeholder="Account name or reference"
+              disabled={saving}
+            />
           </Stack>
         </DialogTitle>
         <DialogContent dividers sx={{ bgcolor: 'background.default' }}>
           <LinkedInFormFields
+            key={editingRecord?.id ?? 'new'}
             form={form}
             setForm={setForm}
             createdAt={editingRecord?.created_at}
@@ -625,7 +663,9 @@ function LinkedInManagement() {
         <DialogContent>
           <Typography>
             Delete LinkedIn account #{deletingRecord?.id}
-            {deletingRecord?.email ? ` (${deletingRecord.email})` : ''}? This cannot be undone.
+            {deletingRecord?.title || deletingRecord?.email
+              ? ` (${deletingRecord.title || deletingRecord.email})`
+              : ''}? This cannot be undone.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -642,6 +682,9 @@ function LinkedInManagement() {
         open={detailOpen}
         account={selectedAccount}
         onClose={closeDetail}
+        onEdit={openEditDialog}
+        onDelete={confirmDelete}
+        disabled={saving}
       />
     </>
   );

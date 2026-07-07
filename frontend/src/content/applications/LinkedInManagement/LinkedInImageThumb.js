@@ -7,7 +7,7 @@ function isPreviewableImage(filename) {
   return /\.(jpe?g|png|gif|webp|bmp)$/i.test(filename || '');
 }
 
-function LinkedInImageThumb({ accountId, image, size = 72, alt }) {
+function LinkedInImageThumb({ accountId, image, size = 72, alt, fill = false, fillMode = 'contain' }) {
   const theme = useTheme();
   const [src, setSrc] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -54,17 +54,27 @@ function LinkedInImageThumb({ accountId, image, size = 72, alt }) {
     };
   }, [accountId, image?.filename, previewable]);
 
-  const frameSx = {
-    width: size,
-    height: size,
-    borderRadius: 1.5,
-    overflow: 'hidden',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    bgcolor: alpha(theme.palette.primary.main, 0.04),
-    border: `1px solid ${theme.palette.divider}`
-  };
+  const frameSx = fill
+    ? {
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: alpha(theme.palette.primary.main, 0.04)
+      }
+    : {
+        width: size,
+        height: size,
+        borderRadius: 1.5,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: alpha(theme.palette.primary.main, 0.04),
+        border: `1px solid ${theme.palette.divider}`
+      };
 
   if (loading) {
     return (
@@ -89,7 +99,7 @@ function LinkedInImageThumb({ accountId, image, size = 72, alt }) {
       component="img"
       src={src}
       alt={displayName}
-      sx={{ ...frameSx, objectFit: 'cover' }}
+      sx={{ ...frameSx, objectFit: fill ? fillMode : 'cover' }}
     />
   );
 }
@@ -98,7 +108,9 @@ LinkedInImageThumb.propTypes = {
   accountId: PropTypes.number,
   image: PropTypes.object,
   size: PropTypes.number,
-  alt: PropTypes.string
+  alt: PropTypes.string,
+  fill: PropTypes.bool,
+  fillMode: PropTypes.oneOf(['contain', 'cover'])
 };
 
 export default LinkedInImageThumb;
