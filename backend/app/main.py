@@ -40,6 +40,17 @@ from app.citizen_service import (
     resolve_citizen_review_file_path,
     update_citizen,
 )
+from app.linkedin_service import (
+    create_linkedin_account,
+    delete_linkedin_account,
+    get_linkedin_account,
+    linkedin_account_to_response,
+    list_linkedin_accounts,
+    remove_linkedin_image,
+    resolve_linkedin_image_path,
+    set_linkedin_image,
+    update_linkedin_account,
+)
 from app.application_service import (
     application_to_response,
     create_application,
@@ -97,6 +108,9 @@ from app.models import (
     CitizenCreateRequest,
     CitizenResponse,
     CitizenUpdateRequest,
+    LinkedInAccountCreateRequest,
+    LinkedInAccountResponse,
+    LinkedInAccountUpdateRequest,
 )
 from app.pdf_renderer import build_resume_path, render_resume_pdf
 from app.profile_parser import load_default_profile, parse_profile_markdown
@@ -658,6 +672,133 @@ def delete_citizen_endpoint(
         raise HTTPException(status_code=404, detail="Citizen not found")
     delete_citizen(db, record)
     return {"ok": True}
+
+
+@app.get("/api/linkedin-accounts", response_model=list[LinkedInAccountResponse])
+def list_linkedin_accounts_endpoint(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    return [linkedin_account_to_response(row) for row in list_linkedin_accounts(db)]
+
+
+@app.post("/api/linkedin-accounts", response_model=LinkedInAccountResponse)
+def create_linkedin_account_endpoint(
+    request: LinkedInAccountCreateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = create_linkedin_account(db, request)
+    return linkedin_account_to_response(record)
+
+
+@app.put("/api/linkedin-accounts/{account_id}", response_model=LinkedInAccountResponse)
+def update_linkedin_account_endpoint(
+    account_id: int,
+    request: LinkedInAccountUpdateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_linkedin_account(db, account_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="LinkedIn account not found")
+    updated = update_linkedin_account(db, record, request)
+    return linkedin_account_to_response(updated)
+
+
+@app.delete("/api/linkedin-accounts/{account_id}")
+def delete_linkedin_account_endpoint(
+    account_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_linkedin_account(db, account_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="LinkedIn account not found")
+    delete_linkedin_account(db, record)
+    return {"ok": True}
+
+
+@app.post("/api/linkedin-accounts/{account_id}/image", response_model=LinkedInAccountResponse)
+async def upload_linkedin_image_endpoint(
+    account_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_linkedin_account(db, account_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="LinkedIn account not found")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Maximum file size is 10MB")
+
+    try:
+        set_linkedin_image(
+            db,
+            record,
+            original_name=file.filename or "image.jpg",
+            content=content,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    refreshed = get_linkedin_account(db, account_id)
+    return linkedin_account_to_response(refreshed)
+
+
+@app.get("/api/linkedin-accounts/{account_id}/image/{filename}")
+def download_linkedin_image_endpoint(
+    account_id: int,
+    filename: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_linkedin_account(db, account_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="LinkedIn account not found")
+
+    image = record.image or {}
+    safe_name = Path(filename).name
+    if image.get("filename") != safe_name:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    try:
+        image_path = resolve_linkedin_image_path(account_id, safe_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not image_path.is_file():
+        raise HTTPException(status_code=404, detail="Image file not found")
+
+    original_name = image.get("original_name") or safe_name
+    return FileResponse(
+        image_path,
+        filename=original_name,
+        headers={"Content-Disposition": f'inline; filename="{original_name}"'},
+    )
+
+
+@app.delete("/api/linkedin-accounts/{account_id}/image", response_model=LinkedInAccountResponse)
+def delete_linkedin_image_endpoint(
+    account_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_linkedin_account(db, account_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="LinkedIn account not found")
+
+    try:
+        remove_linkedin_image(db, record)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    refreshed = get_linkedin_account(db, account_id)
+    return linkedin_account_to_response(refreshed)
 
 
 @app.post("/api/citizens/{citizen_id}/images", response_model=CitizenResponse)

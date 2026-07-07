@@ -16,6 +16,7 @@ import {
   useTheme
 } from '@mui/material';
 import CloseTwoToneIcon from '@mui/icons-material/CloseTwoTone';
+import { CopyFieldAdornment } from 'src/components/CopyableTextField';
 import { formatDateValue, formatDateTimeValue } from 'src/utils/dateFormat';
 
 export const DetailItem = styled(Paper)(({ theme }) => ({
@@ -123,7 +124,9 @@ DetailDialog.propTypes = {
   children: PropTypes.node
 };
 
-export function DetailField({ label, value, icon: Icon, xs = 12, sm = 6, children }) {
+export function DetailField({ label, value, icon: Icon, xs = 12, sm = 6, children, copyValue }) {
+  const canCopy = Boolean(String(copyValue ?? '').trim());
+
   return (
     <Grid item xs={xs} sm={sm}>
       <DetailItem elevation={0}>
@@ -139,6 +142,7 @@ export function DetailField({ label, value, icon: Icon, xs = 12, sm = 6, childre
               </Typography>
             )}
           </Box>
+          {canCopy ? <CopyFieldAdornment label={label} value={copyValue} /> : null}
         </Stack>
       </DetailItem>
     </Grid>
@@ -151,12 +155,20 @@ DetailField.propTypes = {
   icon: PropTypes.elementType,
   xs: PropTypes.number,
   sm: PropTypes.number,
-  children: PropTypes.node
+  children: PropTypes.node,
+  copyValue: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
 };
 
-export function DetailTextSection({ title, icon: Icon, text, emptyText = 'No content provided.' }) {
+export function DetailTextSection({
+  title,
+  icon: Icon,
+  text,
+  emptyText = 'No content provided.',
+  copyValue
+}) {
   const theme = useTheme();
   const content = text?.trim();
+  const canCopy = Boolean(String(copyValue ?? '').trim());
 
   return (
     <Card
@@ -170,7 +182,10 @@ export function DetailTextSection({ title, icon: Icon, text, emptyText = 'No con
       <CardContent>
         <Stack direction="row" alignItems="center" gap={1} mb={2}>
           {Icon ? <Icon color="primary" /> : null}
-          <Typography variant="h5">{title}</Typography>
+          <Typography variant="h5" sx={{ flex: 1 }}>
+            {title}
+          </Typography>
+          {canCopy ? <CopyFieldAdornment label={title} value={copyValue} /> : null}
         </Stack>
         <Box
           sx={{
@@ -203,5 +218,6 @@ DetailTextSection.propTypes = {
   title: PropTypes.string.isRequired,
   icon: PropTypes.elementType,
   text: PropTypes.string,
-  emptyText: PropTypes.string
+  emptyText: PropTypes.string,
+  copyValue: PropTypes.string
 };

@@ -14,6 +14,7 @@ GENERATED_RESUME_DIR = DOWNLOADS_DIR / "generated resume"
 CITIZEN_IMAGE_DIR = UPLOADS_DIR / "citizen image"
 CITIZEN_REVIEW_FILES_DIR = UPLOADS_DIR / "citizen review files"
 PROFILE_DEFAULT_RESUME_DIR = UPLOADS_DIR / "profile default resume"
+LINKEDIN_IMAGE_DIR = UPLOADS_DIR / "linkedin image"
 
 
 class Settings(BaseSettings):
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
     citizen_review_files_dir_config: str = Field(
         default="", validation_alias="CITIZEN_REVIEW_FILES_DIR"
     )
+    linkedin_images_dir_config: str = Field(default="", validation_alias="LINKEDIN_IMAGES_DIR")
     cors_origins: str = ""
     uvicorn_reload: bool = False
 
@@ -76,6 +78,10 @@ class Settings(BaseSettings):
             CITIZEN_REVIEW_FILES_DIR,
         )
 
+    @property
+    def linkedin_images_dir(self) -> Path:
+        return self._resolve_storage_path(self.linkedin_images_dir_config, LINKEDIN_IMAGE_DIR)
+
     @staticmethod
     def _resolve_storage_path(raw_value: str, default: Path) -> Path:
         raw = raw_value.strip()
@@ -102,6 +108,7 @@ settings = Settings()
 GENERATED_DIR = settings.generated_dir
 CITIZEN_IMAGES_DIR = settings.citizen_images_dir
 CITIZEN_REVIEW_FILES_DIR = settings.citizen_review_files_dir
+LINKEDIN_IMAGES_DIR = settings.linkedin_images_dir
 
 
 def ensure_storage_dirs() -> None:
@@ -113,5 +120,6 @@ def ensure_storage_dirs() -> None:
         CITIZEN_IMAGES_DIR,
         CITIZEN_REVIEW_FILES_DIR,
         PROFILE_DEFAULT_RESUME_DIR,
+        LINKEDIN_IMAGE_DIR,
     ):
         path.mkdir(parents=True, exist_ok=True)

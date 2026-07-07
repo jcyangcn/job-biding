@@ -34,6 +34,10 @@ const menuItems = [
           {
             name: 'Citizen Management',
             link: '/applications/citizen-management'
+          },
+          {
+            name: 'LinkedIn Management',
+            link: '/applications/linkedin-management'
           }
         ]
       }

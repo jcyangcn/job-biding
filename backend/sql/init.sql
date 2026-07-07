@@ -107,3 +107,34 @@ CREATE TABLE IF NOT EXISTS citizen (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS linkedin_account (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    email_password VARCHAR(255) NOT NULL DEFAULT '',
+    email_recovery_email VARCHAR(255),
+    email_secured BOOLEAN NOT NULL DEFAULT FALSE,
+    recovery_email VARCHAR(255),
+    recovery_email_password VARCHAR(255),
+    recovery_email_recovery VARCHAR(500),
+    linkedin_email VARCHAR(255),
+    linkedin_password VARCHAR(255),
+    linkedin_link VARCHAR(1000),
+    second_email VARCHAR(255),
+    linkedin_secured BOOLEAN NOT NULL DEFAULT FALSE,
+    browser VARCHAR(255),
+    profile_no INTEGER,
+    provider VARCHAR(50),
+    order_id VARCHAR(100),
+    proxy_info TEXT,
+    proxy_expired_by DATE,
+    purchased_from VARCHAR(255),
+    renting_to VARCHAR(255),
+    renting_by DATE,
+    image JSONB,
+    status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+    need_action VARCHAR(30) NOT NULL DEFAULT 'None',
+    logs TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

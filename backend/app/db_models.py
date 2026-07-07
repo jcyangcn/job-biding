@@ -183,3 +183,45 @@ class Citizen(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+
+class LinkedInAccount(Base):
+    __tablename__ = "linkedin_account"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    email_password: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    email_recovery_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_secured: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    recovery_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recovery_email_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recovery_email_recovery: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    linkedin_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    linkedin_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    linkedin_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    second_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    linkedin_secured: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    browser: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    profile_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    proxy_info: Mapped[str | None] = mapped_column(Text, nullable=True)
+    proxy_expired_by: Mapped[date | None] = mapped_column(Date, nullable=True)
+    purchased_from: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    renting_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    renting_by: Mapped[date | None] = mapped_column(Date, nullable=True)
+    image: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="Pending")
+    need_action: Mapped[str] = mapped_column(String(30), nullable=False, server_default="None")
+    logs: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )

@@ -402,3 +402,93 @@ class CitizenResponse(BaseModel):
     review_files: list[CitizenImageInfo]
     created_at: datetime
     updated_at: datetime
+
+
+LinkedInProviderLiteral = Literal["proxyo.io", "ixbrowser", "iproyal"]
+LinkedInStatusLiteral = Literal["Pending", "Created", "Secured", "Renting", "Suspended"]
+LinkedInNeedActionLiteral = Literal["None", "Need Reverify"]
+
+
+class LinkedInAccountCreateRequest(BaseModel):
+    email: str = Field(min_length=1, max_length=255)
+    email_password: str = Field(min_length=1, max_length=255)
+    email_recovery_email: str | None = Field(default=None, max_length=255)
+    email_secured: bool = False
+    recovery_email: str | None = Field(default=None, max_length=255)
+    recovery_email_password: str | None = Field(default=None, max_length=255)
+    recovery_email_recovery: str | None = Field(default=None, max_length=500)
+    linkedin_email: str | None = Field(default=None, max_length=255)
+    linkedin_password: str | None = Field(default=None, max_length=255)
+    linkedin_link: str | None = Field(default=None, max_length=1000)
+    second_email: str | None = Field(default=None, max_length=255)
+    linkedin_secured: bool = False
+    browser: str | None = Field(default=None, max_length=255)
+    profile_no: int | None = None
+    provider: LinkedInProviderLiteral | None = None
+    order_id: str | None = Field(default=None, max_length=100)
+    proxy_info: str | None = None
+    proxy_expired_by: date | None = None
+    purchased_from: str | None = Field(default=None, max_length=255)
+    renting_to: str | None = Field(default=None, max_length=255)
+    renting_by: date | None = None
+    status: LinkedInStatusLiteral = "Pending"
+    need_action: LinkedInNeedActionLiteral = "None"
+    logs: str = ""
+
+
+class LinkedInAccountUpdateRequest(BaseModel):
+    email: str | None = Field(default=None, min_length=1, max_length=255)
+    email_password: str | None = Field(default=None, max_length=255)
+    email_recovery_email: str | None = Field(default=None, max_length=255)
+    email_secured: bool | None = None
+    recovery_email: str | None = Field(default=None, max_length=255)
+    recovery_email_password: str | None = Field(default=None, max_length=255)
+    recovery_email_recovery: str | None = Field(default=None, max_length=500)
+    linkedin_email: str | None = Field(default=None, max_length=255)
+    linkedin_password: str | None = Field(default=None, max_length=255)
+    linkedin_link: str | None = Field(default=None, max_length=1000)
+    second_email: str | None = Field(default=None, max_length=255)
+    linkedin_secured: bool | None = None
+    browser: str | None = Field(default=None, max_length=255)
+    profile_no: int | None = None
+    provider: LinkedInProviderLiteral | None = None
+    order_id: str | None = Field(default=None, max_length=100)
+    proxy_info: str | None = None
+    proxy_expired_by: date | None = None
+    purchased_from: str | None = Field(default=None, max_length=255)
+    renting_to: str | None = Field(default=None, max_length=255)
+    renting_by: date | None = None
+    status: LinkedInStatusLiteral | None = None
+    need_action: LinkedInNeedActionLiteral | None = None
+    logs: str | None = None
+
+
+class LinkedInAccountResponse(BaseModel):
+    id: int
+    email: str
+    email_password: str
+    email_recovery_email: str | None = None
+    email_secured: bool
+    recovery_email: str | None = None
+    recovery_email_password: str | None = None
+    recovery_email_recovery: str | None = None
+    linkedin_email: str | None = None
+    linkedin_password: str | None = None
+    linkedin_link: str | None = None
+    second_email: str | None = None
+    linkedin_secured: bool
+    browser: str | None = None
+    profile_no: int | None = None
+    provider: LinkedInProviderLiteral | None = None
+    order_id: str | None = None
+    proxy_info: str | None = None
+    proxy_expired_by: date | None = None
+    purchased_from: str | None = None
+    renting_to: str | None = None
+    renting_by: date | None = None
+    image: CitizenImageInfo | None = None
+    status: LinkedInStatusLiteral
+    need_action: LinkedInNeedActionLiteral
+    logs: str
+    created_at: datetime
+    updated_at: datetime
