@@ -54,6 +54,7 @@ import {
   createLinkedInAccount,
   deleteLinkedInAccount,
   deleteLinkedInImage,
+  exportLinkedInAccountsCsv,
   getLinkedInAccount,
   importLinkedInAccountsCsv,
   listLinkedInAccounts,
@@ -61,11 +62,6 @@ import {
   uploadLinkedInImage
 } from 'src/services/linkedinApi';
 import { formatDate, formatDateTime } from 'src/utils/dateFormat';
-import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
-import {
-  LINKEDIN_CSV_HEADERS,
-  buildLinkedInExportRows
-} from 'src/utils/linkedinCsvExport';
 import LinkedInDetailDialog from './LinkedInDetailDialog';
 import LinkedInAccountTile from './LinkedInAccountTile';
 import LinkedInViewModeMenu from './LinkedInViewModeMenu';
@@ -373,18 +369,12 @@ function LinkedInManagement() {
   const handleExportCsv = async () => {
     setExporting(true);
     try {
-      const exportRows = await listLinkedInAccounts();
-      if (!exportRows.length) {
+      if (!rows.length) {
         enqueueSnackbar('No LinkedIn accounts to export', { variant: 'info' });
         return;
       }
 
-      const datePart = new Date().toISOString().slice(0, 10);
-      downloadCsv(
-        sanitizeCsvFilename(`linkedin-accounts-${datePart}.csv`),
-        LINKEDIN_CSV_HEADERS,
-        buildLinkedInExportRows(exportRows)
-      );
+      await exportLinkedInAccountsCsv();
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to export CSV', { variant: 'error' });
     } finally {

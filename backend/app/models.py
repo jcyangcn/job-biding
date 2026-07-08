@@ -364,6 +364,7 @@ class CitizenImageInfo(BaseModel):
     filename: str
     original_name: str
     uploaded_at: datetime
+    path: str | None = None
 
 
 class CitizenCreateRequest(BaseModel):

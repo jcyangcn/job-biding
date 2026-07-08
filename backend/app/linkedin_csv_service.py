@@ -2,6 +2,7 @@ import csv
 import io
 import re
 from datetime import date, datetime
+from pathlib import Path
 
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -10,13 +11,19 @@ from app.linkedin_service import (
     create_linkedin_account,
     get_linkedin_account,
     list_linkedin_accounts,
+    set_linkedin_image_from_storage_path,
     update_linkedin_account,
 )
-from app.models import LinkedInAccountCreateRequest, LinkedInAccountUpdateRequest
+from app.models import (
+    CitizenImageInfo,
+    LinkedInAccountCreateRequest,
+    LinkedInAccountUpdateRequest,
+)
 
 LINKEDIN_CSV_HEADERS = [
     "ID",
     "Title",
+    "Image",
     "Country",
     "Email",
     "Email password",
@@ -49,6 +56,7 @@ LINKEDIN_CSV_HEADERS = [
 HEADER_TO_FIELD = {
     "id": "id",
     "title": "title",
+    "image": "image",
     "country": "country",
     "email": "email",
     "email password": "email_password",
@@ -97,6 +105,20 @@ def _format_date(value: date | None) -> str:
 
 def _format_datetime(value: datetime | None) -> str:
     return value.isoformat() if value else ""
+
+
+def _format_image(raw: dict | None) -> str:
+    if not raw:
+        return ""
+    try:
+        image = CitizenImageInfo.model_validate(raw)
+    except ValidationError:
+        return str(raw.get("path") or raw.get("original_name") or raw.get("filename") or "")
+    if image.path:
+        return image.path
+    if image.filename:
+        return f"/storage/uploads/{Path(image.filename).name}"
+    return image.original_name or image.filename or ""
 
 
 def _parse_bool(value: str | None) -> bool | None:
@@ -192,6 +214,7 @@ def export_linkedin_accounts_csv(db: Session) -> str:
             [
                 record.id,
                 record.title or "",
+                _format_image(record.image),
                 record.country or "United States",
                 record.email or "",
                 record.email_password or "",
@@ -384,17 +407,21 @@ def import_linkedin_accounts_csv(db: Session, content: str) -> dict[str, object]
     for index, record in enumerate(records, start=2):
         try:
             mapped = _map_csv_row(record)
+            image_path = str(mapped.pop("image", "") or "").strip() or None
             account_id = _parse_id(str(mapped.get("id") or "")) if "id" in mapped else None
             existing = get_linkedin_account(db, account_id) if account_id else None
 
             if existing:
                 update_payload = _build_update_payload(mapped)
-                update_linkedin_account(db, existing, update_payload)
+                account = update_linkedin_account(db, existing, update_payload)
                 updated += 1
             else:
                 create_payload = _build_create_payload(mapped)
-                create_linkedin_account(db, create_payload)
+                account = create_linkedin_account(db, create_payload)
                 created += 1
+
+            if image_path:
+                set_linkedin_image_from_storage_path(db, account, storage_path=image_path)
         except (ValueError, ValidationError) as exc:
             failed += 1
             message = str(exc)

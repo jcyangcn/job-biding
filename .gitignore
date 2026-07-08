@@ -1,10 +1,8 @@
 # Generated files (keep folder structure via .gitkeep)
-storage/downloads/generated resume/*
-!storage/downloads/generated resume/.gitkeep
-storage/uploads/citizen image/*
-!storage/uploads/citizen image/.gitkeep
-storage/uploads/citizen review files/*
-!storage/uploads/citizen review files/.gitkeep
+storage/downloads/*
+!storage/downloads/.gitkeep
+storage/uploads/*
+!storage/uploads/.gitkeep
 
 # Legacy paths (pre-storage layout)
 generated_resumes/

@@ -8,13 +8,8 @@ REPO_ROOT = BACKEND_ROOT.parent
 INSTRUCTION_DIR = REPO_ROOT / "instruction"
 
 STORAGE_DIR = REPO_ROOT / "storage"
-DOWNLOADS_DIR = STORAGE_DIR / "downloads"
-UPLOADS_DIR = STORAGE_DIR / "uploads"
-GENERATED_RESUME_DIR = DOWNLOADS_DIR / "generated resume"
-CITIZEN_IMAGE_DIR = UPLOADS_DIR / "citizen image"
-CITIZEN_REVIEW_FILES_DIR = UPLOADS_DIR / "citizen review files"
-PROFILE_DEFAULT_RESUME_DIR = UPLOADS_DIR / "profile default resume"
-LINKEDIN_IMAGE_DIR = UPLOADS_DIR / "linkedin image"
+DEFAULT_DOWNLOADS_DIR = STORAGE_DIR / "downloads"
+DEFAULT_UPLOADS_DIR = STORAGE_DIR / "uploads"
 
 
 class Settings(BaseSettings):
@@ -35,11 +30,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_expire_hours: int = 48
     generated_resumes_dir: str = ""
-    citizen_images_dir_config: str = Field(default="", validation_alias="CITIZEN_IMAGES_DIR")
-    citizen_review_files_dir_config: str = Field(
-        default="", validation_alias="CITIZEN_REVIEW_FILES_DIR"
-    )
-    linkedin_images_dir_config: str = Field(default="", validation_alias="LINKEDIN_IMAGES_DIR")
+    uploads_dir_config: str = Field(default="", validation_alias="UPLOADS_DIR")
     cors_origins: str = ""
     uvicorn_reload: bool = False
 
@@ -65,22 +56,11 @@ class Settings(BaseSettings):
 
     @property
     def generated_dir(self) -> Path:
-        return self._resolve_storage_path(self.generated_resumes_dir, GENERATED_RESUME_DIR)
+        return self._resolve_storage_path(self.generated_resumes_dir, DEFAULT_DOWNLOADS_DIR)
 
     @property
-    def citizen_images_dir(self) -> Path:
-        return self._resolve_storage_path(self.citizen_images_dir_config, CITIZEN_IMAGE_DIR)
-
-    @property
-    def citizen_review_files_dir(self) -> Path:
-        return self._resolve_storage_path(
-            self.citizen_review_files_dir_config,
-            CITIZEN_REVIEW_FILES_DIR,
-        )
-
-    @property
-    def linkedin_images_dir(self) -> Path:
-        return self._resolve_storage_path(self.linkedin_images_dir_config, LINKEDIN_IMAGE_DIR)
+    def uploads_dir(self) -> Path:
+        return self._resolve_storage_path(self.uploads_dir_config, DEFAULT_UPLOADS_DIR)
 
     @staticmethod
     def _resolve_storage_path(raw_value: str, default: Path) -> Path:
@@ -106,20 +86,9 @@ class Settings(BaseSettings):
 
 settings = Settings()
 GENERATED_DIR = settings.generated_dir
-CITIZEN_IMAGES_DIR = settings.citizen_images_dir
-CITIZEN_REVIEW_FILES_DIR = settings.citizen_review_files_dir
-LINKEDIN_IMAGES_DIR = settings.linkedin_images_dir
+UPLOADS_DIR = settings.uploads_dir
 
 
 def ensure_storage_dirs() -> None:
-    for path in (
-        STORAGE_DIR,
-        DOWNLOADS_DIR,
-        UPLOADS_DIR,
-        GENERATED_DIR,
-        CITIZEN_IMAGES_DIR,
-        CITIZEN_REVIEW_FILES_DIR,
-        PROFILE_DEFAULT_RESUME_DIR,
-        LINKEDIN_IMAGE_DIR,
-    ):
+    for path in (STORAGE_DIR, GENERATED_DIR, UPLOADS_DIR):
         path.mkdir(parents=True, exist_ok=True)

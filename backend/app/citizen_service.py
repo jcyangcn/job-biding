@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import CITIZEN_IMAGES_DIR, CITIZEN_REVIEW_FILES_DIR
+from app.config import UPLOADS_DIR
 from app.db_models import Citizen
 from app.models import CitizenCreateRequest, CitizenImageInfo, CitizenUpdateRequest
 
@@ -26,14 +26,6 @@ ALLOWED_REVIEW_FILE_EXTENSIONS = {
     ".xlsx",
     ".zip",
 }
-
-
-def _citizen_images_root(citizen_id: int) -> Path:
-    return CITIZEN_IMAGES_DIR / str(citizen_id)
-
-
-def _citizen_review_files_root(citizen_id: int) -> Path:
-    return CITIZEN_REVIEW_FILES_DIR / str(citizen_id)
 
 
 def _parse_files(raw: list | None) -> list[CitizenImageInfo]:
@@ -110,24 +102,9 @@ def update_citizen(db: Session, record: Citizen, data: CitizenUpdateRequest) -> 
     return record
 
 
-def _remove_directory_files(root: Path) -> None:
-    if root.is_dir():
-        for path in root.iterdir():
-            if path.is_file():
-                path.unlink(missing_ok=True)
-        root.rmdir()
-
-
-def _remove_citizen_files(citizen_id: int) -> None:
-    _remove_directory_files(_citizen_images_root(citizen_id))
-    _remove_directory_files(_citizen_review_files_root(citizen_id))
-
-
 def delete_citizen(db: Session, record: Citizen) -> None:
-    citizen_id = record.id
     db.delete(record)
     db.commit()
-    _remove_citizen_files(citizen_id)
 
 
 def _safe_stored_filename(original_name: str, *, default_stem: str, allowed_extensions: set[str]) -> str:
@@ -155,11 +132,11 @@ def _resolve_file_path(root: Path, filename: str) -> Path:
 
 
 def resolve_citizen_image_path(citizen_id: int, filename: str) -> Path:
-    return _resolve_file_path(_citizen_images_root(citizen_id), filename)
+    return _resolve_file_path(UPLOADS_DIR, filename)
 
 
 def resolve_citizen_review_file_path(citizen_id: int, filename: str) -> Path:
-    return _resolve_file_path(_citizen_review_files_root(citizen_id), filename)
+    return _resolve_file_path(UPLOADS_DIR, filename)
 
 
 def _add_citizen_file(
@@ -184,8 +161,8 @@ def _add_citizen_file(
         default_stem=default_stem,
         allowed_extensions=allowed_extensions,
     )
-    root.mkdir(parents=True, exist_ok=True)
-    target = root / stored_name
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    target = UPLOADS_DIR / stored_name
     target.write_bytes(content)
 
     file_info = CitizenImageInfo(
@@ -240,7 +217,7 @@ def add_citizen_image(
         db,
         record,
         field_name="images",
-        root=_citizen_images_root(record.id),
+        root=UPLOADS_DIR,
         original_name=original_name,
         content=content,
         allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
@@ -253,7 +230,7 @@ def remove_citizen_image(db: Session, record: Citizen, filename: str) -> None:
         db,
         record,
         field_name="images",
-        root=_citizen_images_root(record.id),
+        root=UPLOADS_DIR,
         filename=filename,
     )
 
@@ -269,7 +246,7 @@ def add_citizen_review_file(
         db,
         record,
         field_name="review_files",
-        root=_citizen_review_files_root(record.id),
+        root=UPLOADS_DIR,
         original_name=original_name,
         content=content,
         allowed_extensions=ALLOWED_REVIEW_FILE_EXTENSIONS,
@@ -282,6 +259,6 @@ def remove_citizen_review_file(db: Session, record: Citizen, filename: str) -> N
         db,
         record,
         field_name="review_files",
-        root=_citizen_review_files_root(record.id),
+        root=UPLOADS_DIR,
         filename=filename,
     )

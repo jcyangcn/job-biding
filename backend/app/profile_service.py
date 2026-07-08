@@ -1,13 +1,11 @@
 from pathlib import Path
 import re
 import secrets
-import shutil
-
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.config import PROFILE_DEFAULT_RESUME_DIR
+from app.config import UPLOADS_DIR
 from app.country_codes import format_identity_label
 from app.db_models import JobIdentity, JobProfile, User
 from app.models import JobProfileCreateRequest, JobProfileUpdateRequest, ResumeDetail
@@ -111,10 +109,6 @@ def user_can_access_profile(user: User, profile: JobProfile) -> bool:
     return user.id in (profile.bidder_user_ids or []) or user.id == profile.caller_user_id
 
 
-def _profile_default_resume_root(profile_id: int) -> Path:
-    return PROFILE_DEFAULT_RESUME_DIR / str(profile_id)
-
-
 def _safe_stored_resume_filename(original_name: str) -> str:
     stem = Path(original_name).name
     stem = re.sub(r"[^\w.\-]+", "_", stem).strip("._")
@@ -127,13 +121,12 @@ def _safe_stored_resume_filename(original_name: str) -> str:
     return f"{token}_{stem}"
 
 
-def _resolve_profile_default_resume_path(profile_id: int, stored_name: str) -> Path:
+def _resolve_profile_default_resume_path(stored_name: str) -> Path:
     safe_name = Path(stored_name).name
     if safe_name != stored_name:
         raise ValueError("Invalid filename")
-    root = _profile_default_resume_root(profile_id)
-    file_path = (root / safe_name).resolve()
-    if file_path.parent != root.resolve():
+    file_path = (UPLOADS_DIR / safe_name).resolve()
+    if file_path.parent != UPLOADS_DIR.resolve():
         raise ValueError("Invalid filename")
     return file_path
 
@@ -142,7 +135,7 @@ def _remove_profile_default_resume_file(record: JobProfile) -> None:
     if not record.default_resume_stored_name:
         return
     try:
-        path = _resolve_profile_default_resume_path(record.id, record.default_resume_stored_name)
+        path = _resolve_profile_default_resume_path(record.default_resume_stored_name)
     except ValueError:
         return
     if path.is_file():
@@ -163,9 +156,8 @@ def set_profile_default_resume(
 
     _remove_profile_default_resume_file(record)
     stored_name = _safe_stored_resume_filename(original_name)
-    root = _profile_default_resume_root(record.id)
-    root.mkdir(parents=True, exist_ok=True)
-    (root / stored_name).write_bytes(content)
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    (UPLOADS_DIR / stored_name).write_bytes(content)
 
     record.default_resume_stored_name = stored_name
     record.default_resume_original_name = Path(original_name).name
@@ -177,16 +169,10 @@ def set_profile_default_resume(
 def resolve_profile_default_resume_path(record: JobProfile) -> Path:
     if not record.default_resume_stored_name:
         raise ValueError("Default resume not found")
-    path = _resolve_profile_default_resume_path(record.id, record.default_resume_stored_name)
+    path = _resolve_profile_default_resume_path(record.default_resume_stored_name)
     if not path.is_file():
         raise ValueError("Default resume file not found")
     return path
-
-
-def _remove_profile_default_resume_dir(profile_id: int) -> None:
-    root = _profile_default_resume_root(profile_id)
-    if root.is_dir():
-        shutil.rmtree(root, ignore_errors=True)
 
 
 def _validate_bidder_user_ids(db: Session, bidder_user_ids: list[int] | None) -> list[int]:
@@ -311,7 +297,5 @@ def update_profile(
 
 
 def delete_profile(db: Session, record: JobProfile) -> None:
-    profile_id = record.id
     db.delete(record)
     db.commit()
-    _remove_profile_default_resume_dir(profile_id)
