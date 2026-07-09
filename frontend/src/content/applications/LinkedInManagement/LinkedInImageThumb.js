@@ -72,7 +72,7 @@ function LinkedInImageThumb({ accountId, image, size = 72, alt, fill = false, fi
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          objectPosition: 'left center',
+          objectPosition: 'center center',
           display: 'block'
         }
       : {

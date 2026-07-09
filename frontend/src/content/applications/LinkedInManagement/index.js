@@ -64,7 +64,7 @@ import {
   updateLinkedInAccount,
   uploadLinkedInImage
 } from 'src/services/linkedinApi';
-import { formatDate, formatDateTime } from 'src/utils/dateFormat';
+import { formatDate } from 'src/utils/dateFormat';
 import LinkedInDetailDialog from './LinkedInDetailDialog';
 import LinkedInAccountTile from './LinkedInAccountTile';
 import LinkedInViewModeMenu from './LinkedInViewModeMenu';
@@ -78,7 +78,15 @@ import LinkedInImageThumb from './LinkedInImageThumb';
 
 const LINKEDIN_SELECT_FILTERS = [
   { id: 'status', field: 'status' },
-  { id: 'need_action', field: 'need_action' }
+  { id: 'need_action', field: 'need_action' },
+  {
+    id: 'need_action_active',
+    getValue: (row) => (isLinkedInNeedActionActive(row.need_action) ? 'active' : 'none')
+  },
+  {
+    id: 'renting_expired',
+    getValue: (row) => (isRentingExpired(row) ? 'expired' : 'no')
+  }
 ];
 
 const LINKEDIN_SEARCH_FIELDS = [
@@ -124,6 +132,17 @@ function getRentingDateMeta(rentingBy) {
     };
   }
   return { color: 'success.main', label: `Available (${diffDays}d)` };
+}
+
+function isRentingExpired(row) {
+  if (row.status !== 'Renting' || !row.renting_by) {
+    return false;
+  }
+  const target = new Date(row.renting_by);
+  target.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return target < today;
 }
 
 function RentingByDate({ rentingBy }) {
@@ -235,6 +254,12 @@ function LinkedInManagement() {
   const [removeExistingImage, setRemoveExistingImage] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState('table');
+  const [logDialogOpen, setLogDialogOpen] = useState(false);
+  const [logRecord, setLogRecord] = useState(null);
+  const [logValue, setLogValue] = useState('');
+  const [logStatus, setLogStatus] = useState('idle');
+  const logSaveTimer = useRef(null);
+  const logDirtyRef = useRef(false);
 
   const {
     open: detailOpen,
@@ -300,15 +325,23 @@ function LinkedInManagement() {
   const summary = useMemo(() => {
     const counts = {
       total: rows.length,
-      actionRequired: 0,
-      secured: 0
+      created: 0,
+      renting: 0,
+      rentingExpired: 0,
+      actionRequired: 0
     };
     rows.forEach((row) => {
+      if (row.status === 'Created') {
+        counts.created += 1;
+      }
+      if (row.status === 'Renting') {
+        counts.renting += 1;
+      }
+      if (isRentingExpired(row)) {
+        counts.rentingExpired += 1;
+      }
       if (isLinkedInNeedActionActive(row.need_action)) {
         counts.actionRequired += 1;
-      }
-      if (row.email_secured || row.linkedin_secured) {
-        counts.secured += 1;
       }
     });
     return counts;
@@ -325,6 +358,30 @@ function LinkedInManagement() {
     }
     return COUNTRIES;
   }, [form.country]);
+
+  const showAllAccounts = useCallback(() => {
+    clearFilters();
+  }, [clearFilters]);
+
+  const showCreatedAccounts = useCallback(() => {
+    clearFilters();
+    setSelectValue('status', 'Created');
+  }, [clearFilters, setSelectValue]);
+
+  const showRentingAccounts = useCallback(() => {
+    clearFilters();
+    setSelectValue('status', 'Renting');
+  }, [clearFilters, setSelectValue]);
+
+  const showRentingExpiredAccounts = useCallback(() => {
+    clearFilters();
+    setSelectValue('renting_expired', 'expired');
+  }, [clearFilters, setSelectValue]);
+
+  const showNeedActionAccounts = useCallback(() => {
+    clearFilters();
+    setSelectValue('need_action_active', 'active');
+  }, [clearFilters, setSelectValue]);
 
   const loadAccounts = useCallback(async () => {
     setLoading(true);
@@ -536,6 +593,76 @@ function LinkedInManagement() {
     }
   };
 
+  const persistLog = useCallback(
+    async (recordId, value) => {
+      logDirtyRef.current = false;
+      setLogStatus('saving');
+      try {
+        const saved = await updateLinkedInAccount(recordId, { logs: value });
+        setRows((current) =>
+          current.map((r) =>
+            r.id === recordId ? { ...r, logs: saved.logs, updated_at: saved.updated_at } : r
+          )
+        );
+        setLogStatus('saved');
+      } catch (err) {
+        logDirtyRef.current = true;
+        setLogStatus('error');
+        enqueueSnackbar(err.message || 'Failed to save log', { variant: 'error' });
+      }
+    },
+    [enqueueSnackbar]
+  );
+
+  const openLogDialog = (row) => {
+    if (logSaveTimer.current) {
+      clearTimeout(logSaveTimer.current);
+      logSaveTimer.current = null;
+    }
+    setLogRecord(row);
+    setLogValue(row.logs || '');
+    setLogStatus('idle');
+    logDirtyRef.current = false;
+    setLogDialogOpen(true);
+  };
+
+  const handleLogChange = (event) => {
+    const value = event.target.value;
+    const recordId = logRecord?.id;
+    setLogValue(value);
+    logDirtyRef.current = true;
+    setLogStatus('idle');
+    if (logSaveTimer.current) {
+      clearTimeout(logSaveTimer.current);
+    }
+    logSaveTimer.current = setTimeout(() => {
+      if (recordId != null) {
+        persistLog(recordId, value);
+      }
+    }, 700);
+  };
+
+  const closeLogDialog = () => {
+    if (logSaveTimer.current) {
+      clearTimeout(logSaveTimer.current);
+      logSaveTimer.current = null;
+    }
+    if (logDirtyRef.current && logRecord) {
+      persistLog(logRecord.id, logValue);
+    }
+    setLogDialogOpen(false);
+    setLogRecord(null);
+  };
+
+  useEffect(
+    () => () => {
+      if (logSaveTimer.current) {
+        clearTimeout(logSaveTimer.current);
+      }
+    },
+    []
+  );
+
   const existingImage =
     editingRecord?.image && !removeExistingImage ? editingRecord.image : null;
 
@@ -546,9 +673,41 @@ function LinkedInManagement() {
       </Helmet>
       <Container maxWidth="lg" sx={{ pt: 3 }}>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-          <Chip label={`${summary.total} accounts`} color="primary" variant="outlined" />
-          <Chip label={`${summary.actionRequired} need action`} color="warning" variant="outlined" />
-          <Chip label={`${summary.secured} secured`} color="success" variant="outlined" />
+          <Chip
+            label={`${summary.total} accounts`}
+            color="primary"
+            variant={!hasActiveFilters ? 'filled' : 'outlined'}
+            onClick={showAllAccounts}
+            clickable
+          />
+          <Chip
+            label={`${summary.created} created`}
+            color="info"
+            variant={selectValues.status === 'Created' ? 'filled' : 'outlined'}
+            onClick={showCreatedAccounts}
+            clickable
+          />
+          <Chip
+            label={`${summary.renting} renting`}
+            color="success"
+            variant={selectValues.status === 'Renting' ? 'filled' : 'outlined'}
+            onClick={showRentingAccounts}
+            clickable
+          />
+          <Chip
+            label={`${summary.rentingExpired} renting expired`}
+            color="error"
+            variant={selectValues.renting_expired === 'expired' ? 'filled' : 'outlined'}
+            onClick={showRentingExpiredAccounts}
+            clickable
+          />
+          <Chip
+            label={`${summary.actionRequired} need action`}
+            color="warning"
+            variant={selectValues.need_action_active === 'active' ? 'filled' : 'outlined'}
+            onClick={showNeedActionAccounts}
+            clickable
+          />
         </Stack>
 
         <Box sx={{ mb: 2 }}>
@@ -648,6 +807,7 @@ function LinkedInManagement() {
                       sortDirection={sortDirection}
                       onSort={handleSort}
                     />
+                    <TableCell sx={{ minWidth: 200 }}>Log</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 150 }}>Secured</TableCell>
                     <SortableTableCell
                       label="Status"
@@ -663,35 +823,21 @@ function LinkedInManagement() {
                       sortDirection={sortDirection}
                       onSort={handleSort}
                     />
-                    <SortableTableCell
-                      label="Proxy expires"
-                      sortKey="proxy_expired_by"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Updated"
-                      sortKey="updated_at"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={11}>Loading…</TableCell>
+                      <TableCell colSpan={10}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11}>No LinkedIn accounts yet.</TableCell>
+                      <TableCell colSpan={10}>No LinkedIn accounts yet.</TableCell>
                     </TableRow>
                   ) : filteredRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11}>No LinkedIn accounts match your filters.</TableCell>
+                      <TableCell colSpan={10}>No LinkedIn accounts match your filters.</TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
@@ -715,7 +861,7 @@ function LinkedInManagement() {
                           {row.image ? (
                             <Box
                               sx={{
-                                width: 72,
+                                width: 128,
                                 height: 72,
                                 borderRadius: 1,
                                 overflow: 'hidden',
@@ -733,7 +879,7 @@ function LinkedInManagement() {
                           ) : (
                             <Box
                               sx={{
-                                width: 72,
+                                width: 128,
                                 height: 72,
                                 borderRadius: 1,
                                 border: `1px dashed ${theme.palette.divider}`,
@@ -774,6 +920,42 @@ function LinkedInManagement() {
                             {row.email || '—'}
                           </Typography>
                         </TableCell>
+                        <TableCell sx={{ maxWidth: 240 }} onClick={stopPropagation}>
+                          <Box
+                            onClick={() => openLogDialog(row)}
+                            sx={{
+                              cursor: 'pointer',
+                              borderRadius: 1,
+                              px: 1,
+                              py: 0.5,
+                              minHeight: 34,
+                              display: 'flex',
+                              alignItems: 'center',
+                              transition: 'background-color 0.15s ease',
+                              '&:hover': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.06)
+                              }
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
+                              color={row.logs?.trim() ? 'text.primary' : 'text.disabled'}
+                              sx={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                textTransform: 'none',
+                                fontSize: '0.72rem',
+                                lineHeight: 1.35
+                              }}
+                            >
+                              {row.logs?.trim() || 'Add log…'}
+                            </Typography>
+                          </Box>
+                        </TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>
                           <SecuredStatusCell
                             emailSecured={row.email_secured}
@@ -797,10 +979,6 @@ function LinkedInManagement() {
                             'None'
                           )}
                         </TableCell>
-                        <TableCell>
-                          {row.proxy_expired_by ? formatDate(row.proxy_expired_by) : '—'}
-                        </TableCell>
-                        <TableCell>{formatDateTime(row.updated_at || row.created_at)}</TableCell>
                         <TableCell align="right" onClick={stopPropagation}>
                           <Tooltip title="Edit">
                             <IconButton
@@ -968,6 +1146,54 @@ function LinkedInManagement() {
           <Button onClick={handleDelete} color="error" variant="contained" disabled={saving}>
             Delete
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={logDialogOpen} onClose={closeLogDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1}>
+            <Box minWidth={0}>
+              <Typography variant="h4">Log</Typography>
+              <Typography variant="body2" color="text.secondary" noWrap>
+                #{logRecord?.id}
+                {logRecord?.title ? ` · ${logRecord.title}` : ''}
+              </Typography>
+            </Box>
+            <Typography
+              variant="caption"
+              fontWeight={600}
+              sx={{ mt: 0.5, whiteSpace: 'nowrap' }}
+              color={
+                logStatus === 'error'
+                  ? 'error.main'
+                  : logStatus === 'saved'
+                    ? 'success.main'
+                    : 'text.secondary'
+              }
+            >
+              {logStatus === 'saving'
+                ? 'Saving…'
+                : logStatus === 'saved'
+                  ? 'Saved'
+                  : logStatus === 'error'
+                    ? 'Save failed'
+                    : 'Auto-saves'}
+            </Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={12}
+            value={logValue}
+            onChange={handleLogChange}
+            placeholder="Activity logs, verification notes, handoff details…"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeLogDialog}>Close</Button>
         </DialogActions>
       </Dialog>
 
