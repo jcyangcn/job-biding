@@ -218,7 +218,9 @@ function LinkedInScreenshotField({
           }}
           sx={{
             flex: 1,
-            minHeight: 240,
+            minHeight: hasScreenshot ? 360 : 240,
+            height: hasScreenshot ? 360 : undefined,
+            maxHeight: hasScreenshot ? 520 : undefined,
             borderRadius: 2,
             border: '2px dashed',
             borderColor: pasteAwaiting || dragOver ? 'primary.main' : 'divider',
@@ -230,7 +232,7 @@ function LinkedInScreenshotField({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            overflow: 'hidden',
+            overflow: hasScreenshot ? 'auto' : 'hidden',
             cursor: 'pointer',
             transition: 'border-color 0.2s ease, background-color 0.2s ease',
             '&:focus': {
@@ -250,9 +252,10 @@ function LinkedInScreenshotField({
               src={pendingPreviewUrl}
               alt="Screenshot preview"
               sx={{
-                width: '100%',
-                height: '100%',
-                maxHeight: 280,
+                maxWidth: '100%',
+                maxHeight: '100%',
+                width: 'auto',
+                height: 'auto',
                 objectFit: 'contain',
                 p: 1,
                 pointerEvents: 'none'
@@ -263,14 +266,18 @@ function LinkedInScreenshotField({
               sx={{
                 width: '100%',
                 height: '100%',
-                minHeight: 220,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 p: 1
               }}
             >
-              <LinkedInImageThumb accountId={editingRecordId} image={existingImage} size={280} />
+              <LinkedInImageThumb
+                accountId={editingRecordId}
+                image={existingImage}
+                fill
+                fillMode="contain"
+              />
             </Box>
           ) : (
             <Stack spacing={1} alignItems="center" sx={{ px: 2, py: 3, textAlign: 'center' }}>

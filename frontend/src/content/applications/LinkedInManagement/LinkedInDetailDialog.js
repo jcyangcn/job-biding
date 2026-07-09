@@ -8,7 +8,9 @@ import {
   Link,
   Paper,
   Stack,
-  Typography
+  Typography,
+  alpha,
+  useTheme
 } from '@mui/material';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
@@ -106,6 +108,8 @@ function displayValue(value) {
 }
 
 function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabled = false }) {
+  const theme = useTheme();
+
   if (!account) {
     return null;
   }
@@ -302,7 +306,24 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
             <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
               Screenshot
             </Typography>
-            <LinkedInImageThumb accountId={account.id} image={account.image} size={160} />
+            <Box
+              sx={{
+                width: '100%',
+                height: 360,
+                maxHeight: 520,
+                borderRadius: 2,
+                border: `1px solid ${theme.palette.divider}`,
+                overflow: 'auto',
+                bgcolor: alpha(theme.palette.primary.main, 0.04)
+              }}
+            >
+              <LinkedInImageThumb
+                accountId={account.id}
+                image={account.image}
+                fill
+                fillMode="contain"
+              />
+            </Box>
           </Box>
         </>
       ) : null}

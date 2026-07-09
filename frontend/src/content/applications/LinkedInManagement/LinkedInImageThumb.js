@@ -68,9 +68,10 @@ function LinkedInImageThumb({ accountId, image, size = 72, alt, fill = false, fi
 
   const frameSx = fill
     ? {
-        height: '100%',
-        width: 'auto',
+        maxHeight: '100%',
         maxWidth: '100%',
+        width: 'auto',
+        height: 'auto',
         objectFit: fillMode,
         display: 'block'
       }
