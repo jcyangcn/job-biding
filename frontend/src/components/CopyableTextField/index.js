@@ -4,7 +4,7 @@ import { useSnackbar } from 'notistack';
 import { IconButton, InputAdornment, TextField, Tooltip } from '@mui/material';
 import CheckTwoToneIcon from '@mui/icons-material/CheckTwoTone';
 import ContentCopyTwoToneIcon from '@mui/icons-material/ContentCopyTwoTone';
-import { copyToClipboard } from 'src/utils/copyToClipboard';
+import { copyOnUserClick } from 'src/utils/copyToClipboard';
 
 export function CopyFieldAdornment({ label, value, disabled = false }) {
   const { enqueueSnackbar } = useSnackbar();
@@ -12,21 +12,21 @@ export function CopyFieldAdornment({ label, value, disabled = false }) {
   const text = value == null ? '' : String(value).trim();
   const canCopy = Boolean(text) && !disabled;
 
-  const handleCopy = async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const handleCopy = (event) => {
     if (!canCopy) {
       return;
     }
 
-    try {
-      await copyToClipboard(text);
-      setCopied(true);
-      enqueueSnackbar(`Copied ${label}`, { variant: 'success' });
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      enqueueSnackbar(`Failed to copy ${label}`, { variant: 'error' });
-    }
+    copyOnUserClick(event, text, {
+      onSuccess: () => {
+        setCopied(true);
+        enqueueSnackbar(`Copied ${label}`, { variant: 'success' });
+        window.setTimeout(() => setCopied(false), 2000);
+      },
+      onError: () => {
+        enqueueSnackbar(`Failed to copy ${label}`, { variant: 'error' });
+      }
+    });
   };
 
   return (
@@ -34,6 +34,7 @@ export function CopyFieldAdornment({ label, value, disabled = false }) {
       <span>
         <IconButton
           size="small"
+          type="button"
           edge="end"
           aria-label={`Copy ${label}`}
           onClick={handleCopy}
