@@ -4,7 +4,7 @@ import { useSnackbar } from 'notistack';
 import { Box, IconButton, Link, Tooltip, Typography } from '@mui/material';
 import CheckTwoToneIcon from '@mui/icons-material/CheckTwoTone';
 import ContentCopyTwoToneIcon from '@mui/icons-material/ContentCopyTwoTone';
-import { copyToClipboard } from 'src/utils/copyToClipboard';
+import { copyOnUserClick } from 'src/utils/copyToClipboard';
 
 function CopyableLink({
   url,
@@ -17,18 +17,19 @@ function CopyableLink({
   const [copied, setCopied] = useState(false);
   const text = url?.trim();
 
-  const handleCopy = async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const handleCopy = (event) => {
     if (!text) return;
-    try {
-      await copyToClipboard(text);
-      setCopied(true);
-      enqueueSnackbar(`${label} copied`, { variant: 'success' });
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      enqueueSnackbar(`Failed to copy ${label}`, { variant: 'error' });
-    }
+
+    copyOnUserClick(event, text, {
+      onSuccess: () => {
+        setCopied(true);
+        enqueueSnackbar(`${label} copied`, { variant: 'success' });
+        window.setTimeout(() => setCopied(false), 2000);
+      },
+      onError: () => {
+        enqueueSnackbar(`Failed to copy ${label}`, { variant: 'error' });
+      }
+    });
   };
 
   if (!text) {
@@ -66,6 +67,7 @@ function CopyableLink({
       <Tooltip title={copied ? 'Copied' : 'Copy'}>
         <IconButton
           size="small"
+          type="button"
           onClick={handleCopy}
           aria-label={`Copy ${label}`}
         >

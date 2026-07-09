@@ -25,7 +25,7 @@ import Label from 'src/components/Label';
 import { CountryFlag } from 'src/components/CountryLabel';
 import { formatDetailDateOnly } from 'src/components/DetailDialog';
 import { downloadProfileDefaultResume } from 'src/services/profileApi';
-import { copyToClipboard } from 'src/utils/copyToClipboard';
+import { copyOnUserClick } from 'src/utils/copyToClipboard';
 
 function getInitials(name) {
   if (!name) return '?';
@@ -69,18 +69,19 @@ function CopyableReadOnlyField({ label, value, multiline = false, showCountryFla
   const [copied, setCopied] = useState(false);
   const text = value ?? '';
 
-  const handleCopy = async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const handleCopy = (event) => {
     if (!text) return;
-    try {
-      await copyToClipboard(text);
-      setCopied(true);
-      enqueueSnackbar(`Copied ${label}`, { variant: 'success' });
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      enqueueSnackbar(`Failed to copy ${label}`, { variant: 'error' });
-    }
+
+    copyOnUserClick(event, text, {
+      onSuccess: () => {
+        setCopied(true);
+        enqueueSnackbar(`Copied ${label}`, { variant: 'success' });
+        window.setTimeout(() => setCopied(false), 2000);
+      },
+      onError: () => {
+        enqueueSnackbar(`Failed to copy ${label}`, { variant: 'error' });
+      }
+    });
   };
 
   return (
@@ -103,6 +104,7 @@ function CopyableReadOnlyField({ label, value, multiline = false, showCountryFla
               <IconButton
                 size="small"
                 edge="end"
+                type="button"
                 aria-label={`Copy ${label}`}
                 onClick={handleCopy}
               >
