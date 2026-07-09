@@ -14,20 +14,36 @@ export const LINKEDIN_STATUSES = [
 
 export const LINKEDIN_NEED_ACTIONS = [
   { value: 'None', label: 'None' },
-  { value: 'Need Reverify', label: 'Need Reverify' }
+  { value: 'Need Reverify', label: 'Need Reverify' },
+  { value: 'Email out of control', label: 'Email out of control' }
 ];
 
 export const DEFAULT_LINKEDIN_STATUS = 'Pending';
 export const DEFAULT_LINKEDIN_NEED_ACTION = 'None';
+
+export function isLinkedInNeedActionActive(needAction) {
+  return Boolean(needAction && needAction !== 'None');
+}
+
+export function getLinkedInNeedActionColor(needAction) {
+  switch (needAction) {
+    case 'Need Reverify':
+      return 'error';
+    case 'Email out of control':
+      return 'warning';
+    default:
+      return 'default';
+  }
+}
 
 export function getLinkedInStatusColor(status) {
   switch (status) {
     case 'Created':
       return 'info';
     case 'Renting':
-      return 'warning';
-    case 'Sold':
       return 'success';
+    case 'Sold':
+      return 'primary';
     case 'Suspended':
       return 'error';
     case 'Pending':

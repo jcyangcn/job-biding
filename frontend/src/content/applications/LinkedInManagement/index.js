@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
 import {
@@ -14,7 +15,6 @@ import {
   DialogTitle,
   Grid,
   IconButton,
-  Link,
   Stack,
   TextField,
   Table,
@@ -31,9 +31,11 @@ import {
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
+import LockOpenTwoToneIcon from '@mui/icons-material/LockOpenTwoTone';
+import LockTwoToneIcon from '@mui/icons-material/LockTwoTone';
 import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
 import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
-import OpenInNewTwoToneIcon from '@mui/icons-material/OpenInNewTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
@@ -47,7 +49,7 @@ import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
 import useTableSort from 'src/hooks/useTableSort';
-import { LINKEDIN_NEED_ACTIONS, LINKEDIN_STATUSES } from 'src/data/linkedinOptions';
+import { LINKEDIN_NEED_ACTIONS, LINKEDIN_STATUSES, getLinkedInNeedActionColor, isLinkedInNeedActionActive } from 'src/data/linkedinOptions';
 import COUNTRIES from 'src/data/countries';
 import { getCountryCode } from 'src/data/countryCodes';
 import {
@@ -71,6 +73,7 @@ import LinkedInFormFields, {
   linkedInRecordToForm
 } from './LinkedInFormFields';
 import LinkedInStatusLabel from './LinkedInStatusLabel';
+import LinkedInImageThumb from './LinkedInImageThumb';
 
 const LINKEDIN_SELECT_FILTERS = [
   { id: 'status', field: 'status' },
@@ -99,12 +102,73 @@ const TILE_ROWS_PER_PAGE = 12;
 const TILE_ROWS_PER_PAGE_OPTIONS = [12, 24, 36];
 const TABLE_ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
+function SecuredLockBadge({ secured, label }) {
+  const isSecured = Boolean(secured);
+
+  return (
+    <Tooltip title={`${label} ${isSecured ? 'secured' : 'not secured'}`}>
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.5,
+          flexShrink: 0,
+          whiteSpace: 'nowrap',
+          color: isSecured ? 'success.main' : 'error.main'
+        }}
+      >
+        {isSecured ? (
+          <LockTwoToneIcon sx={{ fontSize: 16 }} />
+        ) : (
+          <LockOpenTwoToneIcon sx={{ fontSize: 16 }} />
+        )}
+        <Typography
+          component="span"
+          variant="caption"
+          fontWeight={600}
+          sx={{ fontSize: '0.72rem', lineHeight: 1 }}
+        >
+          {label}
+        </Typography>
+      </Box>
+    </Tooltip>
+  );
+}
+
+SecuredLockBadge.propTypes = {
+  secured: PropTypes.bool,
+  label: PropTypes.string.isRequired
+};
+
+function SecuredStatusCell({ emailSecured, linkedinSecured }) {
+  return (
+    <Box
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 1.25,
+        whiteSpace: 'nowrap',
+        flexWrap: 'nowrap'
+      }}
+    >
+      <SecuredLockBadge secured={emailSecured} label="Email" />
+      <SecuredLockBadge secured={linkedinSecured} label="LinkedIn" />
+    </Box>
+  );
+}
+
+SecuredStatusCell.propTypes = {
+  emailSecured: PropTypes.bool,
+  linkedinSecured: PropTypes.bool
+};
+
 function LinkedInManagement() {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const imageInputRef = useRef(null);
   const csvInputRef = useRef(null);
-  useSetPageHeader('LinkedIn Management', 'Manage LinkedIn accounts, proxies, and sales records');
+  useSetPageHeader('LinkedIn Management', 'Manage LinkedIn accounts, emails, proxies, and sales records');
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -189,7 +253,7 @@ function LinkedInManagement() {
       secured: 0
     };
     rows.forEach((row) => {
-      if (row.need_action === 'Need Reverify') {
+      if (isLinkedInNeedActionActive(row.need_action)) {
         counts.actionRequired += 1;
       }
       if (row.email_secured || row.linkedin_secured) {
@@ -511,6 +575,7 @@ function LinkedInManagement() {
                       sortDirection={sortDirection}
                       onSort={handleSort}
                     />
+                    <TableCell>Screenshot</TableCell>
                     <SortableTableCell
                       label="Country"
                       sortKey="country"
@@ -532,27 +597,7 @@ function LinkedInManagement() {
                       sortDirection={sortDirection}
                       onSort={handleSort}
                     />
-                    <SortableTableCell
-                      label="LinkedIn"
-                      sortKey="linkedin_email"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Browser / profile"
-                      sortKey="browser"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Provider"
-                      sortKey="provider"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
+                    <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 150 }}>Secured</TableCell>
                     <SortableTableCell
                       label="Status"
                       sortKey="status"
@@ -587,15 +632,15 @@ function LinkedInManagement() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={12}>Loading…</TableCell>
+                      <TableCell colSpan={11}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={12}>No LinkedIn accounts yet.</TableCell>
+                      <TableCell colSpan={11}>No LinkedIn accounts yet.</TableCell>
                     </TableRow>
                   ) : filteredRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={12}>No LinkedIn accounts match your filters.</TableCell>
+                      <TableCell colSpan={11}>No LinkedIn accounts match your filters.</TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
@@ -604,13 +649,53 @@ function LinkedInManagement() {
                         hover
                         sx={{
                           cursor: 'pointer',
-                          ...(row.need_action === 'Need Reverify'
-                            ? { bgcolor: alpha(theme.palette.warning.main, 0.08) }
-                            : undefined)
+                          ...(() => {
+                            const needActionColor = getLinkedInNeedActionColor(row.need_action);
+                            if (needActionColor === 'error' || needActionColor === 'warning') {
+                              return { bgcolor: alpha(theme.palette[needActionColor].main, 0.08) };
+                            }
+                            return undefined;
+                          })()
                         }}
                         onClick={() => openDetail(row)}
                       >
                         <TableCell>{row.id}</TableCell>
+                        <TableCell sx={{ py: 0.5 }}>
+                          {row.image ? (
+                            <Box
+                              sx={{
+                                width: 72,
+                                height: 72,
+                                borderRadius: 1,
+                                overflow: 'hidden',
+                                border: `1px solid ${theme.palette.divider}`
+                              }}
+                            >
+                              <LinkedInImageThumb
+                                accountId={row.id}
+                                image={row.image}
+                                fill
+                                fillMode="cover"
+                                alt={row.title}
+                              />
+                            </Box>
+                          ) : (
+                            <Box
+                              sx={{
+                                width: 72,
+                                height: 72,
+                                borderRadius: 1,
+                                border: `1px dashed ${theme.palette.divider}`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: 'text.disabled'
+                              }}
+                            >
+                              <ImageOutlinedIcon sx={{ fontSize: 28 }} />
+                            </Box>
+                          )}
+                        </TableCell>
                         <TableCell>
                           {row.country ? (
                             <Stack
@@ -637,40 +722,23 @@ function LinkedInManagement() {
                           <Typography variant="body2" noWrap title={row.email || '—'}>
                             {row.email || '—'}
                           </Typography>
-                          {row.renting_to ? (
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              Renting to {row.renting_to}
-                            </Typography>
-                          ) : null}
                         </TableCell>
-                        <TableCell onClick={stopPropagation}>
-                          <Typography variant="body2">{row.linkedin_email || '—'}</Typography>
-                          {row.linkedin_link ? (
-                            <Link
-                              href={row.linkedin_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              underline="hover"
-                              sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, fontSize: 12 }}
-                            >
-                              Profile
-                              <OpenInNewTwoToneIcon sx={{ fontSize: 14 }} />
-                            </Link>
-                          ) : null}
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                          <SecuredStatusCell
+                            emailSecured={row.email_secured}
+                            linkedinSecured={row.linkedin_secured}
+                          />
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">{row.browser || '—'}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {row.profile_no != null ? `#${row.profile_no}` : 'No profile no.'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{row.provider || '—'}</TableCell>
                         <TableCell>
                           <LinkedInStatusLabel status={row.status} />
                         </TableCell>
                         <TableCell>
-                          {row.need_action === 'Need Reverify' ? (
-                            <Chip size="small" label={row.need_action} color="warning" />
+                          {isLinkedInNeedActionActive(row.need_action) ? (
+                            <Chip
+                              size="small"
+                              label={row.need_action}
+                              color={getLinkedInNeedActionColor(row.need_action)}
+                            />
                           ) : (
                             'None'
                           )}

@@ -407,7 +407,7 @@ class CitizenResponse(BaseModel):
 
 LinkedInProviderLiteral = Literal["proxyo.io", "ixbrowser", "iproyal"]
 LinkedInStatusLiteral = Literal["Pending", "Created", "Renting", "Sold", "Suspended"]
-LinkedInNeedActionLiteral = Literal["None", "Need Reverify"]
+LinkedInNeedActionLiteral = Literal["None", "Need Reverify", "Email out of control"]
 
 
 class LinkedInAccountCreateRequest(BaseModel):

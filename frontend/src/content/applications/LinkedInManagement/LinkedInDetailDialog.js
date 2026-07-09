@@ -25,6 +25,7 @@ import { DetailDialog, DetailField, DetailTextSection } from 'src/components/Det
 import { CopyFieldAdornment } from 'src/components/CopyableTextField';
 import LinkedInImageThumb from './LinkedInImageThumb';
 import LinkedInStatusLabel from './LinkedInStatusLabel';
+import LinkedInNeedActionLabel from './LinkedInNeedActionLabel';
 import { formatDate, formatDateTime } from 'src/utils/dateFormat';
 
 function buildSectionCopyText(title, fields) {
@@ -121,9 +122,7 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
     <DetailDialog open={open} title={title} caption={caption || undefined} onClose={onClose} maxWidth="md">
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
         <LinkedInStatusLabel status={account.status} />
-        {account.need_action && account.need_action !== 'None' ? (
-          <Chip size="small" label={account.need_action} color="warning" />
-        ) : null}
+        <LinkedInNeedActionLabel needAction={account.need_action} />
         {account.email_secured ? (
           <Chip size="small" label="Email secured" color="success" variant="outlined" />
         ) : null}

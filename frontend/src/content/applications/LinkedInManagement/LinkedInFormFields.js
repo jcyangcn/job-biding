@@ -26,6 +26,9 @@ import CloudUploadTwoToneIcon from '@mui/icons-material/CloudUploadTwoTone';
 import ContentPasteTwoToneIcon from '@mui/icons-material/ContentPasteTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
+import VpnKeyTwoToneIcon from '@mui/icons-material/VpnKeyTwoTone';
+import LanguageTwoToneIcon from '@mui/icons-material/LanguageTwoTone';
+import SellTwoToneIcon from '@mui/icons-material/SellTwoTone';
 import CopyableTextField, { CopyFieldAdornment } from 'src/components/CopyableTextField';
 import DateField from 'src/components/DateField';
 import {
@@ -33,8 +36,12 @@ import {
   DEFAULT_LINKEDIN_STATUS,
   LINKEDIN_NEED_ACTIONS,
   LINKEDIN_PROVIDERS,
-  LINKEDIN_STATUSES
+  LINKEDIN_STATUSES,
+  getLinkedInNeedActionColor,
+  getLinkedInStatusColor
 } from 'src/data/linkedinOptions';
+import LinkedInNeedActionLabel, { getLinkedInNeedActionIcon } from './LinkedInNeedActionLabel';
+import { getLinkedInStatusIcon } from './LinkedInStatusLabel';
 import { DEFAULT_COUNTRY } from 'src/data/countries';
 import { formatDateTime } from 'src/utils/dateFormat';
 import {
@@ -380,6 +387,7 @@ function LinkedInFormFields({
   onRemoveExistingImage,
   imageInputRef
 }) {
+  const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const screenshotPasteRef = useRef(null);
   const pasteRequestRef = useRef(0);
@@ -495,9 +503,7 @@ function LinkedInFormFields({
         sx={{ mb: 1 }}
       >
         <Chip size="small" label={`Status: ${form.status || DEFAULT_LINKEDIN_STATUS}`} color="primary" variant="outlined" />
-        {form.need_action && form.need_action !== 'None' ? (
-          <Chip size="small" label={form.need_action} color="warning" variant="filled" />
-        ) : null}
+        <LinkedInNeedActionLabel needAction={form.need_action} />
         {form.provider ? (
           <Chip size="small" label={form.provider} variant="outlined" />
         ) : null}
@@ -513,15 +519,13 @@ function LinkedInFormFields({
         onChange={(_, value) => setTab(value)}
         variant="scrollable"
         scrollButtons="auto"
-        sx={{
-          borderBottom: 1,
-          borderColor: 'divider',
-          '& .MuiTab-root': { minHeight: 48, textTransform: 'none', fontWeight: 600 }
-        }}
+        textColor="primary"
+        indicatorColor="primary"
+        sx={{ borderBottom: 1, borderColor: 'divider' }}
       >
-        <Tab label="Credentials" />
-        <Tab label="Profile & proxy" />
-        <Tab label="Sales & tracking" />
+        <Tab icon={<VpnKeyTwoToneIcon />} iconPosition="start" label="Credentials" />
+        <Tab icon={<LanguageTwoToneIcon />} iconPosition="start" label="Profile & proxy" />
+        <Tab icon={<SellTwoToneIcon />} iconPosition="start" label="Sales & tracking" />
       </Tabs>
 
       <TabPanel value={tab} index={0}>
@@ -811,12 +815,38 @@ function LinkedInFormFields({
                     label="Status"
                     value={form.status || DEFAULT_LINKEDIN_STATUS}
                     onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
+                    renderValue={(selected) => {
+                      const colorKey = getLinkedInStatusColor(selected);
+                      const SelectedIcon = getLinkedInStatusIcon(selected);
+                      const mainColor = theme.palette[colorKey]?.main || theme.palette.text.secondary;
+                      return (
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <SelectedIcon sx={{ fontSize: 18, color: mainColor }} />
+                          <span style={{ color: mainColor, fontWeight: 600 }}>{selected}</span>
+                        </Stack>
+                      );
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: (theme) =>
+                          alpha(theme.palette[getLinkedInStatusColor(form.status || DEFAULT_LINKEDIN_STATUS)]?.main || theme.palette.divider, 0.5)
+                      }
+                    }}
                   >
-                    {LINKEDIN_STATUSES.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
+                    {LINKEDIN_STATUSES.map((option) => {
+                      const colorKey = getLinkedInStatusColor(option.value);
+                      const OptionIcon = getLinkedInStatusIcon(option.value);
+                      return (
+                        <MenuItem key={option.value} value={option.value}>
+                          <Stack direction="row" alignItems="center" spacing={1}>
+                            <OptionIcon
+                              sx={{ fontSize: 18, color: (theme) => theme.palette[colorKey]?.main || 'text.secondary' }}
+                            />
+                            <span>{option.label}</span>
+                          </Stack>
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
                 </FormControl>
               </FieldCell>
@@ -829,12 +859,58 @@ function LinkedInFormFields({
                     onChange={(event) =>
                       setForm((current) => ({ ...current, need_action: event.target.value }))
                     }
+                    renderValue={(selected) => {
+                      const colorKey = getLinkedInNeedActionColor(selected);
+                      const SelectedIcon = getLinkedInNeedActionIcon(selected);
+                      const mainColor =
+                        colorKey === 'default'
+                          ? theme.palette.text.secondary
+                          : theme.palette[colorKey]?.main || theme.palette.text.secondary;
+                      return (
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          {SelectedIcon ? (
+                            <SelectedIcon sx={{ fontSize: 18, color: mainColor }} />
+                          ) : (
+                            <Box sx={{ width: 18 }} />
+                          )}
+                          <span style={{ color: mainColor, fontWeight: 600 }}>{selected}</span>
+                        </Stack>
+                      );
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: (theme) => {
+                          const key = getLinkedInNeedActionColor(form.need_action || DEFAULT_LINKEDIN_NEED_ACTION);
+                          if (key === 'default') return theme.palette.divider;
+                          return alpha(theme.palette[key]?.main || theme.palette.divider, 0.5);
+                        }
+                      }
+                    }}
                   >
-                    {LINKEDIN_NEED_ACTIONS.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
+                    {LINKEDIN_NEED_ACTIONS.map((option) => {
+                      const colorKey = getLinkedInNeedActionColor(option.value);
+                      const OptionIcon = getLinkedInNeedActionIcon(option.value);
+                      return (
+                        <MenuItem key={option.value} value={option.value}>
+                          <Stack direction="row" alignItems="center" spacing={1}>
+                            {OptionIcon ? (
+                              <OptionIcon
+                                sx={{
+                                  fontSize: 18,
+                                  color: (theme) =>
+                                    colorKey === 'default'
+                                      ? 'text.secondary'
+                                      : theme.palette[colorKey]?.main || 'text.secondary'
+                                }}
+                              />
+                            ) : (
+                              <Box sx={{ width: 18 }} />
+                            )}
+                            <span>{option.label}</span>
+                          </Stack>
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
                 </FormControl>
               </FieldCell>
@@ -879,7 +955,7 @@ LinkedInFormFields.propTypes = {
 
 export function createEmptyLinkedInForm() {
   return {
-    title: '',
+    title: 'Unknown',
     country: DEFAULT_COUNTRY,
     email: '',
     email_password: '',

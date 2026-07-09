@@ -89,7 +89,7 @@ HEADER_TO_FIELD = {
 }
 
 VALID_STATUSES = {"Pending", "Created", "Renting", "Sold", "Suspended"}
-VALID_NEED_ACTIONS = {"None", "Need Reverify"}
+VALID_NEED_ACTIONS = {"None", "Need Reverify", "Email out of control"}
 VALID_PROVIDERS = {"proxyo.io", "ixbrowser", "iproyal"}
 
 

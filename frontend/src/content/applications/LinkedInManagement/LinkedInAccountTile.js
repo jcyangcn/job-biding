@@ -13,7 +13,7 @@ import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import LockOpenTwoToneIcon from '@mui/icons-material/LockOpenTwoTone';
 import LockTwoToneIcon from '@mui/icons-material/LockTwoTone';
 import { formatDate } from 'src/utils/dateFormat';
-import { getLinkedInStatusColor } from 'src/data/linkedinOptions';
+import { getLinkedInNeedActionColor, getLinkedInStatusColor } from 'src/data/linkedinOptions';
 import LinkedInImageThumb from './LinkedInImageThumb';
 
 const CARD_HEIGHT = 328;
@@ -188,7 +188,11 @@ RentingPill.propTypes = {
 
 function LinkedInAccountTile({ account, onView }) {
   const theme = useTheme();
-  const needsAction = account.need_action === 'Need Reverify';
+  const needActionColorKey = getLinkedInNeedActionColor(account.need_action);
+  const needActionColor =
+    needActionColorKey === 'error' || needActionColorKey === 'warning'
+      ? theme.palette[needActionColorKey].main
+      : null;
   const statusColorKey = getLinkedInStatusColor(account.status);
   const statusColor = theme.palette[statusColorKey]?.main || theme.palette.secondary.main;
   const logsPreview = account.logs?.trim();
@@ -206,7 +210,9 @@ function LinkedInAccountTile({ account, onView }) {
         borderRadius: 2.5,
         bgcolor: 'background.paper',
         position: 'relative',
-        borderColor: needsAction ? alpha(theme.palette.warning.main, 0.45) : alpha(theme.palette.divider, 0.9),
+        borderColor: needActionColor
+          ? alpha(needActionColor, 0.45)
+          : alpha(theme.palette.divider, 0.9),
         boxShadow: `0 1px 2px ${alpha(theme.palette.common.black, 0.04)}`,
         transition: 'transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease',
         '&::before': {
