@@ -2,7 +2,6 @@ import PropTypes from 'prop-types';
 import {
   Box,
   Card,
-  Chip,
   Stack,
   Tooltip,
   Typography,
@@ -13,8 +12,6 @@ import CalendarTodayTwoToneIcon from '@mui/icons-material/CalendarTodayTwoTone';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import LockOpenTwoToneIcon from '@mui/icons-material/LockOpenTwoTone';
 import LockTwoToneIcon from '@mui/icons-material/LockTwoTone';
-import ReportProblemTwoToneIcon from '@mui/icons-material/ReportProblemTwoTone';
-import StorageTwoToneIcon from '@mui/icons-material/StorageTwoTone';
 import { formatDate } from 'src/utils/dateFormat';
 import { getLinkedInStatusColor } from 'src/data/linkedinOptions';
 import LinkedInImageThumb from './LinkedInImageThumb';
@@ -64,23 +61,6 @@ function getRentingMeta(rentingBy) {
   }
 
   return { label: formatted, color: 'text.secondary', tone: 'normal' };
-}
-
-function getProxyMeta(proxyExpiredBy) {
-  if (!proxyExpiredBy) return null;
-
-  const diffDays = diffDaysFromToday(proxyExpiredBy);
-  if (diffDays == null) return null;
-
-  if (diffDays < 0) {
-    return { label: 'Proxy expired', color: 'error' };
-  }
-
-  if (diffDays <= 7) {
-    return { label: `Proxy ${diffDays === 0 ? 'today' : `in ${diffDays}d`}`, color: 'warning' };
-  }
-
-  return null;
 }
 
 function StatusBadge({ status }) {
@@ -211,7 +191,6 @@ function LinkedInAccountTile({ account, onView }) {
   const needsAction = account.need_action === 'Need Reverify';
   const statusColorKey = getLinkedInStatusColor(account.status);
   const statusColor = theme.palette[statusColorKey]?.main || theme.palette.secondary.main;
-  const proxyMeta = getProxyMeta(account.proxy_expired_by);
   const logsPreview = account.logs?.trim();
 
   return (
@@ -257,7 +236,7 @@ function LinkedInAccountTile({ account, onView }) {
         }}
       >
         {account.image ? (
-          <LinkedInImageThumb accountId={account.id} image={account.image} fill fillMode="cover" alt={account.title} />
+          <LinkedInImageThumb accountId={account.id} image={account.image} fill fillMode="contain" alt={account.title} />
         ) : (
           <Box
             sx={{
@@ -281,76 +260,6 @@ function LinkedInAccountTile({ account, onView }) {
             pointerEvents: 'none'
           }}
         />
-
-        <Stack
-          direction="row"
-          spacing={0.5}
-          sx={{ position: 'absolute', top: 8, left: 8, right: 8, zIndex: 1 }}
-          useFlexGap
-        >
-          <Chip
-            size="small"
-            label={`#${account.id}`}
-            sx={{
-              height: 22,
-              fontSize: '0.68rem',
-              fontWeight: 700,
-              bgcolor: alpha(theme.palette.background.paper, 0.88),
-              backdropFilter: 'blur(6px)',
-              border: `1px solid ${alpha(theme.palette.common.white, 0.5)}`
-            }}
-          />
-          {account.profile_no != null ? (
-            <Chip
-              size="small"
-              label={`P${account.profile_no}`}
-              sx={{
-                height: 22,
-                fontSize: '0.68rem',
-                fontWeight: 700,
-                bgcolor: alpha(theme.palette.background.paper, 0.88),
-                backdropFilter: 'blur(6px)'
-              }}
-            />
-          ) : null}
-          <Box sx={{ flex: 1 }} />
-          {needsAction ? (
-            <Chip
-              size="small"
-              icon={<ReportProblemTwoToneIcon sx={{ fontSize: '14px !important' }} />}
-              label="Reverify"
-              color="warning"
-              sx={{ height: 22, fontSize: '0.68rem', fontWeight: 700 }}
-            />
-          ) : null}
-          {proxyMeta ? (
-            <Chip
-              size="small"
-              label={proxyMeta.label}
-              color={proxyMeta.color}
-              sx={{ height: 22, fontSize: '0.68rem', fontWeight: 700 }}
-            />
-          ) : null}
-        </Stack>
-
-        {account.provider ? (
-          <Chip
-            size="small"
-            icon={<StorageTwoToneIcon sx={{ fontSize: '14px !important' }} />}
-            label={account.provider}
-            sx={{
-              position: 'absolute',
-              left: 8,
-              bottom: 8,
-              zIndex: 1,
-              height: 22,
-              fontSize: '0.68rem',
-              fontWeight: 600,
-              bgcolor: alpha(theme.palette.background.paper, 0.9),
-              backdropFilter: 'blur(6px)'
-            }}
-          />
-        ) : null}
       </Box>
 
       <Box
@@ -377,11 +286,6 @@ function LinkedInAccountTile({ account, onView }) {
           >
             {account.title || '—'}
           </Typography>
-          {account.browser ? (
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.15 }}>
-              {account.browser}
-            </Typography>
-          ) : null}
         </Box>
 
         <Box

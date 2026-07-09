@@ -54,7 +54,7 @@ function LinkedInImageThumb({ accountId, image, size = 72, alt, fill = false, fi
     };
   }, [accountId, image?.filename, previewable]);
 
-  const frameSx = fill
+  const wrapperSx = fill
     ? {
         width: '100%',
         height: '100%',
@@ -63,6 +63,16 @@ function LinkedInImageThumb({ accountId, image, size = 72, alt, fill = false, fi
         alignItems: 'center',
         justifyContent: 'center',
         bgcolor: alpha(theme.palette.primary.main, 0.04)
+      }
+    : null;
+
+  const frameSx = fill
+    ? {
+        height: '100%',
+        width: 'auto',
+        maxWidth: '100%',
+        objectFit: fillMode,
+        display: 'block'
       }
     : {
         width: size,
@@ -78,7 +88,7 @@ function LinkedInImageThumb({ accountId, image, size = 72, alt, fill = false, fi
 
   if (loading) {
     return (
-      <Box sx={frameSx}>
+      <Box sx={fill ? wrapperSx : frameSx}>
         <CircularProgress size={22} />
       </Box>
     );
@@ -86,10 +96,18 @@ function LinkedInImageThumb({ accountId, image, size = 72, alt, fill = false, fi
 
   if (failed || !src) {
     return (
-      <Box sx={frameSx}>
+      <Box sx={fill ? wrapperSx : frameSx}>
         <Box component="span" sx={{ fontSize: 11, color: 'text.secondary', px: 1, textAlign: 'center' }}>
           {displayName}
         </Box>
+      </Box>
+    );
+  }
+
+  if (fill) {
+    return (
+      <Box sx={wrapperSx}>
+        <Box component="img" src={src} alt={displayName} sx={frameSx} />
       </Box>
     );
   }
@@ -99,7 +117,7 @@ function LinkedInImageThumb({ accountId, image, size = 72, alt, fill = false, fi
       component="img"
       src={src}
       alt={displayName}
-      sx={{ ...frameSx, objectFit: fill ? fillMode : 'cover' }}
+      sx={{ ...frameSx, objectFit: 'cover' }}
     />
   );
 }
