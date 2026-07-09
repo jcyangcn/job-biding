@@ -133,7 +133,7 @@ export function DetailField({ label, value, icon: Icon, xs = 12, sm = 6, childre
         <Stack direction="row" spacing={1.5} alignItems="flex-start">
           {Icon ? <Icon color="primary" /> : null}
           <Box minWidth={0} flex={1}>
-            <Typography variant="overline" color="text.secondary">
+            <Typography variant="overline" color="text.secondary" noWrap>
               {label}
             </Typography>
             {children || (

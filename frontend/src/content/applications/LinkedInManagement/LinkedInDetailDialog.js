@@ -6,6 +6,7 @@ import {
   Divider,
   Grid,
   Link,
+  Paper,
   Stack,
   Typography
 } from '@mui/material';
@@ -19,26 +20,84 @@ import StorageTwoToneIcon from '@mui/icons-material/StorageTwoTone';
 import VpnKeyTwoToneIcon from '@mui/icons-material/VpnKeyTwoTone';
 import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
 import { DetailDialog, DetailField, DetailTextSection } from 'src/components/DetailDialog';
+import { CopyFieldAdornment } from 'src/components/CopyableTextField';
 import LinkedInImageThumb from './LinkedInImageThumb';
 import LinkedInStatusLabel from './LinkedInStatusLabel';
 import { formatDate, formatDateTime } from 'src/utils/dateFormat';
 
-function DetailSection({ title, children }) {
-  return (
-    <Box sx={{ mb: 2.5 }}>
-      <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+function buildSectionCopyText(title, fields) {
+  const body = fields
+    .map(({ label, value }) => `${label}: ${String(value ?? '').trim()}`)
+    .join('\r\n');
+
+  return `${title}\r\n\r\n${body}`;
+}
+
+function sectionHasCopyValues(fields) {
+  return fields.some(({ value }) => String(value ?? '').trim());
+}
+
+function DetailSection({ title, children, copyFields, bordered = false }) {
+  const copyValue = copyFields ? buildSectionCopyText(title, copyFields) : '';
+  const canCopy = copyFields ? sectionHasCopyValues(copyFields) : false;
+
+  const header = (
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1}
+      sx={{ mb: bordered ? 2 : 1.5 }}
+    >
+      <Typography
+        variant={bordered ? 'subtitle2' : 'overline'}
+        fontWeight={bordered ? 700 : undefined}
+        color={bordered ? 'text.primary' : 'text.secondary'}
+        sx={{ flex: bordered ? 1 : undefined, display: 'block' }}
+      >
         {title}
       </Typography>
+      {canCopy ? <CopyFieldAdornment label={title} value={copyValue} /> : null}
+    </Stack>
+  );
+
+  const content = (
+    <>
+      {header}
       <Grid container spacing={2}>
         {children}
       </Grid>
-    </Box>
+    </>
+  );
+
+  if (!bordered) {
+    return <Box sx={{ mb: 2.5 }}>{content}</Box>;
+  }
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 2,
+        mb: 2.5,
+        borderRadius: 2,
+        bgcolor: 'background.paper'
+      }}
+    >
+      {content}
+    </Paper>
   );
 }
 
 DetailSection.propTypes = {
   title: PropTypes.string.isRequired,
-  children: PropTypes.node.isRequired
+  children: PropTypes.node.isRequired,
+  copyFields: PropTypes.arrayOf(
+    PropTypes.shape({
+      label: PropTypes.string.isRequired,
+      value: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
+    })
+  ),
+  bordered: PropTypes.bool
 };
 
 function displayValue(value) {
@@ -69,7 +128,15 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
         ) : null}
       </Stack>
 
-      <DetailSection title="Credentials">
+      <DetailSection
+        title="Email"
+        bordered
+        copyFields={[
+          { label: 'Email', value: account.email },
+          { label: 'Email password', value: account.email_password },
+          { label: 'Recovery email', value: account.email_recovery_email }
+        ]}
+      >
         <DetailField label="Email" value={displayValue(account.email)} copyValue={account.email} icon={MailTwoToneIcon} />
         <DetailField
           label="Email password"
@@ -78,11 +145,22 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
           icon={VpnKeyTwoToneIcon}
         />
         <DetailField
-          label="Email recovery"
+          label="Recovery email"
           value={displayValue(account.email_recovery_email)}
           copyValue={account.email_recovery_email}
           icon={MailTwoToneIcon}
         />
+      </DetailSection>
+
+      <DetailSection
+        title="Recovery email"
+        bordered
+        copyFields={[
+          { label: 'Recovery email', value: account.recovery_email },
+          { label: 'Recovery email password', value: account.recovery_email_password },
+          { label: 'Recovery code / backup', value: account.recovery_email_recovery }
+        ]}
+      >
         <DetailField
           label="Recovery email"
           value={displayValue(account.recovery_email)}
@@ -102,6 +180,22 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
           icon={SecurityTwoToneIcon}
           xs={12}
         />
+      </DetailSection>
+
+      <DetailSection
+        title="LinkedIn account"
+        bordered
+        copyFields={[
+          { label: 'LinkedIn email', value: account.linkedin_email },
+          { label: 'LinkedIn password', value: account.linkedin_password },
+          { label: 'LinkedIn link', value: account.linkedin_link },
+          { label: 'Second email', value: account.second_email },
+          {
+            label: 'LinkedIn created at',
+            value: account.linkedin_created_at ? formatDate(account.linkedin_created_at) : ''
+          }
+        ]}
+      >
         <DetailField
           label="LinkedIn email"
           value={displayValue(account.linkedin_email)}
@@ -115,24 +209,44 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
           icon={VpnKeyTwoToneIcon}
         />
         <DetailField
-          label="Second email"
-          value={displayValue(account.second_email)}
-          icon={MailTwoToneIcon}
-        />
-        <DetailField
           label="LinkedIn link"
           icon={LinkTwoToneIcon}
-          xs={12}
+          sm={6}
           copyValue={account.linkedin_link}
         >
           {account.linkedin_link ? (
-            <Link href={account.linkedin_link} target="_blank" rel="noopener noreferrer" underline="hover">
-              {account.linkedin_link}
-            </Link>
+            <Typography
+              variant="body1"
+              sx={{
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere'
+              }}
+            >
+              <Link
+                href={account.linkedin_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                underline="hover"
+              >
+                {account.linkedin_link}
+              </Link>
+            </Typography>
           ) : (
-            '—'
+            <Typography variant="body1">—</Typography>
           )}
         </DetailField>
+        <DetailField
+          label="Second email"
+          value={displayValue(account.second_email)}
+          copyValue={account.second_email}
+          icon={MailTwoToneIcon}
+          sm={6}
+        />
+        <DetailField
+          label="LinkedIn created at"
+          value={account.linkedin_created_at ? formatDate(account.linkedin_created_at) : '—'}
+          icon={WorkTwoToneIcon}
+        />
       </DetailSection>
 
       <Divider sx={{ my: 2 }} />
@@ -163,12 +277,6 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
       <DetailSection title="Sales & timeline">
         <DetailField label="Purchased from" value={account.purchased_from || '—'} icon={WorkTwoToneIcon} sm={4} />
         <DetailField label="Renting to" value={account.renting_to || '—'} icon={WorkTwoToneIcon} sm={4} />
-        <DetailField
-          label="LinkedIn created at"
-          value={account.linkedin_created_at ? formatDate(account.linkedin_created_at) : '—'}
-          icon={WorkTwoToneIcon}
-          sm={4}
-        />
         <DetailField
           label="Renting by"
           value={account.renting_by ? formatDate(account.renting_by) : '—'}
