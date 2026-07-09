@@ -603,12 +603,13 @@ function LinkedInFormFields({
                     copyValue={storedValues?.linkedin_password}
                   />
                   <CopyableTextField
-                    label="LinkedIn profile link"
+                    label="LinkedIn link"
                     fullWidth
                     size="small"
                     value={form.linkedin_link}
                     onChange={setField('linkedin_link')}
                     placeholder="https://www.linkedin.com/in/username"
+                    copyLabel="LinkedIn link"
                   />
                   <TextField
                     label="Second email"
@@ -618,6 +619,12 @@ function LinkedInFormFields({
                     onChange={setField('second_email')}
                     placeholder="alt@domain.com"
                   />
+                  <DateField
+                    label="LinkedIn created at"
+                    value={form.linkedin_created_at}
+                    onChange={setDateField('linkedin_created_at')}
+                    fullWidth
+                  />
                   <FormControlLabel
                     control={
                       <Switch
@@ -626,12 +633,6 @@ function LinkedInFormFields({
                       />
                     }
                     label="LinkedIn secured"
-                  />
-                  <DateField
-                    label="LinkedIn created at"
-                    value={form.linkedin_created_at}
-                    onChange={setDateField('linkedin_created_at')}
-                    fullWidth
                   />
                 </Stack>
               </FieldCell>
