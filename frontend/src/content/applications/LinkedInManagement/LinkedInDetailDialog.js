@@ -164,6 +164,12 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
         <DetailField label="Purchased from" value={account.purchased_from || '—'} icon={WorkTwoToneIcon} sm={4} />
         <DetailField label="Renting to" value={account.renting_to || '—'} icon={WorkTwoToneIcon} sm={4} />
         <DetailField
+          label="LinkedIn created at"
+          value={account.linkedin_created_at ? formatDate(account.linkedin_created_at) : '—'}
+          icon={WorkTwoToneIcon}
+          sm={4}
+        />
+        <DetailField
           label="Renting by"
           value={account.renting_by ? formatDate(account.renting_by) : '—'}
           icon={WorkTwoToneIcon}

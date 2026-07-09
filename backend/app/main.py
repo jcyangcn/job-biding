@@ -49,7 +49,7 @@ from app.linkedin_service import (
     linkedin_account_to_response,
     list_linkedin_accounts,
     remove_linkedin_image,
-    resolve_linkedin_image_path,
+    resolve_linkedin_image_file,
     set_linkedin_image,
     update_linkedin_account,
 )
@@ -819,12 +819,9 @@ def download_linkedin_image_endpoint(
         raise HTTPException(status_code=404, detail="Image not found")
 
     try:
-        image_path = resolve_linkedin_image_path(account_id, safe_name)
+        image_path = resolve_linkedin_image_file(image)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    if not image_path.is_file():
-        raise HTTPException(status_code=404, detail="Image file not found")
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     original_name = image.get("original_name") or safe_name
     return FileResponse(

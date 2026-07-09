@@ -214,6 +214,7 @@ class LinkedInAccount(Base):
     purchased_from: Mapped[str | None] = mapped_column(String(255), nullable=True)
     renting_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
     renting_by: Mapped[date | None] = mapped_column(Date, nullable=True)
+    linkedin_created_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     image: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="Pending")
     need_action: Mapped[str] = mapped_column(String(30), nullable=False, server_default="None")

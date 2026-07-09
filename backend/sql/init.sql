@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS linkedin_account (
     purchased_from VARCHAR(255),
     renting_to VARCHAR(255),
     renting_by DATE,
+    linkedin_created_at DATE,
     image JSONB,
     status VARCHAR(20) NOT NULL DEFAULT 'Pending',
     need_action VARCHAR(30) NOT NULL DEFAULT 'None',

@@ -87,8 +87,9 @@ class Settings(BaseSettings):
 settings = Settings()
 GENERATED_DIR = settings.generated_dir
 UPLOADS_DIR = settings.uploads_dir
+LINKEDIN_IMAGE_DIR = UPLOADS_DIR / "linkedin image"
 
 
 def ensure_storage_dirs() -> None:
-    for path in (STORAGE_DIR, GENERATED_DIR, UPLOADS_DIR):
+    for path in (STORAGE_DIR, GENERATED_DIR, UPLOADS_DIR, LINKEDIN_IMAGE_DIR):
         path.mkdir(parents=True, exist_ok=True)

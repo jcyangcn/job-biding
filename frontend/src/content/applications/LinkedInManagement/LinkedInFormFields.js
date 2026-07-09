@@ -627,6 +627,12 @@ function LinkedInFormFields({
                     }
                     label="LinkedIn secured"
                   />
+                  <DateField
+                    label="LinkedIn created at"
+                    value={form.linkedin_created_at}
+                    onChange={setDateField('linkedin_created_at')}
+                    fullWidth
+                  />
                 </Stack>
               </FieldCell>
               <FieldCell
@@ -852,7 +858,7 @@ LinkedInFormFields.propTypes = {
 
 export function createEmptyLinkedInForm() {
   return {
-    title: 'US_template',
+    title: '',
     country: DEFAULT_COUNTRY,
     email: '',
     email_password: '',
@@ -864,6 +870,7 @@ export function createEmptyLinkedInForm() {
     linkedin_email: '',
     linkedin_password: '',
     linkedin_link: '',
+    linkedin_created_at: '',
     second_email: '',
     linkedin_secured: false,
     browser: '',
@@ -899,6 +906,7 @@ export function linkedInRecordToForm(record) {
     linkedin_email: record.linkedin_email ?? '',
     linkedin_password: record.linkedin_password ?? '',
     linkedin_link: record.linkedin_link ?? '',
+    linkedin_created_at: record.linkedin_created_at || '',
     second_email: record.second_email ?? '',
     linkedin_secured: Boolean(record.linkedin_secured),
     browser: record.browser || '',
@@ -927,6 +935,7 @@ export function buildLinkedInPayload(form, { isEdit = false, storedValues = null
     recovery_email_recovery: form.recovery_email_recovery.trim() || null,
     linkedin_email: form.linkedin_email.trim() || null,
     linkedin_link: form.linkedin_link.trim() || null,
+    linkedin_created_at: form.linkedin_created_at || null,
     second_email: form.second_email.trim() || null,
     linkedin_secured: Boolean(form.linkedin_secured),
     browser: form.browser.trim() || null,
