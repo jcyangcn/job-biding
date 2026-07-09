@@ -86,6 +86,10 @@ const LINKEDIN_SELECT_FILTERS = [
   {
     id: 'renting_expired',
     getValue: (row) => (isRentingExpired(row) ? 'expired' : 'no')
+  },
+  {
+    id: 'created_expiring',
+    getValue: (row) => (isCreatedExpiring(row) ? 'expiring' : 'no')
   }
 ];
 
@@ -145,6 +149,18 @@ function isRentingExpired(row) {
   return target < today;
 }
 
+function isCreatedExpiring(row) {
+  if (row.status !== 'Created' || !row.proxy_expired_by) {
+    return false;
+  }
+  const target = new Date(row.proxy_expired_by);
+  target.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+  return diffDays <= 7;
+}
+
 function RentingByDate({ rentingBy }) {
   const meta = getRentingDateMeta(rentingBy);
 
@@ -157,7 +173,7 @@ function RentingByDate({ rentingBy }) {
   }
 
   return (
-    <Tooltip title={meta.label}>
+    <Tooltip title={`Renting by ${formatDate(rentingBy)} · ${meta.label}`}>
       <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.25 }}>
         <CalendarTodayTwoToneIcon sx={{ fontSize: 13, color: meta.color }} />
         <Typography variant="caption" fontWeight={700} sx={{ color: meta.color }}>
@@ -170,6 +186,33 @@ function RentingByDate({ rentingBy }) {
 
 RentingByDate.propTypes = {
   rentingBy: PropTypes.string
+};
+
+function ProxyExpiryDate({ proxyExpiredBy }) {
+  const meta = getRentingDateMeta(proxyExpiredBy);
+
+  if (!meta) {
+    return (
+      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.25 }}>
+        No proxy expiry
+      </Typography>
+    );
+  }
+
+  return (
+    <Tooltip title={`Proxy expired by ${formatDate(proxyExpiredBy)} · ${meta.label}`}>
+      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.25 }}>
+        <CalendarTodayTwoToneIcon sx={{ fontSize: 13, color: meta.color }} />
+        <Typography variant="caption" fontWeight={700} sx={{ color: meta.color }}>
+          {formatDate(proxyExpiredBy)}
+        </Typography>
+      </Stack>
+    </Tooltip>
+  );
+}
+
+ProxyExpiryDate.propTypes = {
+  proxyExpiredBy: PropTypes.string
 };
 
 function SecuredLockBadge({ secured, label }) {
@@ -326,6 +369,7 @@ function LinkedInManagement() {
     const counts = {
       total: rows.length,
       created: 0,
+      createdExpiring: 0,
       renting: 0,
       rentingExpired: 0,
       actionRequired: 0
@@ -333,6 +377,9 @@ function LinkedInManagement() {
     rows.forEach((row) => {
       if (row.status === 'Created') {
         counts.created += 1;
+      }
+      if (isCreatedExpiring(row)) {
+        counts.createdExpiring += 1;
       }
       if (row.status === 'Renting') {
         counts.renting += 1;
@@ -366,6 +413,11 @@ function LinkedInManagement() {
   const showCreatedAccounts = useCallback(() => {
     clearFilters();
     setSelectValue('status', 'Created');
+  }, [clearFilters, setSelectValue]);
+
+  const showCreatedExpiringAccounts = useCallback(() => {
+    clearFilters();
+    setSelectValue('created_expiring', 'expiring');
   }, [clearFilters, setSelectValue]);
 
   const showRentingAccounts = useCallback(() => {
@@ -688,6 +740,13 @@ function LinkedInManagement() {
             clickable
           />
           <Chip
+            label={`${summary.createdExpiring} created expiring`}
+            color="warning"
+            variant={selectValues.created_expiring === 'expiring' ? 'filled' : 'outlined'}
+            onClick={showCreatedExpiringAccounts}
+            clickable
+          />
+          <Chip
             label={`${summary.renting} renting`}
             color="success"
             variant={selectValues.status === 'Renting' ? 'filled' : 'outlined'}
@@ -966,6 +1025,8 @@ function LinkedInManagement() {
                           <LinkedInStatusLabel status={row.status} />
                           {row.status === 'Renting' ? (
                             <RentingByDate rentingBy={row.renting_by} />
+                          ) : row.status === 'Created' ? (
+                            <ProxyExpiryDate proxyExpiredBy={row.proxy_expired_by} />
                           ) : null}
                         </TableCell>
                         <TableCell>

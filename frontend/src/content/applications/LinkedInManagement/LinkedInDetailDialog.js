@@ -2,12 +2,12 @@ import PropTypes from 'prop-types';
 import {
   Box,
   Button,
-  Chip,
   Divider,
   Grid,
   Link,
   Paper,
   Stack,
+  Tooltip,
   Typography,
   alpha,
   useTheme
@@ -15,6 +15,8 @@ import {
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
+import LockTwoToneIcon from '@mui/icons-material/LockTwoTone';
+import LockOpenTwoToneIcon from '@mui/icons-material/LockOpenTwoTone';
 import MailTwoToneIcon from '@mui/icons-material/MailTwoTone';
 import PersonTwoToneIcon from '@mui/icons-material/PersonTwoTone';
 import SecurityTwoToneIcon from '@mui/icons-material/SecurityTwoTone';
@@ -40,7 +42,15 @@ function sectionHasCopyValues(fields) {
   return fields.some(({ value }) => String(value ?? '').trim());
 }
 
-function DetailSection({ title, children, copyFields, bordered = false, dense = false, gutter = true }) {
+function DetailSection({
+  title,
+  children,
+  copyFields,
+  bordered = false,
+  dense = false,
+  gutter = true,
+  titleAdornment
+}) {
   const copyValue = copyFields ? buildSectionCopyText(title, copyFields) : '';
   const canCopy = copyFields ? sectionHasCopyValues(copyFields) : false;
 
@@ -55,10 +65,12 @@ function DetailSection({ title, children, copyFields, bordered = false, dense = 
         variant={bordered ? 'subtitle2' : 'overline'}
         fontWeight={bordered ? 700 : undefined}
         color={bordered ? 'text.primary' : 'text.secondary'}
-        sx={{ flex: bordered ? 1 : undefined, display: 'block' }}
+        sx={{ display: 'block' }}
       >
         {title}
       </Typography>
+      {titleAdornment || null}
+      <Box sx={{ flex: 1 }} />
       {canCopy ? <CopyFieldAdornment label={title} value={copyValue} /> : null}
     </Stack>
   );
@@ -107,7 +119,23 @@ DetailSection.propTypes = {
   ),
   bordered: PropTypes.bool,
   dense: PropTypes.bool,
-  gutter: PropTypes.bool
+  gutter: PropTypes.bool,
+  titleAdornment: PropTypes.node
+};
+
+function SecuredIcon({ secured, label }) {
+  const isSecured = Boolean(secured);
+  const Icon = isSecured ? LockTwoToneIcon : LockOpenTwoToneIcon;
+  return (
+    <Tooltip title={`${label} ${isSecured ? 'secured' : 'not secured'}`}>
+      <Icon sx={{ fontSize: 18, color: isSecured ? 'success.main' : 'error.main' }} />
+    </Tooltip>
+  );
+}
+
+SecuredIcon.propTypes = {
+  secured: PropTypes.bool,
+  label: PropTypes.string.isRequired
 };
 
 function CompactField({ label, value, copyValue, icon: Icon, link = false }) {
@@ -181,12 +209,6 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
         <LinkedInStatusLabel status={account.status} />
         <LinkedInNeedActionLabel needAction={account.need_action} />
-        {account.email_secured ? (
-          <Chip size="small" label="Email secured" color="success" variant="outlined" />
-        ) : null}
-        {account.linkedin_secured ? (
-          <Chip size="small" label="LinkedIn secured" color="success" variant="outlined" />
-        ) : null}
       </Stack>
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -196,6 +218,7 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
             bordered
             dense
             gutter={false}
+            titleAdornment={<SecuredIcon secured={account.email_secured} label="Email" />}
             copyFields={[
               { label: 'Email', value: account.email },
               { label: 'Password', value: account.email_password },
@@ -264,6 +287,7 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
             bordered
             dense
             gutter={false}
+            titleAdornment={<SecuredIcon secured={account.linkedin_secured} label="LinkedIn" />}
             copyFields={[
               { label: 'Email', value: account.linkedin_email },
               { label: 'Password', value: account.linkedin_password },
