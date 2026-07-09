@@ -29,6 +29,7 @@ import {
   useTheme
 } from '@mui/material';
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
+import CalendarTodayTwoToneIcon from '@mui/icons-material/CalendarTodayTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
@@ -101,6 +102,56 @@ const LINKEDIN_SEARCH_FIELDS = [
 const TILE_ROWS_PER_PAGE = 12;
 const TILE_ROWS_PER_PAGE_OPTIONS = [12, 24, 36];
 const TABLE_ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
+
+function getRentingDateMeta(rentingBy) {
+  if (!rentingBy) {
+    return null;
+  }
+
+  const target = new Date(rentingBy);
+  target.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return { color: 'error.main', label: `Expired ${Math.abs(diffDays)}d ago` };
+  }
+  if (diffDays <= 7) {
+    return {
+      color: 'warning.main',
+      label: diffDays === 0 ? 'Due today' : `Due in ${diffDays}d`
+    };
+  }
+  return { color: 'success.main', label: `Available (${diffDays}d)` };
+}
+
+function RentingByDate({ rentingBy }) {
+  const meta = getRentingDateMeta(rentingBy);
+
+  if (!meta) {
+    return (
+      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.25 }}>
+        No renting date
+      </Typography>
+    );
+  }
+
+  return (
+    <Tooltip title={meta.label}>
+      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.25 }}>
+        <CalendarTodayTwoToneIcon sx={{ fontSize: 13, color: meta.color }} />
+        <Typography variant="caption" fontWeight={700} sx={{ color: meta.color }}>
+          {formatDate(rentingBy)}
+        </Typography>
+      </Stack>
+    </Tooltip>
+  );
+}
+
+RentingByDate.propTypes = {
+  rentingBy: PropTypes.string
+};
 
 function SecuredLockBadge({ secured, label }) {
   const isSecured = Boolean(secured);
@@ -731,6 +782,9 @@ function LinkedInManagement() {
                         </TableCell>
                         <TableCell>
                           <LinkedInStatusLabel status={row.status} />
+                          {row.status === 'Renting' ? (
+                            <RentingByDate rentingBy={row.renting_by} />
+                          ) : null}
                         </TableCell>
                         <TableCell>
                           {isLinkedInNeedActionActive(row.need_action) ? (
