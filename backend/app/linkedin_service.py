@@ -1,12 +1,14 @@
 import re
 import secrets
+import string
 from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import REPO_ROOT, UPLOADS_DIR
+from app.config import LINKEDIN_IMAGE_DIR, REPO_ROOT, UPLOADS_DIR
+from app.country_codes import get_country_code
 from app.db_models import LinkedInAccount
 from app.models import (
     CitizenImageInfo,
@@ -15,6 +17,8 @@ from app.models import (
 )
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+_LINKEDIN_IMAGE_STORAGE_PREFIX = "/storage/uploads/linkedin image/"
+_RANDOM_CHARS = string.ascii_letters + string.digits
 
 
 def _optional_text(value: str | None) -> str | None:
@@ -22,6 +26,32 @@ def _optional_text(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _upload_storage_path(stored_name: str) -> str:
+    safe_name = Path(stored_name).name
+    return f"{_LINKEDIN_IMAGE_STORAGE_PREFIX}{safe_name}"
+
+
+def _sanitize_title_part(title: str) -> str:
+    return re.sub(r"[^\w]+", "_", title.strip()).strip("_") or "untitled"
+
+
+def _random_suffix(length: int = 4) -> str:
+    return "".join(secrets.choice(_RANDOM_CHARS) for _ in range(length))
+
+
+def _build_linkedin_upload_filename(country: str, title: str, original_name: str) -> str:
+    country_code = get_country_code(country) or "XX"
+    safe_title = _sanitize_title_part(title)
+    suffix = Path(original_name).suffix.lower()
+    if suffix not in ALLOWED_IMAGE_EXTENSIONS:
+        suffix = ".png"
+    LINKEDIN_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    while True:
+        filename = f"{country_code}_{safe_title}_{_random_suffix()}{suffix}"
+        if not (LINKEDIN_IMAGE_DIR / filename).exists():
+            return filename
 
 
 def _parse_image(raw: dict | None) -> CitizenImageInfo | None:
@@ -35,9 +65,21 @@ def _parse_image(raw: dict | None) -> CitizenImageInfo | None:
     return image
 
 
-def _upload_storage_path(stored_name: str) -> str:
-    safe_name = Path(stored_name).name
-    return f"/storage/uploads/{safe_name}"
+def _resolve_stored_image_path(image: CitizenImageInfo) -> Path:
+    if image.path:
+        relative = image.path.lstrip("/\\")
+        candidate = (REPO_ROOT / relative).resolve()
+        if candidate.is_file():
+            return candidate
+
+    try:
+        linkedin_path = _resolve_file_path(LINKEDIN_IMAGE_DIR, image.filename)
+        if linkedin_path.is_file():
+            return linkedin_path
+    except ValueError:
+        pass
+
+    return _resolve_file_path(UPLOADS_DIR, image.filename)
 
 
 def linkedin_account_to_response(record: LinkedInAccount) -> dict:
@@ -67,6 +109,7 @@ def linkedin_account_to_response(record: LinkedInAccount) -> dict:
         "purchased_from": record.purchased_from,
         "renting_to": record.renting_to,
         "renting_by": record.renting_by,
+        "linkedin_created_at": record.linkedin_created_at,
         "image": image.model_dump(mode="json") if image else None,
         "status": record.status,
         "need_action": record.need_action,
@@ -170,6 +213,7 @@ def create_linkedin_account(db: Session, data: LinkedInAccountCreateRequest) -> 
         purchased_from=_optional_text(data.purchased_from),
         renting_to=_optional_text(data.renting_to),
         renting_by=data.renting_by,
+        linkedin_created_at=data.linkedin_created_at,
         image=None,
         status=data.status,
         need_action=data.need_action,
@@ -202,6 +246,7 @@ def update_linkedin_account(
         "profile_no",
         "proxy_expired_by",
         "renting_by",
+        "linkedin_created_at",
         "status",
         "need_action",
     ):
@@ -219,18 +264,6 @@ def delete_linkedin_account(db: Session, record: LinkedInAccount) -> None:
     db.commit()
 
 
-def _safe_stored_filename(original_name: str) -> str:
-    stem = Path(original_name).name
-    stem = re.sub(r"[^\w.\-]+", "_", stem).strip("._")
-    if not stem:
-        stem = "image"
-    suffix = Path(stem).suffix.lower()
-    if suffix not in ALLOWED_IMAGE_EXTENSIONS:
-        stem = f"{stem}.bin"
-    token = secrets.token_hex(4)
-    return f"{token}_{stem}"
-
-
 def _resolve_file_path(root: Path, filename: str) -> Path:
     safe_name = Path(filename).name
     if safe_name != filename:
@@ -244,14 +277,8 @@ def _resolve_file_path(root: Path, filename: str) -> Path:
 
 
 def resolve_linkedin_image_path(account_id: int, filename: str) -> Path:
-    return _resolve_file_path(UPLOADS_DIR, filename)
-
-
-def _derive_original_name(stored_name: str) -> str:
-    match = re.match(r"^[a-f0-9]{8}_(.+)$", stored_name, flags=re.IGNORECASE)
-    if match:
-        return match.group(1)
-    return stored_name
+    del account_id
+    return _resolve_file_path(LINKEDIN_IMAGE_DIR, filename)
 
 
 def _resolve_import_image_path(raw_path: str) -> Path | None:
@@ -264,7 +291,8 @@ def _resolve_import_image_path(raw_path: str) -> Path | None:
 
     lower = normalized.lower()
     if "storage/uploads/" in lower:
-        relative = normalized[lower.index("storage/uploads/") :]
+        idx = lower.index("storage/uploads/")
+        relative = normalized[idx:]
         candidates.append((REPO_ROOT / relative).resolve())
 
     path = Path(text)
@@ -273,10 +301,11 @@ def _resolve_import_image_path(raw_path: str) -> Path | None:
 
     filename = Path(normalized).name
     if filename:
-        try:
-            candidates.append(_resolve_file_path(UPLOADS_DIR, filename))
-        except ValueError:
-            pass
+        for root in (LINKEDIN_IMAGE_DIR, UPLOADS_DIR):
+            try:
+                candidates.append(_resolve_file_path(root, filename))
+            except ValueError:
+                pass
 
     seen: set[Path] = set()
     for candidate in candidates:
@@ -286,6 +315,26 @@ def _resolve_import_image_path(raw_path: str) -> Path | None:
         if candidate.is_file():
             return candidate
     return None
+
+
+def _link_linkedin_image(
+    db: Session,
+    record: LinkedInAccount,
+    *,
+    stored_name: str,
+    original_name: str,
+) -> CitizenImageInfo:
+    file_info = CitizenImageInfo(
+        filename=stored_name,
+        original_name=original_name,
+        uploaded_at=datetime.now(timezone.utc),
+        path=_upload_storage_path(stored_name),
+    )
+    record.image = file_info.model_dump(mode="json")
+    record.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(record)
+    return file_info
 
 
 def set_linkedin_image_from_storage_path(
@@ -304,27 +353,21 @@ def set_linkedin_image_from_storage_path(
             f"Unsupported file type. Allowed: {', '.join(sorted(ALLOWED_IMAGE_EXTENSIONS))}"
         )
 
-    uploads_root = UPLOADS_DIR.resolve()
-    if file_path.parent != uploads_root:
-        return set_linkedin_image(
+    linkedin_root = LINKEDIN_IMAGE_DIR.resolve()
+    if file_path.parent == linkedin_root:
+        return _link_linkedin_image(
             db,
             record,
+            stored_name=file_path.name,
             original_name=file_path.name,
-            content=file_path.read_bytes(),
         )
 
-    stored_name = file_path.name
-    file_info = CitizenImageInfo(
-        filename=stored_name,
-        original_name=_derive_original_name(stored_name),
-        uploaded_at=datetime.now(timezone.utc),
-        path=_upload_storage_path(stored_name),
+    return set_linkedin_image(
+        db,
+        record,
+        original_name=file_path.name,
+        content=file_path.read_bytes(),
     )
-    record.image = file_info.model_dump(mode="json")
-    record.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(record)
-    return file_info
 
 
 def set_linkedin_image(
@@ -340,38 +383,36 @@ def set_linkedin_image(
             f"Unsupported file type. Allowed: {', '.join(sorted(ALLOWED_IMAGE_EXTENSIONS))}"
         )
 
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    existing = _parse_image(record.image)
-    if existing:
-        existing_path = _resolve_file_path(UPLOADS_DIR, existing.filename)
-        if existing_path.is_file():
-            existing_path.unlink()
-
-    stored_name = _safe_stored_filename(original_name)
-    target = UPLOADS_DIR / stored_name
+    LINKEDIN_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    stored_name = _build_linkedin_upload_filename(
+        record.country,
+        record.title,
+        original_name,
+    )
+    target = LINKEDIN_IMAGE_DIR / stored_name
     target.write_bytes(content)
 
-    file_info = CitizenImageInfo(
-        filename=stored_name,
+    return _link_linkedin_image(
+        db,
+        record,
+        stored_name=stored_name,
         original_name=Path(original_name).name,
-        uploaded_at=datetime.now(timezone.utc),
-        path=_upload_storage_path(stored_name),
     )
-    record.image = file_info.model_dump(mode="json")
-    record.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(record)
-    return file_info
+
+
+def resolve_linkedin_image_file(image: dict | None) -> Path:
+    parsed = _parse_image(image)
+    if not parsed:
+        raise ValueError("Image not found")
+    path = _resolve_stored_image_path(parsed)
+    if not path.is_file():
+        raise ValueError("Image file not found")
+    return path
 
 
 def remove_linkedin_image(db: Session, record: LinkedInAccount) -> None:
-    existing = _parse_image(record.image)
-    if not existing:
+    if not _parse_image(record.image):
         raise ValueError("Image not found")
-
-    path = _resolve_file_path(UPLOADS_DIR, existing.filename)
-    if path.is_file():
-        path.unlink()
 
     record.image = None
     record.updated_at = datetime.now(timezone.utc)

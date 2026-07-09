@@ -35,6 +35,7 @@ LINKEDIN_CSV_HEADERS = [
     "LinkedIn email",
     "LinkedIn password",
     "LinkedIn link",
+    "LinkedIn created at",
     "Second email",
     "LinkedIn secured",
     "Browser",
@@ -68,6 +69,7 @@ HEADER_TO_FIELD = {
     "linkedin email": "linkedin_email",
     "linkedin password": "linkedin_password",
     "linkedin link": "linkedin_link",
+    "linkedin created at": "linkedin_created_at",
     "second email": "second_email",
     "linkedin secured": "linkedin_secured",
     "browser": "browser",
@@ -117,7 +119,7 @@ def _format_image(raw: dict | None) -> str:
     if image.path:
         return image.path
     if image.filename:
-        return f"/storage/uploads/{Path(image.filename).name}"
+        return f"/storage/uploads/linkedin image/{Path(image.filename).name}"
     return image.original_name or image.filename or ""
 
 
@@ -226,6 +228,7 @@ def export_linkedin_accounts_csv(db: Session) -> str:
                 record.linkedin_email or "",
                 record.linkedin_password or "",
                 record.linkedin_link or "",
+                _format_date(record.linkedin_created_at),
                 record.second_email or "",
                 _format_bool(record.linkedin_secured),
                 record.browser or "",
@@ -296,6 +299,7 @@ def _build_create_payload(data: dict[str, object]) -> LinkedInAccountCreateReque
         "linkedin_email": _optional_text(str(data.get("linkedin_email") or "")),
         "linkedin_password": _optional_text(str(data.get("linkedin_password") or "")),
         "linkedin_link": _optional_text(str(data.get("linkedin_link") or "")),
+        "linkedin_created_at": _parse_date(str(data.get("linkedin_created_at") or "")),
         "second_email": _optional_text(str(data.get("second_email") or "")),
         "linkedin_secured": _parse_bool(str(data.get("linkedin_secured") or "")) or False,
         "browser": _optional_text(str(data.get("browser") or "")),
@@ -356,6 +360,8 @@ def _build_update_payload(data: dict[str, object]) -> LinkedInAccountUpdateReque
             payload["linkedin_password"] = password
     if "linkedin_link" in data:
         payload["linkedin_link"] = _optional_text(str(data.get("linkedin_link") or ""))
+    if "linkedin_created_at" in data:
+        payload["linkedin_created_at"] = _parse_date(str(data.get("linkedin_created_at") or ""))
     if "second_email" in data:
         payload["second_email"] = _optional_text(str(data.get("second_email") or ""))
     if "linkedin_secured" in data:

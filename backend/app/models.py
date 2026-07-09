@@ -434,6 +434,7 @@ class LinkedInAccountCreateRequest(BaseModel):
     purchased_from: str | None = Field(default=None, max_length=255)
     renting_to: str | None = Field(default=None, max_length=255)
     renting_by: date | None = None
+    linkedin_created_at: date | None = None
     status: LinkedInStatusLiteral = "Pending"
     need_action: LinkedInNeedActionLiteral = "None"
     logs: str = ""
@@ -463,6 +464,7 @@ class LinkedInAccountUpdateRequest(BaseModel):
     purchased_from: str | None = Field(default=None, max_length=255)
     renting_to: str | None = Field(default=None, max_length=255)
     renting_by: date | None = None
+    linkedin_created_at: date | None = None
     status: LinkedInStatusLiteral | None = None
     need_action: LinkedInNeedActionLiteral | None = None
     logs: str | None = None
@@ -493,6 +495,7 @@ class LinkedInAccountResponse(BaseModel):
     purchased_from: str | None = None
     renting_to: str | None = None
     renting_by: date | None = None
+    linkedin_created_at: date | None = None
     image: CitizenImageInfo | None = None
     status: LinkedInStatusLiteral
     need_action: LinkedInNeedActionLiteral
