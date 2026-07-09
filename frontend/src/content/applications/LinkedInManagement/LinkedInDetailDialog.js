@@ -21,7 +21,7 @@ import SecurityTwoToneIcon from '@mui/icons-material/SecurityTwoTone';
 import StorageTwoToneIcon from '@mui/icons-material/StorageTwoTone';
 import VpnKeyTwoToneIcon from '@mui/icons-material/VpnKeyTwoTone';
 import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
-import { DetailDialog, DetailField, DetailTextSection } from 'src/components/DetailDialog';
+import { DetailDialog, DetailTextSection } from 'src/components/DetailDialog';
 import { CopyFieldAdornment } from 'src/components/CopyableTextField';
 import LinkedInImageThumb from './LinkedInImageThumb';
 import LinkedInStatusLabel from './LinkedInStatusLabel';
@@ -33,14 +33,14 @@ function buildSectionCopyText(title, fields) {
     .map(({ label, value }) => `${label}: ${String(value ?? '').trim()}`)
     .join('\r\n');
 
-  return `${title}\r\n\r\n${body}`;
+  return `${title}\r\n-----\r\n${body}`;
 }
 
 function sectionHasCopyValues(fields) {
   return fields.some(({ value }) => String(value ?? '').trim());
 }
 
-function DetailSection({ title, children, copyFields, bordered = false }) {
+function DetailSection({ title, children, copyFields, bordered = false, dense = false, gutter = true }) {
   const copyValue = copyFields ? buildSectionCopyText(title, copyFields) : '';
   const canCopy = copyFields ? sectionHasCopyValues(copyFields) : false;
 
@@ -49,7 +49,7 @@ function DetailSection({ title, children, copyFields, bordered = false }) {
       direction="row"
       alignItems="center"
       spacing={1}
-      sx={{ mb: bordered ? 2 : 1.5 }}
+      sx={{ mb: dense ? 1 : bordered ? 2 : 1.5 }}
     >
       <Typography
         variant={bordered ? 'subtitle2' : 'overline'}
@@ -66,14 +66,18 @@ function DetailSection({ title, children, copyFields, bordered = false }) {
   const content = (
     <>
       {header}
-      <Grid container spacing={2}>
-        {children}
-      </Grid>
+      {dense ? (
+        <Stack divider={<Divider flexItem />}>{children}</Stack>
+      ) : (
+        <Grid container spacing={2}>
+          {children}
+        </Grid>
+      )}
     </>
   );
 
   if (!bordered) {
-    return <Box sx={{ mb: 2.5 }}>{content}</Box>;
+    return <Box sx={{ mb: gutter ? 2.5 : 0 }}>{content}</Box>;
   }
 
   return (
@@ -81,7 +85,8 @@ function DetailSection({ title, children, copyFields, bordered = false }) {
       variant="outlined"
       sx={{
         p: 2,
-        mb: 2.5,
+        mb: gutter ? 2.5 : 0,
+        height: '100%',
         borderRadius: 2,
         bgcolor: 'background.paper'
       }}
@@ -100,7 +105,60 @@ DetailSection.propTypes = {
       value: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
     })
   ),
-  bordered: PropTypes.bool
+  bordered: PropTypes.bool,
+  dense: PropTypes.bool,
+  gutter: PropTypes.bool
+};
+
+function CompactField({ label, value, copyValue, icon: Icon, link = false }) {
+  const text = displayValue(value);
+  const canCopy = Boolean(String(copyValue ?? '').trim());
+  const hasLink = link && Boolean(String(value ?? '').trim());
+
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1}
+      sx={{ py: 0.65, minHeight: 34 }}
+    >
+      {Icon ? <Icon color="primary" sx={{ fontSize: 18, flexShrink: 0 }} /> : null}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ width: 132, flexShrink: 0 }}
+      >
+        {label}
+      </Typography>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        {hasLink ? (
+          <Link
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            underline="hover"
+            variant="body2"
+            sx={{ wordBreak: 'break-all', fontWeight: 500 }}
+          >
+            {value}
+          </Link>
+        ) : (
+          <Typography variant="body2" sx={{ wordBreak: 'break-word', fontWeight: 500 }}>
+            {text}
+          </Typography>
+        )}
+      </Box>
+      {canCopy ? <CopyFieldAdornment label={label} value={copyValue} /> : null}
+    </Stack>
+  );
+}
+
+CompactField.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  copyValue: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  icon: PropTypes.elementType,
+  link: PropTypes.bool
 };
 
 function displayValue(value) {
@@ -119,7 +177,7 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
   const caption = [account.email, account.linkedin_email, account.provider].filter(Boolean).join(' · ');
 
   return (
-    <DetailDialog open={open} title={title} caption={caption || undefined} onClose={onClose} maxWidth="md">
+    <DetailDialog open={open} title={title} caption={caption || undefined} onClose={onClose} maxWidth="lg">
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
         <LinkedInStatusLabel status={account.status} />
         <LinkedInNeedActionLabel needAction={account.need_action} />
@@ -131,201 +189,250 @@ function LinkedInDetailDialog({ open, account, onClose, onEdit, onDelete, disabl
         ) : null}
       </Stack>
 
-      <DetailSection
-        title="Email"
-        bordered
-        copyFields={[
-          { label: 'Email', value: account.email },
-          { label: 'Email password', value: account.email_password },
-          { label: 'Recovery email', value: account.email_recovery_email }
-        ]}
-      >
-        <DetailField label="Email" value={displayValue(account.email)} copyValue={account.email} icon={MailTwoToneIcon} />
-        <DetailField
-          label="Email password"
-          value={displayValue(account.email_password)}
-          copyValue={account.email_password}
-          icon={VpnKeyTwoToneIcon}
-        />
-        <DetailField
-          label="Recovery email"
-          value={displayValue(account.email_recovery_email)}
-          copyValue={account.email_recovery_email}
-          icon={MailTwoToneIcon}
-        />
-      </DetailSection>
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid item xs={12} md={6}>
+          <DetailSection
+            title="Email"
+            bordered
+            dense
+            gutter={false}
+            copyFields={[
+              { label: 'Email', value: account.email },
+              { label: 'Password', value: account.email_password },
+              { label: 'Recovery', value: account.email_recovery_email }
+            ]}
+          >
+            <CompactField label="Email" value={account.email} copyValue={account.email} icon={MailTwoToneIcon} />
+            <CompactField
+              label="Password"
+              value={account.email_password}
+              copyValue={account.email_password}
+              icon={VpnKeyTwoToneIcon}
+            />
+            <CompactField
+              label="Recovery"
+              value={account.email_recovery_email}
+              copyValue={account.email_recovery_email}
+              icon={MailTwoToneIcon}
+            />
+          </DetailSection>
+        </Grid>
 
-      <DetailSection
-        title="Recovery email"
-        bordered
-        copyFields={[
-          { label: 'Recovery email', value: account.recovery_email },
-          { label: 'Recovery email password', value: account.recovery_email_password },
-          { label: 'Recovery code / backup', value: account.recovery_email_recovery }
-        ]}
-      >
-        <DetailField
-          label="Recovery email"
-          value={displayValue(account.recovery_email)}
-          copyValue={account.recovery_email}
-          icon={MailTwoToneIcon}
-        />
-        <DetailField
-          label="Recovery email password"
-          value={displayValue(account.recovery_email_password)}
-          copyValue={account.recovery_email_password}
-          icon={VpnKeyTwoToneIcon}
-        />
-        <DetailField
-          label="Recovery code / backup"
-          value={displayValue(account.recovery_email_recovery)}
-          copyValue={account.recovery_email_recovery}
-          icon={SecurityTwoToneIcon}
-          xs={12}
-        />
-      </DetailSection>
-
-      <DetailSection
-        title="LinkedIn account"
-        bordered
-        copyFields={[
-          { label: 'LinkedIn email', value: account.linkedin_email },
-          { label: 'LinkedIn password', value: account.linkedin_password },
-          { label: 'LinkedIn link', value: account.linkedin_link },
-          { label: 'Second email', value: account.second_email },
-          {
-            label: 'LinkedIn created at',
-            value: account.linkedin_created_at ? formatDate(account.linkedin_created_at) : ''
-          }
-        ]}
-      >
-        <DetailField
-          label="LinkedIn email"
-          value={displayValue(account.linkedin_email)}
-          copyValue={account.linkedin_email}
-          icon={PersonTwoToneIcon}
-        />
-        <DetailField
-          label="LinkedIn password"
-          value={displayValue(account.linkedin_password)}
-          copyValue={account.linkedin_password}
-          icon={VpnKeyTwoToneIcon}
-        />
-        <DetailField
-          label="LinkedIn link"
-          icon={LinkTwoToneIcon}
-          sm={6}
-          copyValue={account.linkedin_link}
-        >
-          {account.linkedin_link ? (
-            <Typography
-              variant="body1"
-              sx={{
-                wordBreak: 'break-word',
-                overflowWrap: 'anywhere'
-              }}
-            >
-              <Link
-                href={account.linkedin_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                underline="hover"
-              >
-                {account.linkedin_link}
-              </Link>
-            </Typography>
-          ) : (
-            <Typography variant="body1">—</Typography>
-          )}
-        </DetailField>
-        <DetailField
-          label="Second email"
-          value={displayValue(account.second_email)}
-          copyValue={account.second_email}
-          icon={MailTwoToneIcon}
-          sm={6}
-        />
-        <DetailField
-          label="LinkedIn created at"
-          value={account.linkedin_created_at ? formatDate(account.linkedin_created_at) : '—'}
-          icon={WorkTwoToneIcon}
-        />
-      </DetailSection>
-
-      <Divider sx={{ my: 2 }} />
-
-      <DetailSection title="Infrastructure">
-        <DetailField label="Browser" value={account.browser?.trim() || '—'} icon={WorkTwoToneIcon} sm={4} />
-        <DetailField
-          label="Profile no."
-          value={account.profile_no != null ? String(account.profile_no) : '—'}
-          icon={PersonTwoToneIcon}
-          sm={4}
-        />
-        <DetailField label="Provider" value={account.provider || '—'} icon={StorageTwoToneIcon} sm={4} />
-        <DetailField label="Order ID" value={account.order_id || '—'} icon={StorageTwoToneIcon} />
-        <DetailField
-          label="Proxy expired by"
-          value={account.proxy_expired_by ? formatDate(account.proxy_expired_by) : '—'}
-          icon={StorageTwoToneIcon}
-        />
-      </DetailSection>
-
-      {account.proxy_info ? (
-        <DetailTextSection title="Proxy info" text={account.proxy_info} copyValue={account.proxy_info} />
-      ) : null}
-
-      <Divider sx={{ my: 2 }} />
-
-      <DetailSection title="Sales & timeline">
-        <DetailField label="Purchased from" value={account.purchased_from || '—'} icon={WorkTwoToneIcon} sm={4} />
-        <DetailField label="Renting to" value={account.renting_to || '—'} icon={WorkTwoToneIcon} sm={4} />
-        <DetailField
-          label="Renting by"
-          value={account.renting_by ? formatDate(account.renting_by) : '—'}
-          icon={WorkTwoToneIcon}
-          sm={4}
-        />
-        <DetailField
-          label="Created at"
-          value={account.created_at ? formatDateTime(account.created_at) : '—'}
-          icon={SecurityTwoToneIcon}
-        />
-        <DetailField
-          label="Updated at"
-          value={account.updated_at ? formatDateTime(account.updated_at) : '—'}
-          icon={SecurityTwoToneIcon}
-        />
-      </DetailSection>
-
-      {account.image ? (
-        <>
-          <Divider sx={{ my: 2 }} />
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+        <Grid item xs={12} md={6}>
+          <Paper
+            variant="outlined"
+            sx={{ p: 2, height: '100%', borderRadius: 2, bgcolor: 'background.paper' }}
+          >
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
               Screenshot
             </Typography>
-            <Box
-              sx={{
-                width: '100%',
-                height: 360,
-                maxHeight: 520,
-                borderRadius: 2,
-                border: `1px solid ${theme.palette.divider}`,
-                overflow: 'auto',
-                bgcolor: alpha(theme.palette.primary.main, 0.04)
-              }}
-            >
-              <LinkedInImageThumb
-                accountId={account.id}
-                image={account.image}
-                fill
-                fillMode="contain"
+            {account.image ? (
+              <Box
+                sx={{
+                  width: '100%',
+                  height: 200,
+                  borderRadius: 2,
+                  border: `1px solid ${theme.palette.divider}`,
+                  overflow: 'hidden',
+                  bgcolor: alpha(theme.palette.primary.main, 0.04)
+                }}
+              >
+                <LinkedInImageThumb accountId={account.id} image={account.image} fill fillMode="contain" />
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  width: '100%',
+                  height: 200,
+                  borderRadius: 2,
+                  border: `1px dashed ${theme.palette.divider}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'text.disabled'
+                }}
+              >
+                <Typography variant="caption">No screenshot</Typography>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <DetailSection
+            title="LinkedIn account"
+            bordered
+            dense
+            gutter={false}
+            copyFields={[
+              { label: 'Email', value: account.linkedin_email },
+              { label: 'Password', value: account.linkedin_password },
+              { label: 'Link', value: account.linkedin_link }
+            ]}
+          >
+            <CompactField
+              label="Email"
+              value={account.linkedin_email}
+              copyValue={account.linkedin_email}
+              icon={PersonTwoToneIcon}
+            />
+            <CompactField
+              label="Password"
+              value={account.linkedin_password}
+              copyValue={account.linkedin_password}
+              icon={VpnKeyTwoToneIcon}
+            />
+            <CompactField
+              label="Link"
+              value={account.linkedin_link}
+              copyValue={account.linkedin_link}
+              icon={LinkTwoToneIcon}
+              link
+            />
+            <CompactField
+              label="Second email"
+              value={account.second_email}
+              copyValue={account.second_email}
+              icon={MailTwoToneIcon}
+            />
+            <CompactField
+              label="Created at"
+              value={account.linkedin_created_at ? formatDate(account.linkedin_created_at) : ''}
+              icon={WorkTwoToneIcon}
+            />
+          </DetailSection>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <DetailSection
+            title="Recovery email"
+            bordered
+            dense
+            gutter={false}
+            copyFields={[
+              { label: 'Email', value: account.recovery_email },
+              { label: 'Password', value: account.recovery_email_password },
+              { label: 'Code / backup', value: account.recovery_email_recovery }
+            ]}
+          >
+            <CompactField
+              label="Email"
+              value={account.recovery_email}
+              copyValue={account.recovery_email}
+              icon={MailTwoToneIcon}
+            />
+            <CompactField
+              label="Password"
+              value={account.recovery_email_password}
+              copyValue={account.recovery_email_password}
+              icon={VpnKeyTwoToneIcon}
+            />
+            <CompactField
+              label="Code / backup"
+              value={account.recovery_email_recovery}
+              copyValue={account.recovery_email_recovery}
+              icon={SecurityTwoToneIcon}
+            />
+          </DetailSection>
+        </Grid>
+      </Grid>
+
+      <Paper
+        variant="outlined"
+        sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: 'background.paper' }}
+      >
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" fontWeight={700}>
+            Proxy
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+            IP:Port:User:Pass
+          </Typography>
+          {account.proxy_expired_by ? (
+            <Stack direction="row" alignItems="center" spacing={0.5}>
+              <StorageTwoToneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                Expired by {formatDate(account.proxy_expired_by)}
+              </Typography>
+            </Stack>
+          ) : null}
+          {(() => {
+            const proxyCopyFields = [
+              {
+                label: 'Expired by',
+                value: account.proxy_expired_by ? formatDate(account.proxy_expired_by) : ''
+              },
+              { label: 'Info (IP:Port:User:Pass)', value: account.proxy_info }
+            ];
+            return sectionHasCopyValues(proxyCopyFields) ? (
+              <CopyFieldAdornment
+                label="Proxy"
+                value={buildSectionCopyText('Proxy', proxyCopyFields)}
               />
-            </Box>
-          </Box>
-        </>
-      ) : null}
+            ) : null;
+          })()}
+        </Stack>
+        <Box
+          sx={{
+            mt: 1,
+            p: 1.5,
+            borderRadius: 1,
+            maxHeight: 200,
+            overflow: 'auto',
+            bgcolor: alpha(theme.palette.common.black, 0.03),
+            border: `1px dashed ${theme.palette.divider}`
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              lineHeight: 1.7,
+              color: String(account.proxy_info ?? '').trim() ? 'text.primary' : 'text.secondary'
+            }}
+          >
+            {String(account.proxy_info ?? '').trim() || 'No proxy info provided.'}
+          </Typography>
+        </Box>
+      </Paper>
+
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid item xs={12} md={6}>
+          <DetailSection title="Infrastructure" bordered dense gutter={false}>
+            <CompactField label="Browser" value={account.browser} icon={WorkTwoToneIcon} />
+            <CompactField
+              label="Profile no."
+              value={account.profile_no != null ? String(account.profile_no) : ''}
+              icon={PersonTwoToneIcon}
+            />
+            <CompactField label="Provider" value={account.provider} icon={StorageTwoToneIcon} />
+            <CompactField label="Order ID" value={account.order_id} icon={StorageTwoToneIcon} />
+          </DetailSection>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <DetailSection title="Sales & timeline" bordered dense gutter={false}>
+            <CompactField label="Purchased from" value={account.purchased_from} icon={WorkTwoToneIcon} />
+            <CompactField label="Renting to" value={account.renting_to} icon={WorkTwoToneIcon} />
+            <CompactField
+              label="Renting by"
+              value={account.renting_by ? formatDate(account.renting_by) : ''}
+              icon={WorkTwoToneIcon}
+            />
+            <CompactField
+              label="Created at"
+              value={account.created_at ? formatDateTime(account.created_at) : ''}
+              icon={SecurityTwoToneIcon}
+            />
+            <CompactField
+              label="Updated at"
+              value={account.updated_at ? formatDateTime(account.updated_at) : ''}
+              icon={SecurityTwoToneIcon}
+            />
+          </DetailSection>
+        </Grid>
+      </Grid>
 
       {account.logs ? <DetailTextSection title="Logs" text={account.logs} /> : null}
 
