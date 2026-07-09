@@ -37,6 +37,10 @@ import {
 } from 'src/data/linkedinOptions';
 import { DEFAULT_COUNTRY } from 'src/data/countries';
 import { formatDateTime } from 'src/utils/dateFormat';
+import {
+  extractImageFileFromPasteEvent,
+  pasteImageOnUserClick
+} from 'src/utils/pasteImageFromClipboard';
 import LinkedInImageThumb from './LinkedInImageThumb';
 
 function TabPanel({ children, value, index }) {
@@ -154,7 +158,8 @@ function LinkedInScreenshotField({
   hasScreenshot,
   onClear,
   onRemoveExistingImage,
-  pendingFile
+  pendingFile,
+  pasteAwaiting = false
 }) {
   const theme = useTheme();
   const [dragOver, setDragOver] = useState(false);
@@ -216,10 +221,12 @@ function LinkedInScreenshotField({
             minHeight: 240,
             borderRadius: 2,
             border: '2px dashed',
-            borderColor: dragOver ? 'primary.main' : 'divider',
-            bgcolor: dragOver
-              ? alpha(theme.palette.primary.main, 0.08)
-              : alpha(theme.palette.background.default, 0.8),
+            borderColor: pasteAwaiting || dragOver ? 'primary.main' : 'divider',
+            bgcolor:
+              pasteAwaiting || dragOver
+                ? alpha(theme.palette.primary.main, 0.08)
+                : alpha(theme.palette.background.default, 0.8),
+            boxShadow: pasteAwaiting ? `0 0 0 2px ${alpha(theme.palette.primary.main, 0.2)}` : 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -272,7 +279,7 @@ function LinkedInScreenshotField({
                 Drop image here
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                or click to browse · Ctrl+V to paste
+                {pasteAwaiting ? 'Press Ctrl+V to paste image' : 'or click to browse · Ctrl+V to paste'}
               </Typography>
             </Stack>
           )}
@@ -304,14 +311,14 @@ function LinkedInScreenshotField({
           </Button>
           <Button
             size="small"
-            variant="outlined"
+            variant={pasteAwaiting ? 'contained' : 'outlined'}
             startIcon={<ContentPasteTwoToneIcon />}
             onClick={(event) => {
               event.stopPropagation();
               onPasteFromClipboard();
             }}
           >
-            Paste
+            {pasteAwaiting ? 'Press Ctrl+V' : 'Paste'}
           </Button>
           {hasScreenshot ? (
             <Button
@@ -349,7 +356,8 @@ LinkedInScreenshotField.propTypes = {
   hasScreenshot: PropTypes.bool.isRequired,
   onClear: PropTypes.func.isRequired,
   onRemoveExistingImage: PropTypes.func,
-  pendingFile: PropTypes.object
+  pendingFile: PropTypes.object,
+  pasteAwaiting: PropTypes.bool
 };
 
 function LinkedInFormFields({
@@ -367,10 +375,19 @@ function LinkedInFormFields({
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const screenshotPasteRef = useRef(null);
+  const pasteRequestRef = useRef(0);
   const [tab, setTab] = useState(0);
+  const [pasteAwaiting, setPasteAwaiting] = useState(false);
   const pendingPreviewUrl = useMemo(
     () => (pendingFile ? URL.createObjectURL(pendingFile) : null),
     [pendingFile]
+  );
+
+  useEffect(
+    () => () => {
+      pasteRequestRef.current += 1;
+    },
+    []
   );
 
   useEffect(
@@ -414,54 +431,49 @@ function LinkedInFormFields({
   };
 
   const handleScreenshotPaste = (event) => {
-    const items = event.clipboardData?.items;
-    if (!items) {
+    const file = extractImageFileFromPasteEvent(event);
+    if (!file) {
       return;
     }
-    const imageItem = Array.from(items).find((item) => item.type.startsWith('image/'));
-    if (!imageItem) {
-      return;
-    }
-    event.preventDefault();
-    const file = imageItem.getAsFile();
-    if (file) {
-      selectPendingFile(file);
-      enqueueSnackbar('Image pasted', { variant: 'success' });
-    }
-  };
 
-  const readFirstClipboardImage = async (items) => {
-    const files = await Promise.all(
-      items.map(async (item) => {
-        const imageType = item.types.find((type) => type.startsWith('image/'));
-        if (!imageType) {
-          return null;
-        }
-        const blob = await item.getType(imageType);
-        const ext = imageType.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
-        return new File([blob], `pasted-image.${ext}`, { type: imageType });
-      })
-    );
-    return files.find(Boolean) || null;
+    event.preventDefault();
+    pasteRequestRef.current += 1;
+    setPasteAwaiting(false);
+    selectPendingFile(file);
+    enqueueSnackbar('Image pasted', { variant: 'success' });
   };
 
   const handlePasteFromClipboard = async () => {
-    screenshotPasteRef.current?.focus();
+    const requestId = pasteRequestRef.current + 1;
+    pasteRequestRef.current = requestId;
+    setPasteAwaiting(true);
+
     try {
-      if (!navigator.clipboard?.read) {
-        enqueueSnackbar('Click the preview and press Ctrl+V to paste an image', { variant: 'info' });
+      const file = await pasteImageOnUserClick({
+        getPasteTarget: () => screenshotPasteRef.current,
+        getPasteContainer: () => screenshotPasteRef.current?.closest?.('[role="dialog"]')
+      });
+
+      if (pasteRequestRef.current !== requestId) {
         return;
       }
-      const items = await navigator.clipboard.read();
-      const file = await readFirstClipboardImage(items);
-      if (!file) {
-        enqueueSnackbar('No image found in clipboard', { variant: 'warning' });
-        return;
-      }
+
       selectPendingFile(file);
       enqueueSnackbar('Image pasted from clipboard', { variant: 'success' });
-    } catch {
-      enqueueSnackbar('Paste not allowed — click the preview and use Ctrl+V', { variant: 'warning' });
+    } catch (error) {
+      if (pasteRequestRef.current !== requestId) {
+        return;
+      }
+
+      if (error?.message === 'Paste timed out') {
+        return;
+      }
+
+      enqueueSnackbar('No image found in clipboard', { variant: 'warning' });
+    } finally {
+      if (pasteRequestRef.current === requestId) {
+        setPasteAwaiting(false);
+      }
     }
   };
 
@@ -658,6 +670,7 @@ function LinkedInFormFields({
                   onClear={clearPendingFile}
                   onRemoveExistingImage={onRemoveExistingImage}
                   pendingFile={pendingFile}
+                  pasteAwaiting={pasteAwaiting}
                 />
               </FieldCell>
             </SectionCard>

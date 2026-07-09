@@ -29,6 +29,11 @@ export function CopyFieldAdornment({ label, value, disabled = false }) {
     });
   };
 
+  const handleMouseDown = (event) => {
+    // Keep focus on the text field so dialog focus traps do not break copy.
+    event.preventDefault();
+  };
+
   return (
     <Tooltip title={!canCopy ? 'Nothing to copy' : copied ? 'Copied' : 'Copy'}>
       <span>
@@ -37,6 +42,7 @@ export function CopyFieldAdornment({ label, value, disabled = false }) {
           type="button"
           edge="end"
           aria-label={`Copy ${label}`}
+          onMouseDown={handleMouseDown}
           onClick={handleCopy}
           disabled={!canCopy}
         >
