@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import PropTypes from 'prop-types';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
 import {
@@ -29,12 +28,9 @@ import {
   useTheme
 } from '@mui/material';
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
-import CalendarTodayTwoToneIcon from '@mui/icons-material/CalendarTodayTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
-import LockOpenTwoToneIcon from '@mui/icons-material/LockOpenTwoTone';
-import LockTwoToneIcon from '@mui/icons-material/LockTwoTone';
 import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
 import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
@@ -64,7 +60,6 @@ import {
   updateLinkedInAccount,
   uploadLinkedInImage
 } from 'src/services/linkedinApi';
-import { formatDate } from 'src/utils/dateFormat';
 import LinkedInDetailDialog from './LinkedInDetailDialog';
 import LinkedInAccountTile from './LinkedInAccountTile';
 import LinkedInViewModeMenu from './LinkedInViewModeMenu';
@@ -75,6 +70,11 @@ import LinkedInFormFields, {
 } from './LinkedInFormFields';
 import LinkedInStatusLabel from './LinkedInStatusLabel';
 import LinkedInImageThumb from './LinkedInImageThumb';
+import {
+  ProxyExpiryDate,
+  RentingByDate,
+  SecuredStatusCell
+} from './LinkedInRowParts';
 
 const LINKEDIN_SELECT_FILTERS = [
   { id: 'status', field: 'status' },
@@ -90,6 +90,10 @@ const LINKEDIN_SELECT_FILTERS = [
   {
     id: 'created_expiring',
     getValue: (row) => (isCreatedExpiring(row) ? 'expiring' : 'no')
+  },
+  {
+    id: 'email_not_secured',
+    getValue: (row) => (isEmailNotSecuredActive(row) ? 'yes' : 'no')
   }
 ];
 
@@ -115,29 +119,6 @@ const TILE_ROWS_PER_PAGE = 12;
 const TILE_ROWS_PER_PAGE_OPTIONS = [12, 24, 36];
 const TABLE_ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
-function getRentingDateMeta(rentingBy) {
-  if (!rentingBy) {
-    return null;
-  }
-
-  const target = new Date(rentingBy);
-  target.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) {
-    return { color: 'error.main', label: `Expired ${Math.abs(diffDays)}d ago` };
-  }
-  if (diffDays <= 7) {
-    return {
-      color: 'warning.main',
-      label: diffDays === 0 ? 'Due today' : `Due in ${diffDays}d`
-    };
-  }
-  return { color: 'success.main', label: `Available (${diffDays}d)` };
-}
-
 function isRentingExpired(row) {
   if (row.status !== 'Renting' || !row.renting_by) {
     return false;
@@ -161,120 +142,9 @@ function isCreatedExpiring(row) {
   return diffDays <= 7;
 }
 
-function RentingByDate({ rentingBy }) {
-  const meta = getRentingDateMeta(rentingBy);
-
-  if (!meta) {
-    return (
-      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.25 }}>
-        No renting date
-      </Typography>
-    );
-  }
-
-  return (
-    <Tooltip title={`Renting by ${formatDate(rentingBy)} · ${meta.label}`}>
-      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.25 }}>
-        <CalendarTodayTwoToneIcon sx={{ fontSize: 13, color: meta.color }} />
-        <Typography variant="caption" fontWeight={700} sx={{ color: meta.color }}>
-          {formatDate(rentingBy)}
-        </Typography>
-      </Stack>
-    </Tooltip>
-  );
+function isEmailNotSecuredActive(row) {
+  return (row.status === 'Created' || row.status === 'Renting') && !row.email_secured;
 }
-
-RentingByDate.propTypes = {
-  rentingBy: PropTypes.string
-};
-
-function ProxyExpiryDate({ proxyExpiredBy }) {
-  const meta = getRentingDateMeta(proxyExpiredBy);
-
-  if (!meta) {
-    return (
-      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.25 }}>
-        No proxy expiry
-      </Typography>
-    );
-  }
-
-  return (
-    <Tooltip title={`Proxy expired by ${formatDate(proxyExpiredBy)} · ${meta.label}`}>
-      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.25 }}>
-        <CalendarTodayTwoToneIcon sx={{ fontSize: 13, color: meta.color }} />
-        <Typography variant="caption" fontWeight={700} sx={{ color: meta.color }}>
-          {formatDate(proxyExpiredBy)}
-        </Typography>
-      </Stack>
-    </Tooltip>
-  );
-}
-
-ProxyExpiryDate.propTypes = {
-  proxyExpiredBy: PropTypes.string
-};
-
-function SecuredLockBadge({ secured, label }) {
-  const isSecured = Boolean(secured);
-
-  return (
-    <Tooltip title={`${label} ${isSecured ? 'secured' : 'not secured'}`}>
-      <Box
-        component="span"
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 0.5,
-          flexShrink: 0,
-          whiteSpace: 'nowrap',
-          color: isSecured ? 'success.main' : 'error.main'
-        }}
-      >
-        {isSecured ? (
-          <LockTwoToneIcon sx={{ fontSize: 16 }} />
-        ) : (
-          <LockOpenTwoToneIcon sx={{ fontSize: 16 }} />
-        )}
-        <Typography
-          component="span"
-          variant="caption"
-          fontWeight={600}
-          sx={{ fontSize: '0.72rem', lineHeight: 1 }}
-        >
-          {label}
-        </Typography>
-      </Box>
-    </Tooltip>
-  );
-}
-
-SecuredLockBadge.propTypes = {
-  secured: PropTypes.bool,
-  label: PropTypes.string.isRequired
-};
-
-function SecuredStatusCell({ emailSecured, linkedinSecured }) {
-  return (
-    <Box
-      sx={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 1.25,
-        whiteSpace: 'nowrap',
-        flexWrap: 'nowrap'
-      }}
-    >
-      <SecuredLockBadge secured={emailSecured} label="Email" />
-      <SecuredLockBadge secured={linkedinSecured} label="LinkedIn" />
-    </Box>
-  );
-}
-
-SecuredStatusCell.propTypes = {
-  emailSecured: PropTypes.bool,
-  linkedinSecured: PropTypes.bool
-};
 
 function LinkedInManagement() {
   const theme = useTheme();
@@ -372,6 +242,7 @@ function LinkedInManagement() {
       createdExpiring: 0,
       renting: 0,
       rentingExpired: 0,
+      emailNotSecured: 0,
       actionRequired: 0
     };
     rows.forEach((row) => {
@@ -386,6 +257,9 @@ function LinkedInManagement() {
       }
       if (isRentingExpired(row)) {
         counts.rentingExpired += 1;
+      }
+      if (isEmailNotSecuredActive(row)) {
+        counts.emailNotSecured += 1;
       }
       if (isLinkedInNeedActionActive(row.need_action)) {
         counts.actionRequired += 1;
@@ -428,6 +302,11 @@ function LinkedInManagement() {
   const showRentingExpiredAccounts = useCallback(() => {
     clearFilters();
     setSelectValue('renting_expired', 'expired');
+  }, [clearFilters, setSelectValue]);
+
+  const showEmailNotSecuredAccounts = useCallback(() => {
+    clearFilters();
+    setSelectValue('email_not_secured', 'yes');
   }, [clearFilters, setSelectValue]);
 
   const showNeedActionAccounts = useCallback(() => {
@@ -761,6 +640,13 @@ function LinkedInManagement() {
             clickable
           />
           <Chip
+            label={`${summary.emailNotSecured} email not secured`}
+            color="error"
+            variant={selectValues.email_not_secured === 'yes' ? 'filled' : 'outlined'}
+            onClick={showEmailNotSecuredAccounts}
+            clickable
+          />
+          <Chip
             label={`${summary.actionRequired} need action`}
             color="warning"
             variant={selectValues.need_action_active === 'active' ? 'filled' : 'outlined'}
@@ -876,6 +762,19 @@ function LinkedInManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
+                      label="Due date"
+                      sortKey={(row) =>
+                        row.status === 'Renting'
+                          ? row.renting_by
+                          : row.status === 'Created'
+                            ? row.proxy_expired_by
+                            : null
+                      }
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
                       label="Action"
                       sortKey="need_action"
                       sortField={sortField}
@@ -888,15 +787,15 @@ function LinkedInManagement() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={10}>Loading…</TableCell>
+                      <TableCell colSpan={11}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10}>No LinkedIn accounts yet.</TableCell>
+                      <TableCell colSpan={11}>No LinkedIn accounts yet.</TableCell>
                     </TableRow>
                   ) : filteredRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10}>No LinkedIn accounts match your filters.</TableCell>
+                      <TableCell colSpan={11}>No LinkedIn accounts match your filters.</TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
@@ -1023,11 +922,17 @@ function LinkedInManagement() {
                         </TableCell>
                         <TableCell>
                           <LinkedInStatusLabel status={row.status} />
+                        </TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
                           {row.status === 'Renting' ? (
                             <RentingByDate rentingBy={row.renting_by} />
                           ) : row.status === 'Created' ? (
                             <ProxyExpiryDate proxyExpiredBy={row.proxy_expired_by} />
-                          ) : null}
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">
+                              —
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell>
                           {isLinkedInNeedActionActive(row.need_action) ? (
