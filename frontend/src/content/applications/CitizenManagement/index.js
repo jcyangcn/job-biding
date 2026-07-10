@@ -30,6 +30,7 @@ import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import CloudUploadTwoToneIcon from '@mui/icons-material/CloudUploadTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import InsertDriveFileTwoToneIcon from '@mui/icons-material/InsertDriveFileTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
@@ -523,6 +524,13 @@ function CitizenManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
+                      label="Files"
+                      sortKey={(row) => (row.review_files || []).length}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
                       label="Updated"
                       sortKey="updated_at"
                       sortField={sortField}
@@ -535,11 +543,11 @@ function CitizenManagement() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9}>Loading…</TableCell>
+                      <TableCell colSpan={10}>Loading…</TableCell>
                     </TableRow>
                   ) : filteredRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9}>
+                      <TableCell colSpan={10}>
                         {rows.length === 0 ? 'No citizens yet.' : 'No citizens match your filters.'}
                       </TableCell>
                     </TableRow>
@@ -583,6 +591,29 @@ function CitizenManagement() {
                               {row.images.length > 4 ? (
                                 <Typography variant="caption" color="text.secondary">
                                   +{row.images.length - 4}
+                                </Typography>
+                              ) : null}
+                            </Stack>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {(row.review_files || []).length ? (
+                            <Stack direction="row" gap={0.25} alignItems="center" flexWrap="wrap">
+                              {row.review_files.slice(0, 4).map((file) => (
+                                <Tooltip key={file.filename} title={`Download ${file.original_name}`}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDownloadReviewFile(row.id, file)}
+                                  >
+                                    <InsertDriveFileTwoToneIcon fontSize="small" color="action" />
+                                  </IconButton>
+                                </Tooltip>
+                              ))}
+                              {row.review_files.length > 4 ? (
+                                <Typography variant="caption" color="text.secondary">
+                                  +{row.review_files.length - 4}
                                 </Typography>
                               ) : null}
                             </Stack>

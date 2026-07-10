@@ -96,8 +96,8 @@ function copyWithExecCommand(value, event) {
 }
 
 export function copyTextSync(text, event) {
-  const value = String(text ?? '').trim();
-  if (!value) {
+  const value = String(text ?? '');
+  if (!value.trim()) {
     throw new Error('Nothing to copy');
   }
 
@@ -105,8 +105,8 @@ export function copyTextSync(text, event) {
 }
 
 export async function copyToClipboard(text, event) {
-  const value = String(text ?? '').trim();
-  if (!value) {
+  const value = String(text ?? '');
+  if (!value.trim()) {
     throw new Error('Nothing to copy');
   }
 
@@ -134,13 +134,13 @@ export function copyOnUserClick(event, text, { onSuccess, onError } = {}) {
   event?.preventDefault?.();
   event?.stopPropagation?.();
 
-  const value = String(text ?? '').trim();
-  if (!value) {
+  const value = String(text ?? '');
+  if (!value.trim()) {
     return;
   }
 
   const input = findFieldInput(event);
-  if (input && String(input.value ?? '').trim() === value) {
+  if (input && String(input.value ?? '').trim() === value.trim()) {
     try {
       copyViaInputElement(input, value);
       onSuccess?.();

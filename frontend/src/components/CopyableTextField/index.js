@@ -9,8 +9,8 @@ import { copyOnUserClick } from 'src/utils/copyToClipboard';
 export function CopyFieldAdornment({ label, value, disabled = false }) {
   const { enqueueSnackbar } = useSnackbar();
   const [copied, setCopied] = useState(false);
-  const text = value == null ? '' : String(value).trim();
-  const canCopy = Boolean(text) && !disabled;
+  const text = value == null ? '' : String(value);
+  const canCopy = Boolean(text.trim()) && !disabled;
 
   const handleCopy = (event) => {
     if (!canCopy) {

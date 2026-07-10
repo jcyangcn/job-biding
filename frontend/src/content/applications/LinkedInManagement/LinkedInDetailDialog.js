@@ -35,7 +35,7 @@ function buildSectionCopyText(title, fields) {
     .map(({ label, value }) => `${label}: ${String(value ?? '').trim()}`)
     .join('\r\n');
 
-  return `${title}\r\n-----\r\n${body}`;
+  return `${title}\r\n-----\r\n${body}\r\n\r\n`;
 }
 
 function sectionHasCopyValues(fields) {

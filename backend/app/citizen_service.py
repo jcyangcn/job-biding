@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import UPLOADS_DIR
+from app.config import CITIZEN_IMAGE_DIR, CITIZEN_REVIEW_DIR, UPLOADS_DIR
 from app.db_models import Citizen
 from app.models import CitizenCreateRequest, CitizenImageInfo, CitizenUpdateRequest
 
@@ -119,24 +119,40 @@ def _safe_stored_filename(original_name: str, *, default_stem: str, allowed_exte
     return f"{token}_{stem}"
 
 
-def _resolve_file_path(root: Path, filename: str) -> Path:
+def _citizen_scope_dir(root: Path, citizen_id: int) -> Path:
+    return root / str(citizen_id)
+
+
+def _resolve_scoped_file_path(root: Path, citizen_id: int, filename: str) -> Path:
+    """Resolve a citizen file stored under ``root/{citizen_id}/{filename}``.
+
+    Falls back to the legacy flat uploads directory so previously uploaded
+    files keep resolving after the storage layout change.
+    """
     safe_name = Path(filename).name
     if safe_name != filename:
         raise ValueError("Invalid filename")
 
-    file_path = (root / safe_name).resolve()
-    resolved_root = root.resolve()
-    if file_path.parent != resolved_root:
+    scope_dir = _citizen_scope_dir(root, citizen_id).resolve()
+    candidate = (scope_dir / safe_name).resolve()
+    if candidate.parent != scope_dir:
         raise ValueError("Invalid filename")
-    return file_path
+    if candidate.is_file():
+        return candidate
+
+    legacy = (UPLOADS_DIR / safe_name).resolve()
+    if legacy.parent == UPLOADS_DIR.resolve() and legacy.is_file():
+        return legacy
+
+    return candidate
 
 
 def resolve_citizen_image_path(citizen_id: int, filename: str) -> Path:
-    return _resolve_file_path(UPLOADS_DIR, filename)
+    return _resolve_scoped_file_path(CITIZEN_IMAGE_DIR, citizen_id, filename)
 
 
 def resolve_citizen_review_file_path(citizen_id: int, filename: str) -> Path:
-    return _resolve_file_path(UPLOADS_DIR, filename)
+    return _resolve_scoped_file_path(CITIZEN_REVIEW_DIR, citizen_id, filename)
 
 
 def _add_citizen_file(
@@ -161,14 +177,16 @@ def _add_citizen_file(
         default_stem=default_stem,
         allowed_extensions=allowed_extensions,
     )
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    target = UPLOADS_DIR / stored_name
+    scope_dir = _citizen_scope_dir(root, record.id)
+    scope_dir.mkdir(parents=True, exist_ok=True)
+    target = scope_dir / stored_name
     target.write_bytes(content)
 
     file_info = CitizenImageInfo(
         filename=stored_name,
         original_name=Path(original_name).name,
         uploaded_at=datetime.now(timezone.utc),
+        path=f"/storage/uploads/{root.name}/{record.id}/{stored_name}",
     )
     files = _parse_files(getattr(record, field_name))
     files.append(file_info)
@@ -192,7 +210,7 @@ def _remove_citizen_file(
     if not any(item.filename == safe_name for item in files):
         raise ValueError("File not found")
 
-    path = _resolve_file_path(root, safe_name)
+    path = _resolve_scoped_file_path(root, record.id, safe_name)
     if path.is_file():
         path.unlink()
 
@@ -217,7 +235,7 @@ def add_citizen_image(
         db,
         record,
         field_name="images",
-        root=UPLOADS_DIR,
+        root=CITIZEN_IMAGE_DIR,
         original_name=original_name,
         content=content,
         allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
@@ -230,7 +248,7 @@ def remove_citizen_image(db: Session, record: Citizen, filename: str) -> None:
         db,
         record,
         field_name="images",
-        root=UPLOADS_DIR,
+        root=CITIZEN_IMAGE_DIR,
         filename=filename,
     )
 
@@ -246,7 +264,7 @@ def add_citizen_review_file(
         db,
         record,
         field_name="review_files",
-        root=UPLOADS_DIR,
+        root=CITIZEN_REVIEW_DIR,
         original_name=original_name,
         content=content,
         allowed_extensions=ALLOWED_REVIEW_FILE_EXTENSIONS,
@@ -259,6 +277,6 @@ def remove_citizen_review_file(db: Session, record: Citizen, filename: str) -> N
         db,
         record,
         field_name="review_files",
-        root=UPLOADS_DIR,
+        root=CITIZEN_REVIEW_DIR,
         filename=filename,
     )
