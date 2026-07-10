@@ -987,7 +987,11 @@ function LinkedInManagement() {
               <Grid container spacing={2}>
                 {paginatedRows.map((row) => (
                   <Grid item xs={12} sm={6} md={3} key={row.id}>
-                    <LinkedInAccountTile account={row} onView={openDetail} />
+                    <LinkedInAccountTile
+                      account={row}
+                      onView={openDetail}
+                      onEditLog={openLogDialog}
+                    />
                   </Grid>
                 ))}
               </Grid>

@@ -12,7 +12,7 @@ import { ProxyExpiryDate, RentingByDate, SecuredStatusCell } from './LinkedInRow
 const CARD_HEIGHT = 304;
 const IMAGE_HEIGHT = 160;
 
-function LinkedInAccountTile({ account, onView }) {
+function LinkedInAccountTile({ account, onView, onEditLog }) {
   const theme = useTheme();
   const needActionColorKey = getLinkedInNeedActionColor(account.need_action);
   const needActionColor =
@@ -155,13 +155,26 @@ function LinkedInAccountTile({ account, onView }) {
         </Stack>
 
         <Box
+          onClick={
+            onEditLog
+              ? (event) => {
+                  event.stopPropagation();
+                  onEditLog(account);
+                }
+              : undefined
+          }
           sx={{
             borderRadius: 1,
             px: 1,
             py: 0.5,
             minHeight: 28,
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            cursor: onEditLog ? 'pointer' : 'inherit',
+            transition: 'background-color 0.15s ease',
+            '&:hover': onEditLog
+              ? { bgcolor: alpha(theme.palette.primary.main, 0.06) }
+              : undefined
           }}
         >
           <Typography
@@ -210,7 +223,8 @@ function LinkedInAccountTile({ account, onView }) {
 
 LinkedInAccountTile.propTypes = {
   account: PropTypes.object.isRequired,
-  onView: PropTypes.func.isRequired
+  onView: PropTypes.func.isRequired,
+  onEditLog: PropTypes.func
 };
 
 export default LinkedInAccountTile;

@@ -7,12 +7,12 @@ import TableRowsTwoToneIcon from '@mui/icons-material/TableRowsTwoTone';
 export const LINKEDIN_VIEW_MODES = {
   table: {
     value: 'table',
-    label: 'Grid',
+    label: 'Table view',
     Icon: TableRowsTwoToneIcon
   },
   tile: {
     value: 'tile',
-    label: 'Tile view',
+    label: 'Grid View',
     Icon: GridViewTwoToneIcon
   }
 };
