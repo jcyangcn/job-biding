@@ -9,8 +9,17 @@ function ApplicationProfileRow({ profile, identity, onQaClick, onViewClick }) {
     <ProfileCopyCard
       profile={profile}
       identity={identity}
+      onClick={onViewClick}
       actions={
         <>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<VisibilityTwoToneIcon />}
+            onClick={onViewClick}
+          >
+            Manage Application
+          </Button>
           <Button
             variant="outlined"
             color="info"
@@ -20,14 +29,6 @@ function ApplicationProfileRow({ profile, identity, onQaClick, onViewClick }) {
             disabled={!identity}
           >
             QA
-          </Button>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<VisibilityTwoToneIcon />}
-            onClick={onViewClick}
-          >
-            View
           </Button>
         </>
       }

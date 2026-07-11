@@ -143,6 +143,7 @@ class JobApplication(Base):
         Integer, ForeignKey("resume_generations.id", ondelete="SET NULL"), nullable=True
     )
     resume_online_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    resume_generation_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     applied: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     bidder_user_id: Mapped[int | None] = mapped_column(

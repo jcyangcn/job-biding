@@ -84,6 +84,7 @@ class GenerateResumeRequest(BaseModel):
     profile: Profile | None = None
     profile_markdown: str | None = None
     profile_id: int | None = None
+    application_id: int | None = None
     ai_provider: Literal["openai", "cursor", "auto"] | None = None
 
 
@@ -92,6 +93,7 @@ class GenerateResumeResponse(BaseModel):
     summary_chars: int
     provider: str
     generation_id: int | None = None
+    application_id: int | None = None
 
 
 class ResumeGenerationRecord(BaseModel):
@@ -317,6 +319,7 @@ class JobApplicationResponse(BaseModel):
     resume_generated_id: int | None = None
     resume_pdf_filename: str | None = None
     resume_online_link: str | None = None
+    resume_generation_status: str | None = None
     applied: bool
     applied_at: datetime | None = None
     created_at: datetime

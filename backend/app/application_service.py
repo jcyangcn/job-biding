@@ -53,6 +53,7 @@ def application_to_response(db: Session, record: JobApplication) -> dict:
         "resume_generated_id": record.resume_generated_id,
         "resume_pdf_filename": resume_pdf_filename,
         "resume_online_link": record.resume_online_link,
+        "resume_generation_status": record.resume_generation_status,
         "applied": record.applied,
         "applied_at": record.applied_at,
         "created_at": record.created_at,
@@ -156,10 +157,7 @@ def list_applications_for_profile(
         db.scalars(
             select(JobApplication)
             .where(JobApplication.profile_id == profile_id)
-            .order_by(
-                JobApplication.applied_at.desc().nullslast(),
-                JobApplication.id.desc(),
-            )
+            .order_by(JobApplication.id.desc())
         ).all()
     )
 
@@ -170,10 +168,7 @@ def list_applications_admin(
     if user.role != UserRole.admin:
         raise PermissionError("Access denied")
 
-    query = select(JobApplication).order_by(
-        JobApplication.applied_at.desc().nullslast(),
-        JobApplication.id.desc(),
-    )
+    query = select(JobApplication).order_by(JobApplication.id.desc())
     if profile_id is not None:
         query = query.where(JobApplication.profile_id == profile_id)
 
@@ -186,10 +181,7 @@ def list_applications_for_user(db: Session, user: User) -> list[JobApplication]:
             select(JobApplication)
             .join(JobProfile, JobApplication.profile_id == JobProfile.id)
             .where(profile_access_filter(user.id))
-            .order_by(
-                JobApplication.applied_at.desc().nullslast(),
-                JobApplication.id.desc(),
-            )
+            .order_by(JobApplication.id.desc())
         ).all()
     )
 
@@ -236,3 +228,48 @@ def delete_application(db: Session, application_id: int, user: User) -> None:
     _ensure_application_access(db, record, user)
     db.delete(record)
     db.commit()
+
+
+def set_application_resume_generation_status(
+    db: Session,
+    application_id: int,
+    status: str | None,
+    user: User,
+) -> JobApplication:
+    record = get_application(db, application_id)
+    if not record:
+        raise ValueError("Application not found")
+    _ensure_application_access(db, record, user)
+    record.resume_generation_status = status
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def attach_generated_resume_to_application(
+    db: Session,
+    application_id: int,
+    generation_id: int,
+    user: User,
+    *,
+    job_description: str | None = None,
+) -> JobApplication:
+    """Link a finished resume generation to an application (auto-save after PDF)."""
+    record = get_application(db, application_id)
+    if not record:
+        raise ValueError("Application not found")
+    _ensure_application_access(db, record, user)
+
+    generation = db.get(ResumeGeneration, generation_id)
+    if not generation:
+        raise ValueError("Resume generation not found")
+
+    record.resume_generated_id = generation_id
+    record.resume_online_link = None
+    record.resume_generation_status = "generated"
+    if job_description is not None:
+        record.job_description = job_description.strip()
+
+    db.commit()
+    db.refresh(record)
+    return record

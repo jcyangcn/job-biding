@@ -55,12 +55,14 @@ from app.linkedin_service import (
 )
 from app.application_service import (
     application_to_response,
+    attach_generated_resume_to_application,
     create_application,
     delete_application,
     list_applications_admin,
     list_applications_for_profile,
     list_applications_for_user,
     next_application_number_for_profile,
+    set_application_resume_generation_status,
     update_application,
 )
 from app.profile_service import (
@@ -1067,20 +1069,50 @@ def list_resume_generations(
     ]
 
 
-@app.post("/api/resumes", response_model=GenerateResumeResponse)
-def create_resume(request: GenerateResumeRequest, db: Session = Depends(get_db)):
+def _create_resume_response(
+    request: GenerateResumeRequest,
+    db: Session,
+    user: User,
+) -> GenerateResumeResponse:
     profile = _resolve_profile(request)
     provider = request.ai_provider or settings.resolved_provider()
+
+    if request.application_id is not None:
+        try:
+            set_application_resume_generation_status(
+                db, request.application_id, "generating", user
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
         content = generate_resume_content(
             profile, request.job_description, provider=provider,
         )
     except Exception as exc:
+        if request.application_id is not None:
+            try:
+                set_application_resume_generation_status(
+                    db, request.application_id, "failed", user
+                )
+            except (PermissionError, ValueError):
+                pass
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     output_path = _resolve_resume_output_path(db, profile, request)
-    render_resume_pdf(profile, content, output_path)
+    try:
+        render_resume_pdf(profile, content, output_path)
+    except Exception as exc:
+        if request.application_id is not None:
+            try:
+                set_application_resume_generation_status(
+                    db, request.application_id, "failed", user
+                )
+            except (PermissionError, ValueError):
+                pass
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     try:
         record = save_resume_generation(
@@ -1092,17 +1124,50 @@ def create_resume(request: GenerateResumeRequest, db: Session = Depends(get_db))
         )
         generation_id = record.id
     except Exception as exc:
+        if request.application_id is not None:
+            try:
+                set_application_resume_generation_status(
+                    db, request.application_id, "failed", user
+                )
+            except (PermissionError, ValueError):
+                pass
         raise HTTPException(
             status_code=500,
             detail=f"Resume saved but history record failed: {exc}",
         ) from exc
+
+    attached_application_id = None
+    if request.application_id is not None:
+        try:
+            attach_generated_resume_to_application(
+                db,
+                request.application_id,
+                generation_id,
+                user,
+                job_description=request.job_description,
+            )
+            attached_application_id = request.application_id
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return GenerateResumeResponse(
         filename=output_path.name,
         summary_chars=len(content.summary),
         provider=provider,
         generation_id=generation_id,
+        application_id=attached_application_id,
     )
+
+
+@app.post("/api/resumes", response_model=GenerateResumeResponse)
+def create_resume(
+    request: GenerateResumeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return _create_resume_response(request, db, user)
 
 
 def _resolve_generated_pdf(filename: str) -> Path:
@@ -1133,9 +1198,13 @@ def download_resume_pdf(filename: str, inline: bool = False):
 
 
 @app.post("/api/resumes/pdf")
-def create_resume_pdf(request: GenerateResumeRequest, db: Session = Depends(get_db)):
+def create_resume_pdf(
+    request: GenerateResumeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Generate resume and return the PDF file directly."""
-    meta = create_resume(request, db)
+    meta = _create_resume_response(request, db, user)
     path = GENERATED_DIR / meta.filename
     return FileResponse(
         path,
@@ -1154,6 +1223,7 @@ async def create_resume_from_files(
     profile_markdown: str | None = Form(None),
     use_default_profile: bool = Form(False),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Multipart form: paste JD text and optional profile markdown."""
     if use_default_profile or not profile_markdown:
@@ -1168,7 +1238,17 @@ async def create_resume_from_files(
         job_description=job_description,
         profile=profile,
     )
-    return create_resume_pdf(request, db)
+    meta = _create_resume_response(request, db, user)
+    path = GENERATED_DIR / meta.filename
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=meta.filename,
+        headers={
+            "X-Generation-Id": str(meta.generation_id or ""),
+            "Content-Disposition": f'attachment; filename="{meta.filename}"',
+        },
+    )
 
 
 def _resolve_profile(request: GenerateResumeRequest) -> Profile:

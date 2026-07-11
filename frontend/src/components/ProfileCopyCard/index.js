@@ -36,35 +36,41 @@ function getInitials(name) {
 
 function buildProfileFields(profile, identity) {
   return [
-    { label: 'Name', value: identity?.name || profile.identity_name || '' },
+    { label: 'Name', value: identity?.name || profile.identity_name || '', copyable: true },
     { label: 'Bidder', value: profile.bidder_name || '' },
     { label: 'Caller', value: profile.caller_name || '' },
     { label: 'Roles', value: profile.roles || '', multiline: true, columns: { xs: 12, md: 8 } },
-    { label: 'Reference tag', value: profile.reference_tag || '' },
-    { label: 'Email', value: profile.email || '', columns: { xs: 12, sm: 8, lg: 6 } },
-    { label: 'Email password', value: profile.email_password || '', columns: { xs: 12, sm: 6, lg: 4 } },
-    { label: 'Phone', value: profile.phone || '' },
+    { label: 'Email', value: profile.email || '', copyable: true, columns: { xs: 12, sm: 8, lg: 6 } },
+    { label: 'Email password', value: profile.email_password || '', copyable: true, columns: { xs: 12, sm: 6, lg: 4 } },
+    { label: 'Phone', value: profile.phone || '', copyable: true },
     {
       label: 'Cover letter',
       value: profile.cover_letter || '',
+      copyable: true,
       multiline: true,
       columns: { xs: 12 }
     },
-    { label: 'Proxy', value: profile.proxy || '', columns: { xs: 12, sm: 6, lg: 8 } },
+    { label: 'Proxy', value: profile.proxy || '', copyable: true, columns: { xs: 12, sm: 6, lg: 8 } },
     { label: 'Country', value: identity?.country || '', showCountryFlag: true },
     { label: 'City / State', value: identity?.city_state || '' },
-    { label: 'Zipcode', value: identity?.zipcode || '' },
+    { label: 'Zipcode', value: identity?.zipcode || '', copyable: true },
     { label: 'Date of birth', value: formatDetailDateOnly(identity?.dob) || '' },
-    { label: 'SSN', value: identity?.ssn || '' },
-    { label: 'Address', value: identity?.address || '', multiline: true, columns: { xs: 12, lg: 8 } },
-    { label: 'LinkedIn', value: identity?.linkedin || '', columns: { xs: 12, sm: 6, lg: 6 } },
-    { label: 'GitHub', value: identity?.github || '', columns: { xs: 12, sm: 6, lg: 6 } }
+    { label: 'SSN', value: identity?.ssn || '', copyable: true },
+    { label: 'Address', value: identity?.address || '', copyable: true, multiline: true, columns: { xs: 12, lg: 8 } },
+    { label: 'LinkedIn', value: identity?.linkedin || '', copyable: true, columns: { xs: 12, sm: 6, lg: 6 } },
+    { label: 'GitHub', value: identity?.github || '', copyable: true, columns: { xs: 12, sm: 6, lg: 6 } }
   ];
 }
 
 const DEFAULT_COLUMNS = { xs: 12, sm: 6, lg: 4 };
 
-function CopyableReadOnlyField({ label, value, multiline = false, showCountryFlag = false }) {
+function CopyableReadOnlyField({
+  label,
+  value,
+  multiline = false,
+  showCountryFlag = false,
+  copyable = false
+}) {
   const { enqueueSnackbar } = useSnackbar();
   const [copied, setCopied] = useState(false);
   const text = value ?? '';
@@ -98,7 +104,7 @@ function CopyableReadOnlyField({ label, value, multiline = false, showCountryFla
               <CountryFlag country={text} />
             </InputAdornment>
           ) : undefined,
-        endAdornment: (
+        endAdornment: copyable ? (
           <InputAdornment position="end">
             <Tooltip title={copied ? 'Copied' : 'Copy'}>
               <IconButton
@@ -116,7 +122,7 @@ function CopyableReadOnlyField({ label, value, multiline = false, showCountryFla
               </IconButton>
             </Tooltip>
           </InputAdornment>
-        )
+        ) : undefined
       }}
       multiline={multiline}
       minRows={multiline ? 2 : 1}
@@ -128,7 +134,8 @@ CopyableReadOnlyField.propTypes = {
   label: PropTypes.string.isRequired,
   value: PropTypes.string,
   multiline: PropTypes.bool,
-  showCountryFlag: PropTypes.bool
+  showCountryFlag: PropTypes.bool,
+  copyable: PropTypes.bool
 };
 
 function DefaultResumeDownload({ profile }) {
@@ -176,7 +183,7 @@ function getFieldColumns(field) {
   return field.columns || DEFAULT_COLUMNS;
 }
 
-function ProfileCopyCard({ profile, identity, actions }) {
+function ProfileCopyCard({ profile, identity, actions, onClick }) {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   const displayName = profile.identity_name || identity?.name || 'Profile';
@@ -185,6 +192,23 @@ function ProfileCopyCard({ profile, identity, actions }) {
     .map((role) => role.trim())
     .filter(Boolean);
   const fields = useMemo(() => buildProfileFields(profile, identity), [profile, identity]);
+
+  const handleToggleExpand = (event) => {
+    event.stopPropagation();
+    setExpanded((current) => !current);
+  };
+
+  const handleActionsClick = (event) => {
+    event.stopPropagation();
+  };
+
+  const handleHeaderKeyDown = (event) => {
+    if (!onClick) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onClick(event);
+    }
+  };
 
   return (
     <Card
@@ -200,9 +224,14 @@ function ProfileCopyCard({ profile, identity, actions }) {
       }}
     >
       <Box
+        onClick={onClick}
+        onKeyDown={onClick ? handleHeaderKeyDown : undefined}
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : undefined}
         sx={{
           px: 2,
           py: 1.5,
+          cursor: onClick ? 'pointer' : 'default',
           background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.secondary.main, 0.04)} 100%)`
         }}
       >
@@ -231,7 +260,6 @@ function ProfileCopyCard({ profile, identity, actions }) {
                   {displayName}
                 </Typography>
                 <Label color="success">Active</Label>
-                {profile.reference_tag ? <Label color="info">{profile.reference_tag}</Label> : null}
               </Stack>
 
               <Stack direction="row" alignItems="center" gap={0.75} flexWrap="wrap">
@@ -250,21 +278,31 @@ function ProfileCopyCard({ profile, identity, actions }) {
             </Box>
           </Stack>
 
-          <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="flex-end">
-            <Tooltip title={expanded ? 'Hide details' : 'Show details'}>
-              <IconButton
-                size="small"
-                aria-label={expanded ? 'Collapse details' : 'Expand details'}
-                onClick={() => setExpanded((current) => !current)}
-                sx={{
-                  transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: theme.transitions.create('transform')
-                }}
-              >
-                <ExpandMoreTwoToneIcon />
-              </IconButton>
-            </Tooltip>
+          <Stack
+            direction="row"
+            spacing={0.5}
+            alignItems="center"
+            justifyContent="flex-end"
+            onClick={handleActionsClick}
+          >
             {actions}
+            <Button
+              size="small"
+              color="inherit"
+              onClick={handleToggleExpand}
+              aria-label={expanded ? 'Hide details' : 'Show details'}
+              endIcon={
+                <ExpandMoreTwoToneIcon
+                  sx={{
+                    transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: theme.transitions.create('transform')
+                  }}
+                />
+              }
+              sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+            >
+              {expanded ? 'Hide details' : 'Show details'}
+            </Button>
           </Stack>
         </Stack>
       </Box>
@@ -281,6 +319,7 @@ function ProfileCopyCard({ profile, identity, actions }) {
                     value={field.value}
                     multiline={field.multiline}
                     showCountryFlag={field.showCountryFlag}
+                    copyable={field.copyable}
                   />
                 </Grid>
               );
@@ -296,7 +335,8 @@ function ProfileCopyCard({ profile, identity, actions }) {
 ProfileCopyCard.propTypes = {
   profile: PropTypes.object.isRequired,
   identity: PropTypes.object,
-  actions: PropTypes.node
+  actions: PropTypes.node,
+  onClick: PropTypes.func
 };
 
 export default ProfileCopyCard;

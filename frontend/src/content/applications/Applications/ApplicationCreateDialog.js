@@ -18,40 +18,26 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography,
   useTheme
 } from '@mui/material';
 import { format } from 'date-fns';
 import AutoAwesomeTwoToneIcon from '@mui/icons-material/AutoAwesomeTwoTone';
 import CloseIcon from '@mui/icons-material/Close';
-import CheckCircleTwoToneIcon from '@mui/icons-material/CheckCircleTwoTone';
-import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
-import HighlightOffTwoToneIcon from '@mui/icons-material/HighlightOffTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
-import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
-import ApplicationResumePdfDialog from './ApplicationResumePdfDialog';
-import { listJobApplications, updateJobApplication } from 'src/services/jobApplicationApi';
+import { createJobApplication, listJobApplications, updateJobApplication } from 'src/services/jobApplicationApi';
 import { listIdentities } from 'src/services/identityApi';
-import { listProfiles } from 'src/services/profileApi';
 import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
 import {
   buildResumeRequest,
   generateResumePdf,
-  getResumeDownloadUrl,
   listResumeGenerations
 } from 'src/services/resumeApi';
-import { appliedAtToIso, formatDateTime, formatDateTimeValue } from 'src/utils/dateFormat';
+import { appliedAtToIso, formatDateTime } from 'src/utils/dateFormat';
 import { isDuplicateCompanyName } from 'src/utils/normalizeCompanyName';
-
-function resumeFilenameFromPath(pdfPath) {
-  if (!pdfPath) return '';
-  const parts = String(pdfPath).replace(/\\/g, '/').split('/');
-  return parts[parts.length - 1] || '';
-}
 
 const APPLICATION_SNACKBAR = {
   anchorOrigin: { vertical: 'top', horizontal: 'center' }
@@ -68,7 +54,7 @@ const EMPTY_FORM = {
   applied_at: ''
 };
 
-function ApplicationEditDialog({ open, application, onClose, onSaved }) {
+function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
   const theme = useTheme();
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const notify = useCallback(
@@ -92,7 +78,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     [enqueueSnackbar, closeSnackbar]
   );
 
-  const [profile, setProfile] = useState(null);
   const [identity, setIdentity] = useState(null);
   const [resumeGenerations, setResumeGenerations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -102,26 +87,19 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const [companyDuplicate, setCompanyDuplicate] = useState(false);
   const [existingApplications, setExistingApplications] = useState([]);
   const [resumeSource, setResumeSource] = useState('generated');
-  const [resumePdfFilename, setResumePdfFilename] = useState('');
-  const [viewerOpen, setViewerOpen] = useState(false);
+  const [draftApplicationId, setDraftApplicationId] = useState(null);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
   });
 
   const selectedGeneration = resumeGenerations.find(
-    (generation) => String(generation.id) === String(form.resume_generated_id)
+    (generation) => generation.id === form.resume_generated_id
   );
-  const generatedFilename =
-    resumePdfFilename ||
-    application?.resume_pdf_filename ||
-    resumeFilenameFromPath(selectedGeneration?.pdf_path);
-  const hasGeneratedResume = Boolean(form.resume_generated_id);
 
   const busy = submitting || generating || loading;
   const mountedRef = useRef(true);
   const onSavedRef = useRef(onSaved);
-  const generateTokenRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -140,89 +118,47 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       if (!trimmed) {
         return false;
       }
-      const existingCompanies = existingApplications
-        .filter((app) => app.id !== application?.id)
-        .map((app) => app.company);
+      const existingCompanies = existingApplications.map((app) => app.company);
       return isDuplicateCompanyName(trimmed, existingCompanies);
     },
-    [existingApplications, application?.id]
+    [existingApplications]
   );
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!open || !application) {
+    if (!open || !profile) {
       return () => {
         cancelled = true;
       };
     }
 
-    const loadData = async () => {
-      generateTokenRef.current += 1;
+    const resetAndLoad = async () => {
       setGenerating(false);
       setSubmitting(false);
       setLoading(true);
       setCompanyDuplicate(false);
       setAppliedConfirmOpen(false);
-
-      const nextSource = application.resume_generated_id
-        ? 'generated'
-        : application.resume_online_link
-          ? 'online'
-          : 'generated';
-      setResumeSource(nextSource);
-      setResumePdfFilename(application.resume_pdf_filename || '');
-      setViewerOpen(false);
+      setResumeSource('generated');
+      setDraftApplicationId(null);
       setForm({
-        role: application.role || '',
-        company: application.company || '',
-        link: application.link || '',
-        job_description: application.job_description || '',
-        resume_generated_id: application.resume_generated_id || '',
-        resume_online_link: application.resume_online_link || '',
-        applied: Boolean(application.applied),
-        applied_at:
-          formatDateTimeValue(application.applied_at) || format(new Date(), 'yyyy-MM-dd HH:mm')
+        ...EMPTY_FORM,
+        applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
       });
 
       try {
-        const [generationRows, identityRows, profileRows, applicationRows] = await Promise.all([
+        const [generationRows, identityRows, applicationRows] = await Promise.all([
           listResumeGenerations(),
           listIdentities(),
-          listProfiles(),
-          listJobApplications(application.profile_id)
+          listJobApplications(profile.id)
         ]);
         if (cancelled) return;
 
-        const matchedProfile =
-          profileRows.find((row) => row.id === application.profile_id) || null;
-        const matchedIdentity = matchedProfile
-          ? identityRows.find((row) => row.id === matchedProfile.identity_id) || null
-          : null;
-
-        setProfile(matchedProfile);
+        const matchedIdentity =
+          identityRows.find((row) => row.id === profile.identity_id) || null;
         setIdentity(matchedIdentity);
         setExistingApplications(applicationRows);
         setResumeGenerations(generationRows);
-
-        if (!application.resume_pdf_filename && application.resume_generated_id) {
-          const matchedGeneration = generationRows.find(
-            (generation) => String(generation.id) === String(application.resume_generated_id)
-          );
-          const fromPath = resumeFilenameFromPath(matchedGeneration?.pdf_path);
-          if (fromPath) {
-            setResumePdfFilename(fromPath);
-          }
-        }
-
-        setCompanyDuplicate(
-          isDuplicateCompanyName(
-            (application.company || '').trim(),
-            applicationRows
-              .filter((app) => app.id !== application.id)
-              .map((app) => app.company)
-          )
-        );
       } catch (err) {
         if (!cancelled) {
           notify(err.message || 'Failed to load application data', { variant: 'error' });
@@ -234,12 +170,12 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       }
     };
 
-    loadData();
+    resetAndLoad();
 
     return () => {
       cancelled = true;
     };
-  }, [open, application, notify]);
+  }, [open, profile, notify]);
 
   const handleFormChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -262,7 +198,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const handleAppliedChange = (event) => {
     const checked = event.target.checked;
     if (checked) {
-      if (form.applied) return;
       setAppliedConfirmOpen(true);
       return;
     }
@@ -271,18 +206,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       ...current,
       applied: false
     }));
-  };
-
-  const handleAppliedSectionClick = () => {
-    if (loading) return;
-    if (form.applied) {
-      setForm((current) => ({
-        ...current,
-        applied: false
-      }));
-      return;
-    }
-    setAppliedConfirmOpen(true);
   };
 
   const handleConfirmApplied = () => {
@@ -308,69 +231,115 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     }));
   };
 
-  const handleGenerateResume = async () => {
+  const buildApplicationPayload = useCallback(
+    (resumeGeneratedId = null) => ({
+      profile_id: profile.id,
+      role: form.role.trim(),
+      company: form.company.trim(),
+      link: form.link.trim(),
+      job_description: form.job_description.trim(),
+      resume_generated_id:
+        resumeSource === 'generated' && resumeGeneratedId
+          ? resumeGeneratedId
+          : resumeSource === 'generated' && form.resume_generated_id
+            ? form.resume_generated_id
+            : null,
+      resume_online_link:
+        resumeSource === 'online' && form.resume_online_link.trim()
+          ? form.resume_online_link.trim()
+          : null,
+      applied: form.applied,
+      applied_at: form.applied
+        ? appliedAtToIso(form.applied_at || format(new Date(), 'yyyy-MM-dd HH:mm'))
+        : null
+    }),
+    [profile, form, resumeSource]
+  );
+
+  const ensureApplicationRecord = useCallback(async () => {
     if (!profile) {
-      notify('Profile not found for this application', { variant: 'warning' });
-      return;
+      throw new Error('Profile is required');
     }
-    if (!application?.id) {
-      notify('Application not found', { variant: 'warning' });
-      return;
+    if (!form.link.trim()) {
+      throw new Error('Link is required before generating a resume');
     }
     if (form.job_description.trim().length < 50) {
-      notify('Job description must be at least 50 characters.', { variant: 'warning' });
-      return;
+      throw new Error('Job description must be at least 50 characters.');
     }
 
+    const payload = buildApplicationPayload();
+    if (draftApplicationId) {
+      const updated = await updateJobApplication(draftApplicationId, {
+        role: payload.role,
+        company: payload.company,
+        link: payload.link,
+        job_description: payload.job_description,
+        resume_generated_id: payload.resume_generated_id,
+        resume_online_link: payload.resume_online_link,
+        applied: payload.applied,
+        applied_at: payload.applied_at
+      });
+      return updated.id;
+    }
+
+    const created = await createJobApplication(payload);
+    if (mountedRef.current) {
+      setDraftApplicationId(created.id);
+    }
+    onSavedRef.current?.({ silent: true });
+    return created.id;
+  }, [profile, form.link, form.job_description, buildApplicationPayload, draftApplicationId]);
+
+  const handleGenerateResume = async () => {
+    if (!profile) return;
+
     setGenerating(true);
-    const generateToken = generateTokenRef.current + 1;
-    generateTokenRef.current = generateToken;
     notify(
       'Generating PDF… this usually takes 1–3 minutes. You can close this dialog; the list will update automatically.',
       { variant: 'info' }
     );
 
+    const refreshList = onSavedRef.current;
+    const notifyFn = notify;
+
+    let applicationId;
     try {
-      await updateJobApplication(application.id, {
-        role: form.role.trim(),
-        company: form.company.trim(),
-        link: form.link.trim() || application.link,
-        job_description: form.job_description.trim(),
-        resume_generated_id: form.resume_generated_id ? Number(form.resume_generated_id) : null,
-        resume_online_link: null,
-        applied: form.applied,
-        applied_at: form.applied ? appliedAtToIso(form.applied_at) : null
-      });
-      if (generateTokenRef.current !== generateToken) return;
-      onSavedRef.current?.({ silent: true });
+      applicationId = await ensureApplicationRecord();
+      refreshList?.({ silent: true });
+    } catch (err) {
+      if (mountedRef.current) {
+        setGenerating(false);
+      }
+      notifyFn(err.message || 'Something went wrong.', { variant: 'error' });
+      return;
+    }
 
-      const { markdown } = buildProfileContentFromJobProfile(profile, identity);
-      const body = buildResumeRequest({
-        jobDescription: form.job_description,
-        profileMode: 'markdown',
-        profileMarkdown: markdown,
-        profileJson: '',
-        profileId: profile.id,
-        applicationId: application.id
-      });
+    // Capture inputs now; generation continues even if this dialog unmounts.
+    const { markdown } = buildProfileContentFromJobProfile(profile, identity);
+    const body = buildResumeRequest({
+      jobDescription: form.job_description,
+      profileMode: 'markdown',
+      profileMarkdown: markdown,
+      profileJson: '',
+      profileId: profile.id,
+      applicationId
+    });
+
+    try {
       const { filename, generationId } = await generateResumePdf(body);
-      if (generateTokenRef.current !== generateToken) return;
 
-      notify(
+      notifyFn(
         `Resume PDF finished and saved to the application${generationId ? ` (#${generationId})` : ''}. Downloaded ${filename}.`,
         { variant: 'success' }
       );
-      onSavedRef.current?.({ silent: true });
+      refreshList?.({ silent: true });
 
+      // Only update this dialog instance if it is still open.
       if (!mountedRef.current) return;
-
-      if (filename) {
-        setResumePdfFilename(filename);
-      }
 
       try {
         const generationRows = await listResumeGenerations();
-        if (generateTokenRef.current !== generateToken) return;
+        if (!mountedRef.current) return;
         setResumeGenerations(generationRows);
         const selectedId = generationId || generationRows[0]?.id || '';
         if (selectedId) {
@@ -378,24 +347,31 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
           setResumeSource('generated');
         }
       } catch {
-        if (generationId && generateTokenRef.current === generateToken) {
+        if (generationId && mountedRef.current) {
           setForm((current) => ({ ...current, resume_generated_id: generationId }));
           setResumeSource('generated');
         }
       }
     } catch (err) {
-      if (generateTokenRef.current !== generateToken) return;
-      notify(err.message || 'Something went wrong.', { variant: 'error' });
-      onSavedRef.current?.({ silent: true });
+      notifyFn(err.message || 'Something went wrong.', { variant: 'error' });
+      refreshList?.({ silent: true });
     } finally {
-      if (mountedRef.current && generateTokenRef.current === generateToken) {
+      if (mountedRef.current) {
         setGenerating(false);
       }
     }
   };
 
+  const handleDialogClose = () => {
+    if (submitting) return;
+    // Closing must always clear this dialog's generating UI. Background PDF work
+    // continues via captured refreshList/notifyFn above; a new Add opens a fresh dialog.
+    setGenerating(false);
+    onClose();
+  };
+
   const handleSubmit = async () => {
-    if (!application) return;
+    if (!profile) return;
     if (!form.link.trim()) {
       notify('Link is required', { variant: 'warning' });
       return;
@@ -410,38 +386,29 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
 
     setSubmitting(true);
     try {
-      const appliedAtValue = form.applied
-        ? appliedAtToIso(form.applied_at || format(new Date(), 'yyyy-MM-dd HH:mm'))
-        : null;
-      await updateJobApplication(application.id, {
-        role: form.role.trim(),
-        company: form.company.trim(),
-        link: form.link.trim(),
-        job_description: form.job_description.trim(),
-        resume_generated_id:
-          resumeSource === 'generated' && form.resume_generated_id
-            ? Number(form.resume_generated_id)
-            : null,
-        resume_online_link:
-          resumeSource === 'online' && form.resume_online_link.trim()
-            ? form.resume_online_link.trim()
-            : null,
-        applied: form.applied,
-        applied_at: appliedAtValue
-      });
-      notify('Application updated', { variant: 'success' });
+      const payload = buildApplicationPayload();
+      if (draftApplicationId) {
+        await updateJobApplication(draftApplicationId, {
+          role: payload.role,
+          company: payload.company,
+          link: payload.link,
+          job_description: payload.job_description,
+          resume_generated_id: payload.resume_generated_id,
+          resume_online_link: payload.resume_online_link,
+          applied: payload.applied,
+          applied_at: payload.applied_at
+        });
+      } else {
+        await createJobApplication(payload);
+      }
+      notify('Application saved', { variant: 'success' });
       onSaved();
       onClose();
     } catch (err) {
-      notify(err.message || 'Update failed', { variant: 'error' });
+      notify(err.message || 'Save failed', { variant: 'error' });
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleDialogClose = () => {
-    if (submitting) return;
-    onClose();
   };
 
   return (
@@ -466,22 +433,17 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 1,
-            pr: 1.5,
-            flexShrink: 0
+            pr: 1.5
           }}
         >
           <Box minWidth={0}>
             <Typography variant="h4" component="span">
-              Edit application #{application?.id}
+              Add application
             </Typography>
             {profile ? (
               <Typography variant="body2" color="text.secondary" noWrap>
                 {profile.identity_name}
                 {profile.email ? ` · ${profile.email}` : ''}
-              </Typography>
-            ) : application?.profile_label ? (
-              <Typography variant="body2" color="text.secondary" noWrap>
-                {application.profile_label}
               </Typography>
             ) : null}
           </Box>
@@ -587,83 +549,34 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                       display="flex"
                       alignItems="center"
                       justifyContent="flex-end"
-                      gap={0.75}
+                      gap={1}
                       sx={{ flex: 1, minWidth: 0 }}
                     >
                       {resumeSource === 'generated' ? (
-                        generating ? (
-                          <Chip size="small" color="warning" label="Generating PDF…" />
-                        ) : hasGeneratedResume ? (
-                          <Stack
-                            direction="row"
-                            alignItems="center"
-                            spacing={0.5}
-                            sx={{ minWidth: 0 }}
-                          >
-                            <Chip
-                              size="small"
-                              color="success"
-                              variant="outlined"
-                              icon={<PictureAsPdfTwoToneIcon />}
-                              label={
-                                generatedFilename ||
-                                (selectedGeneration
-                                  ? `#${selectedGeneration.id} · ${formatDateTime(selectedGeneration.created_at)}`
-                                  : `#${form.resume_generated_id}`)
-                              }
-                              onClick={
-                                generatedFilename ? () => setViewerOpen(true) : undefined
-                              }
-                              sx={{
-                                maxWidth: 240,
-                                cursor: generatedFilename ? 'pointer' : 'default',
-                                '& .MuiChip-label': {
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis'
-                                }
-                              }}
-                            />
-                            {generatedFilename ? (
-                              <Tooltip title="Download PDF">
-                                <IconButton
-                                  component="a"
-                                  href={getResumeDownloadUrl(generatedFilename)}
-                                  download={generatedFilename}
-                                  size="small"
-                                  color="primary"
-                                  aria-label={`Download ${generatedFilename}`}
-                                  rel="noopener noreferrer"
-                                >
-                                  <FileDownloadTwoToneIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            ) : null}
-                            <Tooltip title="Regenerate resume PDF">
-                              <span>
-                                <IconButton
-                                  size="small"
-                                  color="success"
-                                  disabled={loading}
-                                  onClick={handleGenerateResume}
-                                  aria-label="Regenerate resume PDF"
-                                >
-                                  <RefreshTwoToneIcon fontSize="small" />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                          </Stack>
-                        ) : (
+                        <>
                           <Button
                             size="small"
                             color="success"
                             variant="contained"
                             endIcon={<PictureAsPdfTwoToneIcon />}
-                            disabled={loading}
+                            disabled={generating || loading}
                             onClick={handleGenerateResume}
                           >
-                            Generate Resume PDF
+                            {generating ? 'Generating PDF…' : 'Generate Resume PDF'}
                           </Button>
-                        )
+                          {form.resume_generated_id ? (
+                            <Chip
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                              label={
+                                selectedGeneration
+                                  ? `#${selectedGeneration.id} · ${formatDateTime(selectedGeneration.created_at)}`
+                                  : `#${form.resume_generated_id} selected`
+                              }
+                            />
+                          ) : null}
+                        </>
                       ) : (
                         <TextField
                           fullWidth
@@ -728,79 +641,32 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
 
                 <Stack spacing={1.25} sx={{ flexShrink: 0 }}>
                   <Box
-                    role="button"
-                    tabIndex={loading ? -1 : 0}
-                    aria-pressed={form.applied}
-                    onClick={handleAppliedSectionClick}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        handleAppliedSectionClick();
-                      }
-                    }}
-                    sx={{
-                      flexShrink: 0,
-                      width: '100%',
-                      minHeight: 56,
-                      px: 1.75,
-                      py: 1.1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      borderRadius: theme.general.borderRadiusSm || theme.general.borderRadius,
-                      bgcolor: form.applied
-                        ? alpha(theme.palette.success.main, 0.12)
-                        : alpha(theme.palette.error.main, 0.1),
-                      border: `2px solid ${
-                        form.applied ? theme.palette.success.main : theme.palette.error.main
-                      }`,
-                      cursor: loading ? 'default' : 'pointer',
-                      userSelect: 'none',
-                      transition: theme.transitions.create(['background-color', 'border-color']),
-                      '&:hover': loading
-                        ? undefined
-                        : {
-                            bgcolor: form.applied
-                              ? alpha(theme.palette.success.main, 0.18)
-                              : alpha(theme.palette.error.main, 0.16)
-                          }
-                    }}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="flex-end"
+                    gap={2}
+                    flexWrap="wrap"
+                    sx={{ flexShrink: 0 }}
                   >
-                    <Stack
-                      direction="row"
+                    <Box
+                      display="flex"
                       alignItems="center"
-                      justifyContent="space-between"
-                      spacing={1.5}
-                      width="100%"
+                      gap={1.5}
+                      flexWrap="wrap"
+                      sx={{
+                        minHeight: 56,
+                        px: 1.75,
+                        py: 1.1,
+                        borderRadius: theme.general.borderRadius,
+                        bgcolor: form.applied
+                          ? alpha(theme.palette.success.main, 0.14)
+                          : alpha(theme.palette.error.main, 0.14),
+                        border: `2px solid ${
+                          form.applied ? theme.palette.success.main : theme.palette.error.main
+                        }`
+                      }}
                     >
-                      <Stack direction="row" alignItems="center" spacing={1.25} minWidth={0}>
-                        {form.applied ? (
-                          <CheckCircleTwoToneIcon
-                            sx={{ fontSize: 28, color: 'success.main', flexShrink: 0 }}
-                          />
-                        ) : (
-                          <HighlightOffTwoToneIcon
-                            sx={{ fontSize: 28, color: 'error.main', flexShrink: 0 }}
-                          />
-                        )}
-                        <Box minWidth={0}>
-                          <Typography
-                            variant="h6"
-                            fontWeight={800}
-                            color={form.applied ? 'success.main' : 'error.main'}
-                            lineHeight={1.2}
-                          >
-                            {form.applied ? 'Applied' : 'Not applied'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {form.applied
-                              ? 'This application has been submitted to the company.'
-                              : 'Click to mark as applied after submitting to the company.'}
-                          </Typography>
-                        </Box>
-                      </Stack>
-
                       <FormControlLabel
-                        onClick={(event) => event.stopPropagation()}
                         control={
                           <Switch
                             checked={form.applied}
@@ -810,26 +676,13 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                           />
                         }
                         label={
-                          <Typography variant="body2" fontWeight={700}>
-                            {form.applied ? 'On' : 'Off'}
+                          <Typography variant="h6" fontWeight={800}>
+                            Applied
                           </Typography>
                         }
-                        sx={{
-                          m: 0,
-                          flexShrink: 0,
-                          pl: 1,
-                          pr: 1.25,
-                          py: 0.5,
-                          borderRadius: 1,
-                          bgcolor: alpha(
-                            form.applied
-                              ? theme.palette.success.main
-                              : theme.palette.error.main,
-                            0.08
-                          )
-                        }}
+                        sx={{ m: 0 }}
                       />
-                    </Stack>
+                    </Box>
                   </Box>
 
                   <Stack
@@ -870,21 +723,15 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <ApplicationResumePdfDialog
-        open={viewerOpen}
-        filename={generatedFilename}
-        onClose={() => setViewerOpen(false)}
-      />
     </>
   );
 }
 
-ApplicationEditDialog.propTypes = {
+ApplicationCreateDialog.propTypes = {
   open: PropTypes.bool.isRequired,
-  application: PropTypes.object,
+  profile: PropTypes.object,
   onClose: PropTypes.func.isRequired,
   onSaved: PropTypes.func.isRequired
 };
 
-export default ApplicationEditDialog;
+export default ApplicationCreateDialog;

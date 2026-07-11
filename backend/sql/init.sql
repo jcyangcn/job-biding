@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS job_application (
     job_description TEXT NOT NULL DEFAULT '',
     resume_generated_id INTEGER REFERENCES resume_generations(id) ON DELETE SET NULL,
     resume_online_link VARCHAR(1000),
+    resume_generation_status VARCHAR(20),
     applied BOOLEAN NOT NULL DEFAULT FALSE,
     applied_at TIMESTAMPTZ,
     bidder_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

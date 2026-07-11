@@ -127,7 +127,8 @@ export function buildResumeRequest({
   profileMode,
   profileMarkdown,
   profileJson,
-  profileId
+  profileId,
+  applicationId
 }) {
   const trimmedJobDescription = jobDescription.trim();
   if (trimmedJobDescription.length < 50) {
@@ -138,6 +139,10 @@ export function buildResumeRequest({
 
   if (profileId != null && profileId !== '') {
     body.profile_id = Number(profileId);
+  }
+
+  if (applicationId != null && applicationId !== '') {
+    body.application_id = Number(applicationId);
   }
 
   if (profileMode === 'markdown') {

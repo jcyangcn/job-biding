@@ -268,6 +268,36 @@ def migrate_job_application_columns() -> None:
                 )
             )
 
+        resume_generation_status_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'resume_generation_status'
+                """
+            )
+        ).scalar()
+        if not resume_generation_status_exists:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN resume_generation_status VARCHAR(20)
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE job_application
+                    SET resume_generation_status = 'generated'
+                    WHERE resume_generated_id IS NOT NULL
+                    """
+                )
+            )
+
 
 def repair_application_creator_assignments() -> None:
     """One-time repair for legacy rows that stored the profile bidder instead of creator."""

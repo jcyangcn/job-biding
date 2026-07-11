@@ -1,7 +1,13 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Link as RouterLink } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
+import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
+import CancelTwoToneIcon from '@mui/icons-material/CancelTwoTone';
+import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
+import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
+import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
+import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
+import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
 import {
   Box,
   Button,
@@ -13,6 +19,7 @@ import {
   DialogTitle,
   IconButton,
   Link,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -22,13 +29,7 @@ import {
   Tooltip,
   Typography
 } from '@mui/material';
-import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
-import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
-import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
-import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
-import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
-import OpenInNewTwoToneIcon from '@mui/icons-material/OpenInNewTwoTone';
-import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
+import ApplicationCreateDialog from './ApplicationCreateDialog';
 import ApplicationDetailDialog from './ApplicationDetailDialog';
 import ApplicationEditDialog from './ApplicationEditDialog';
 import ApplicationResumeCell from './ApplicationResumeCell';
@@ -50,6 +51,12 @@ import { formatDateTime } from 'src/utils/dateFormat';
 import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
 
 function formatResumeSource(row) {
+  if (row.resume_generation_status === 'generating') {
+    return 'Generating';
+  }
+  if (row.resume_generation_status === 'failed') {
+    return 'Failed';
+  }
   if (row.resume_pdf_filename) {
     return row.resume_pdf_filename;
   }
@@ -66,6 +73,58 @@ function formatResumeSource(row) {
 function formatBidderLabel(row) {
   return row.bidder_name || row.bidder_username || '';
 }
+
+function formatLinkPreview(link, maxLength = 42) {
+  const value = String(link || '').trim();
+  if (!value) return '';
+  const withoutProtocol = value.replace(/^https?:\/\//i, '');
+  if (withoutProtocol.length <= maxLength) {
+    return withoutProtocol;
+  }
+  return `${withoutProtocol.slice(0, maxLength)}…`;
+}
+
+/** Percent widths for table-layout: fixed (without Profile column). */
+const COLUMN_WIDTHS = {
+  no: '4%',
+  profile: '9%',
+  bidder: '10%',
+  role: '18%',
+  company: '12%',
+  link: '14%',
+  resume: '16%',
+  applied: '14%',
+  actions: '12%'
+};
+
+/** When Profile is shown, slightly shrink neighboring columns. */
+const COLUMN_WIDTHS_WITH_PROFILE = {
+  no: '4%',
+  profile: '9%',
+  bidder: '8%',
+  role: '15%',
+  company: '10%',
+  link: '12%',
+  resume: '14%',
+  applied: '12%',
+  actions: '16%'
+};
+
+function colSx(width) {
+  return {
+    width,
+    maxWidth: width,
+    overflow: 'hidden'
+  };
+}
+
+const ellipsisSx = {
+  display: 'block',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  maxWidth: '100%'
+};
 
 const BASE_SEARCH_FIELDS = [
   'id',
@@ -100,6 +159,8 @@ function ApplicationsTableView({
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const fileInputRef = useRef(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSessionKey, setCreateSessionKey] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -133,6 +194,21 @@ function ApplicationsTableView({
     dateField: 'applied_at',
     selects: APPLICATION_SELECT_FILTERS
   });
+
+  const hasGeneratingResumes = useMemo(
+    () => rows.some((row) => row.resume_generation_status === 'generating'),
+    [rows]
+  );
+
+  useEffect(() => {
+    if (!hasGeneratingResumes) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      onRefresh({ silent: true });
+    }, 20000);
+
+    return () => window.clearInterval(intervalId);
+  }, [hasGeneratingResumes, onRefresh]);
 
   const bidderOptions = useMemo(() => {
     const values = new Set();
@@ -308,6 +384,7 @@ function ApplicationsTableView({
 
   const columnCount = showProfileColumn ? 9 : 8;
   const fixedTableCard = Boolean(tableCardHeight);
+  const widths = showProfileColumn ? COLUMN_WIDTHS_WITH_PROFILE : COLUMN_WIDTHS;
 
   const toolbar = (
     <TableListFilters
@@ -363,8 +440,10 @@ function ApplicationsTableView({
             <Button
               variant="contained"
               startIcon={<AddTwoToneIcon />}
-              component={RouterLink}
-              to={`/applications/job-applications/${profile.id}/new`}
+              onClick={() => {
+                setCreateSessionKey((key) => key + 1);
+                setCreateOpen(true);
+              }}
             >
               Add application
             </Button>
@@ -402,10 +481,10 @@ function ApplicationsTableView({
         }
       >
         <TableContainer sx={fixedTableCard ? { flex: 1, overflow: 'auto' } : undefined}>
-          <Table stickyHeader={fixedTableCard}>
+          <Table stickyHeader={fixedTableCard} sx={{ tableLayout: 'fixed', width: '100%' }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>No</TableCell>
+                  <TableCell sx={colSx(widths.no)}>No</TableCell>
                   {showProfileColumn ? (
                     <SortableTableCell
                       label="Profile"
@@ -413,6 +492,7 @@ function ApplicationsTableView({
                       sortField={sortField}
                       sortDirection={sortDirection}
                       onSort={handleSort}
+                      sx={colSx(widths.profile)}
                     />
                   ) : null}
                   <SortableTableCell
@@ -421,6 +501,7 @@ function ApplicationsTableView({
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
+                    sx={colSx(widths.bidder)}
                   />
                   <SortableTableCell
                     label="Role"
@@ -428,6 +509,7 @@ function ApplicationsTableView({
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
+                    sx={colSx(widths.role)}
                   />
                   <SortableTableCell
                     label="Company"
@@ -435,6 +517,7 @@ function ApplicationsTableView({
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
+                    sx={colSx(widths.company)}
                   />
                   <SortableTableCell
                     label="Link"
@@ -442,6 +525,7 @@ function ApplicationsTableView({
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
+                    sx={colSx(widths.link)}
                   />
                   <SortableTableCell
                     label="Resume"
@@ -449,6 +533,7 @@ function ApplicationsTableView({
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
+                    sx={colSx(widths.resume)}
                   />
                   <SortableTableCell
                     label="Applied"
@@ -456,8 +541,9 @@ function ApplicationsTableView({
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
+                    sx={colSx(widths.applied)}
                   />
-                  <TableCell align="right" />
+                  <TableCell align="right" sx={colSx(widths.actions)} />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -479,45 +565,84 @@ function ApplicationsTableView({
                       key={row.id}
                       hover
                       sx={{ cursor: 'pointer' }}
-                      onClick={() => openDetail(row)}
+                      onClick={() => openEditDialog(row)}
                     >
-                      <TableCell>{rowOffset + index + 1}</TableCell>
+                      <TableCell sx={colSx(widths.no)}>{rowOffset + index + 1}</TableCell>
                       {showProfileColumn ? (
-                        <TableCell>{row.profile_label || '—'}</TableCell>
+                        <TableCell sx={colSx(widths.profile)}>
+                          <Typography variant="body2" sx={ellipsisSx}>
+                            {row.profile_label || '—'}
+                          </Typography>
+                        </TableCell>
                       ) : null}
-                      <TableCell>{formatBidderLabel(row) || '—'}</TableCell>
-                      <TableCell>{row.role || '—'}</TableCell>
-                      <TableCell>{row.company || '—'}</TableCell>
-                      <TableCell onClick={stopPropagation}>
-                        {row.link ? (
-                          <Link
-                            href={row.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            underline="hover"
-                            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-                          >
-                            Open
-                            <OpenInNewTwoToneIcon sx={{ fontSize: 16 }} />
-                          </Link>
+                      <TableCell sx={colSx(widths.bidder)}>
+                        <Typography variant="body2" sx={ellipsisSx}>
+                          {formatBidderLabel(row) || '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={colSx(widths.role)}>
+                        {row.role ? (
+                          <Tooltip title={row.role}>
+                            <Typography variant="body2" sx={ellipsisSx}>
+                              {row.role}
+                            </Typography>
+                          </Tooltip>
                         ) : (
                           '—'
                         )}
                       </TableCell>
-                      <TableCell onClick={stopPropagation}>
+                      <TableCell sx={colSx(widths.company)}>
+                        <Typography variant="body2" sx={ellipsisSx}>
+                          {row.company || '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={colSx(widths.link)} onClick={stopPropagation}>
+                        {row.link ? (
+                          <Tooltip title={row.link}>
+                            <Link
+                              href={row.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              underline="hover"
+                              sx={ellipsisSx}
+                            >
+                              {formatLinkPreview(row.link)}
+                            </Link>
+                          </Tooltip>
+                        ) : (
+                          '—'
+                        )}
+                      </TableCell>
+                      <TableCell sx={colSx(widths.resume)} onClick={stopPropagation}>
                         <ApplicationResumeCell row={row} />
                       </TableCell>
-                      <TableCell>
-                        {row.applied ? formatDateTime(row.applied_at) : 'Not applied'}
+                      <TableCell sx={colSx(widths.applied)}>
+                        {row.applied ? (
+                          <Typography variant="body2" sx={ellipsisSx}>
+                            {formatDateTime(row.applied_at)}
+                          </Typography>
+                        ) : (
+                          <Tooltip title="Not applied">
+                            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
+                              <CancelTwoToneIcon
+                                sx={{ fontSize: 20, color: 'error.main', flexShrink: 0 }}
+                                aria-label="Not applied"
+                              />
+                              <Typography variant="body2" color="error.main" noWrap>
+                                Not applied
+                              </Typography>
+                            </Stack>
+                          </Tooltip>
+                        )}
                       </TableCell>
-                      <TableCell align="right" onClick={stopPropagation}>
-                        <Tooltip title="Edit">
+                      <TableCell align="right" sx={colSx(widths.actions)} onClick={stopPropagation}>
+                        <Tooltip title="View details">
                           <IconButton
                             color="primary"
-                            onClick={() => openEditDialog(row)}
+                            onClick={() => openDetail(row)}
                             disabled={saving}
                           >
-                            <EditTwoToneIcon />
+                            <VisibilityTwoToneIcon />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete">
@@ -550,18 +675,30 @@ function ApplicationsTableView({
 
   const dialogs = (
     <>
+      {createOpen ? (
+        <ApplicationCreateDialog
+          key={createSessionKey}
+          open
+          profile={profile}
+          onClose={() => setCreateOpen(false)}
+          onSaved={onRefresh}
+        />
+      ) : null}
+
       <ApplicationDetailDialog
         open={detailOpen}
         application={selectedApplication}
         onClose={closeDetail}
       />
 
-      <ApplicationEditDialog
-        open={editOpen}
-        application={editingRecord}
-        onClose={() => !saving && setEditOpen(false)}
-        onSaved={onRefresh}
-      />
+      {editOpen && editingRecord ? (
+        <ApplicationEditDialog
+          open
+          application={editingRecord}
+          onClose={() => !saving && setEditOpen(false)}
+          onSaved={onRefresh}
+        />
+      ) : null}
 
       <Dialog open={deleteOpen} onClose={() => !saving && setDeleteOpen(false)}>
         <DialogTitle>Delete application</DialogTitle>

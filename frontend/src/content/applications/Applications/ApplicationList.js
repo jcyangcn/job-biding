@@ -9,6 +9,7 @@ import ApplicationsTableView from './ApplicationsTableView';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { listJobApplications } from 'src/services/jobApplicationApi';
 import { listProfiles } from 'src/services/profileApi';
+import { mergeApplicationResumeStatus } from 'src/utils/mergeApplicationResumeStatus';
 
 function ApplicationList() {
   const { profileId } = useParams();
@@ -36,10 +37,20 @@ function ApplicationList() {
     profile ? headerLeading : null
   );
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (options = {}) => {
+    const { silent = false } = options;
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const numericId = Number(profileId);
+
+      if (silent) {
+        const applicationRows = await listJobApplications(numericId);
+        setRows((prev) => mergeApplicationResumeStatus(prev, applicationRows));
+        return;
+      }
+
       const [profileRows, applicationRows] = await Promise.all([
         listProfiles(),
         listJobApplications(numericId)
@@ -59,7 +70,9 @@ function ApplicationList() {
         navigate('/applications/job-applications', { replace: true });
       }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [enqueueSnackbar, navigate, profileId]);
 

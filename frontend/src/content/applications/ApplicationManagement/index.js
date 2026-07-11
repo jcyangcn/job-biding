@@ -9,6 +9,7 @@ import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { listJobApplications } from 'src/services/jobApplicationApi';
 import { listIdentities } from 'src/services/identityApi';
 import { listProfiles } from 'src/services/profileApi';
+import { mergeApplicationResumeStatus } from 'src/utils/mergeApplicationResumeStatus';
 
 function ApplicationManagement() {
   const theme = useTheme();
@@ -64,14 +65,24 @@ function ApplicationManagement() {
     }
   }, [enqueueSnackbar]);
 
-  const loadApplications = useCallback(async () => {
-    setLoadingApplications(true);
+  const loadApplications = useCallback(async (options = {}) => {
+    const { silent = false } = options;
+    if (!silent) {
+      setLoadingApplications(true);
+    }
     try {
-      setAllApplications(await listJobApplications());
+      const applicationRows = await listJobApplications();
+      if (silent) {
+        setAllApplications((prev) => mergeApplicationResumeStatus(prev, applicationRows));
+      } else {
+        setAllApplications(applicationRows);
+      }
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load applications', { variant: 'error' });
     } finally {
-      setLoadingApplications(false);
+      if (!silent) {
+        setLoadingApplications(false);
+      }
     }
   }, [enqueueSnackbar]);
 
@@ -83,8 +94,8 @@ function ApplicationManagement() {
     loadApplications();
   }, [loadApplications]);
 
-  const handleRefresh = async () => {
-    await loadApplications();
+  const handleRefresh = async (options = {}) => {
+    await loadApplications(options);
   };
 
   return (

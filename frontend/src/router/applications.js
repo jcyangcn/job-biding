@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 
 import RequireAdmin from 'src/components/RequireAdmin';
 import SuspenseLoader from 'src/components/SuspenseLoader';
@@ -10,6 +10,11 @@ const Loader = (Component) => (props) =>
       <Component {...props} />
     </Suspense>
   );
+
+const ApplicationCreateRedirect = () => {
+  const { profileId } = useParams();
+  return <Navigate to={`/applications/job-applications/${profileId}`} replace />;
+};
 
 // Applications
 
@@ -62,9 +67,6 @@ const Applications = Loader(
 const ApplicationList = Loader(
   lazy(() => import('src/content/applications/Applications/ApplicationList'))
 );
-const ApplicationDetails = Loader(
-  lazy(() => import('src/content/applications/Applications/ApplicationDetails'))
-);
 const ProgressionEmails = Loader(
   lazy(() => import('src/content/applications/ProgressionEmails'))
 );
@@ -90,7 +92,7 @@ const applicationsRoutes = [
   },
   {
     path: 'job-applications/:profileId/new',
-    element: <ApplicationDetails />
+    element: <ApplicationCreateRedirect />
   },
   {
     path: 'job-applications/:profileId',
