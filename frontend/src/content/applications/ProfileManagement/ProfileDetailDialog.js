@@ -133,6 +133,11 @@ function ProfileDetailDialog({ open, profile, onClose }) {
             emptyText="No proxy detail."
           />
         </Grid>
+        <DetailField label="Resume from AI">
+          <Label color={profile.resume_fromAI ? 'success' : 'secondary'}>
+            {profile.resume_fromAI ? 'Yes' : 'No'}
+          </Label>
+        </DetailField>
         <DetailField label="Active">
           <Label color={profile.is_active ? 'success' : 'error'}>
             {profile.is_active ? 'Active' : 'Inactive'}

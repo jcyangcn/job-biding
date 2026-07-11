@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Grid, Link, Typography } from '@mui/material';
+import { Box, CircularProgress, Grid, Link, Typography } from '@mui/material';
 import BusinessTwoToneIcon from '@mui/icons-material/BusinessTwoTone';
 import CalendarTodayTwoToneIcon from '@mui/icons-material/CalendarTodayTwoTone';
 import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
@@ -13,52 +14,101 @@ import {
   DetailTextSection,
   formatDetailDate
 } from 'src/components/DetailDialog';
+import { getJobApplication } from 'src/services/jobApplicationApi';
 
 function ApplicationDetailDialog({ open, application, onClose }) {
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const applicationId = application?.id;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!open || !applicationId) {
+      setDetail(null);
+      setError('');
+      setLoading(false);
+      return undefined;
+    }
+
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      setDetail(null);
+      try {
+        const full = await getJobApplication(applicationId);
+        if (!cancelled) {
+          setDetail(full);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || 'Failed to load application details');
+          setDetail(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, applicationId]);
+
   if (!application) {
     return null;
   }
 
-  const company = application.company?.trim();
-  const role = application.role?.trim();
+  const view = detail || application;
+  const company = view.company?.trim();
+  const role = view.role?.trim();
   const title = [company, role].filter(Boolean).join(' · ') || 'Application details';
-  const caption = `#${application.id}${
-    formatDetailDate(application.applied_at) ? ` · ${formatDetailDate(application.applied_at)}` : ''
+  const caption = `#${view.id}${
+    formatDetailDate(view.applied_at) ? ` · ${formatDetailDate(view.applied_at)}` : ''
   }`;
-  const hasJobLink = Boolean(application.link?.trim());
-  const hasResumeLink = Boolean(application.resume_online_link?.trim());
-  const hasGeneratedResume = Boolean(application.resume_generated_id);
+  const hasJobLink = Boolean(view.link?.trim());
+  const hasResumeLink = Boolean(view.resume_online_link?.trim());
+  const hasGeneratedResume = Boolean(view.resume_generated_id);
+  const jobDescription = detail?.job_description;
 
   return (
     <DetailDialog open={open} onClose={onClose} title={title} caption={caption}>
+      {error ? (
+        <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+          {error}
+        </Typography>
+      ) : null}
       <Grid container spacing={2}>
         <DetailField
           label="Company"
-          value={application.company?.trim() || '—'}
+          value={view.company?.trim() || '—'}
           icon={BusinessTwoToneIcon}
         />
-        <DetailField label="Role" value={application.role?.trim() || '—'} icon={WorkTwoToneIcon} />
+        <DetailField label="Role" value={view.role?.trim() || '—'} icon={WorkTwoToneIcon} />
         <DetailField
           label="Bidder"
-          value={application.bidder_name?.trim() || application.bidder_username?.trim() || '—'}
+          value={view.bidder_name?.trim() || view.bidder_username?.trim() || '—'}
           icon={PersonPinTwoToneIcon}
         />
         <DetailField label="Applied" icon={CalendarTodayTwoToneIcon}>
           <Typography variant="body1">
-            {application.applied
-              ? formatDetailDate(application.applied_at) || '—'
-              : 'Not applied'}
+            {view.applied ? formatDetailDate(view.applied_at) || '—' : 'Not applied'}
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-            Created {formatDetailDate(application.created_at) || '—'}
+            Created {formatDetailDate(view.created_at) || '—'}
           </Typography>
         </DetailField>
         <DetailField label="Resume" icon={PictureAsPdfTwoToneIcon}>
           {hasGeneratedResume ? (
-            <Typography variant="body1">Generated resume #{application.resume_generated_id}</Typography>
+            <Typography variant="body1">Generated resume #{view.resume_generated_id}</Typography>
           ) : hasResumeLink ? (
             <Link
-              href={application.resume_online_link}
+              href={view.resume_online_link}
               target="_blank"
               rel="noopener noreferrer"
               underline="hover"
@@ -73,13 +123,13 @@ function ApplicationDetailDialog({ open, application, onClose }) {
         <DetailField label="Job link" icon={LinkTwoToneIcon} xs={12} sm={12}>
           {hasJobLink ? (
             <Link
-              href={application.link}
+              href={view.link}
               target="_blank"
               rel="noopener noreferrer"
               underline="hover"
               sx={{ wordBreak: 'break-all', display: 'inline-block', mt: 0.5 }}
             >
-              {application.link}
+              {view.link}
             </Link>
           ) : (
             <Typography variant="body1">—</Typography>
@@ -87,12 +137,21 @@ function ApplicationDetailDialog({ open, application, onClose }) {
         </DetailField>
       </Grid>
 
-      <DetailTextSection
-        title="Job description"
-        icon={DescriptionTwoToneIcon}
-        text={application.job_description}
-        emptyText="No job description provided."
-      />
+      {loading ? (
+        <Box display="flex" justifyContent="center" alignItems="center" gap={1} py={3}>
+          <CircularProgress size={22} />
+          <Typography variant="body2" color="text.secondary">
+            Loading job description…
+          </Typography>
+        </Box>
+      ) : (
+        <DetailTextSection
+          title="Job description"
+          icon={DescriptionTwoToneIcon}
+          text={jobDescription}
+          emptyText={error ? 'Could not load job description.' : 'No job description provided.'}
+        />
+      )}
     </DetailDialog>
   );
 }

@@ -1,5 +1,6 @@
 import { getApiBase } from 'src/config/api';
 import { getStoredAccessToken } from 'src/services/authApi';
+import { buildListQuery, toListQueryParams } from 'src/utils/listQuery';
 
 function authHeaders(extra = {}) {
   const headers = { ...extra };
@@ -8,6 +9,13 @@ function authHeaders(extra = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
   return headers;
+}
+
+function asListEnvelope(body) {
+  if (Array.isArray(body)) {
+    return { items: body, total: body.length, page: 1, page_size: body.length };
+  }
+  return body;
 }
 
 async function fetchText(path) {
@@ -114,8 +122,14 @@ export async function loadDefaultProfileJson() {
   return fetchJson('/api/profile/default');
 }
 
-export async function listResumeGenerations(limit = 50) {
-  return fetchJson(`/api/resume-generations?limit=${limit}`);
+export function listResumeGenerations(options = {}) {
+  const params = toListQueryParams(options);
+  return fetchJson(`/api/resume-generations${buildListQuery(params)}`).then(asListEnvelope);
+}
+
+export async function listAllResumeGenerations(options = {}) {
+  const result = await listResumeGenerations({ page: 1, pageSize: 200, ...options });
+  return result.items || [];
 }
 
 export async function fetchHealth() {

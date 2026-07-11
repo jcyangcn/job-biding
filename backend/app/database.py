@@ -495,6 +495,7 @@ def migrate_job_profile_columns() -> None:
         "default_resume_stored_name": "VARCHAR(500)",
         "default_resume_original_name": "VARCHAR(500)",
         "proxy_detail": "TEXT NOT NULL DEFAULT ''",
+        "resume_from_ai": "BOOLEAN NOT NULL DEFAULT TRUE",
     }
     with engine.begin() as conn:
         table_exists = conn.execute(
@@ -527,6 +528,24 @@ def migrate_job_profile_columns() -> None:
             conn.execute(
                 text(
                     f"ALTER TABLE job_profile ADD COLUMN {column_name} {column_type}"
+                )
+            )
+
+        resume_from_ai_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_profile'
+                  AND column_name = 'resume_from_ai'
+                """
+            )
+        ).scalar()
+        if resume_from_ai_exists:
+            conn.execute(
+                text(
+                    "ALTER TABLE job_profile ALTER COLUMN resume_from_ai SET DEFAULT TRUE"
                 )
             )
 
@@ -942,6 +961,162 @@ def migrate_linkedin_created_at_column() -> None:
             )
 
 
+def migrate_skills_columns() -> None:
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'skills'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            return
+
+        weight_nullable = conn.execute(
+            text(
+                """
+                SELECT is_nullable
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'skills'
+                  AND column_name = 'weight'
+                """
+            )
+        ).scalar()
+        if weight_nullable == "NO":
+            conn.execute(text("ALTER TABLE skills ALTER COLUMN weight DROP NOT NULL"))
+
+        for column_name in ("field", "keyword"):
+            data_type = conn.execute(
+                text(
+                    """
+                    SELECT data_type
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'skills'
+                      AND column_name = :column_name
+                    """
+                ),
+                {"column_name": column_name},
+            ).scalar()
+            if data_type and data_type != "text":
+                conn.execute(
+                    text(f"ALTER TABLE skills ALTER COLUMN {column_name} TYPE TEXT")
+                )
+
+
+def migrate_job_application_job_vector() -> None:
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_application'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            return
+
+        exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'job_vector'
+                """
+            )
+        ).scalar()
+        if not exists:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN job_vector JSONB NOT NULL DEFAULT '[]'
+                    """
+                )
+            )
+
+
+def migrate_resume_generations_structure() -> None:
+    """Replace profile JSONB with profile_id, resume_content, and resume_vector."""
+    migration_name = "resume_generations_profile_id_content_vector_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'resume_generations'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            _mark_schema_migration_applied(conn, migration_name)
+            return
+
+        def column_exists(column_name: str) -> bool:
+            return bool(
+                conn.execute(
+                    text(
+                        """
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'resume_generations'
+                          AND column_name = :column_name
+                        """
+                    ),
+                    {"column_name": column_name},
+                ).scalar()
+            )
+
+        if not column_exists("profile_id"):
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE resume_generations
+                    ADD COLUMN profile_id INTEGER
+                    REFERENCES job_profile(id) ON DELETE SET NULL
+                    """
+                )
+            )
+
+        if not column_exists("resume_content"):
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE resume_generations
+                    ADD COLUMN resume_content JSONB NOT NULL DEFAULT '{}'
+                    """
+                )
+            )
+
+        if not column_exists("resume_vector"):
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE resume_generations
+                    ADD COLUMN resume_vector JSONB NOT NULL DEFAULT '[]'
+                    """
+                )
+            )
+
+        if column_exists("profile"):
+            conn.execute(text("ALTER TABLE resume_generations DROP COLUMN profile"))
+
+        _mark_schema_migration_applied(conn, migration_name)
+
+
 def init_db() -> None:
     from app import db_models  # noqa: F401
     from app.auth import seed_default_users
@@ -953,6 +1128,8 @@ def init_db() -> None:
     migrate_user_role_column()
     migrate_job_identity_columns()
     migrate_job_application_columns()
+    migrate_job_application_job_vector()
+    migrate_resume_generations_structure()
     repair_application_creator_assignments()
     repair_application_creator_by_resume_list()
     migrate_job_profile_columns()
@@ -963,6 +1140,7 @@ def init_db() -> None:
     migrate_linkedin_status_values()
     migrate_linkedin_country_column()
     migrate_linkedin_created_at_column()
+    migrate_skills_columns()
     with SessionLocal() as db:
         seed_default_users(db)
         seed_test_identity_profile(db)

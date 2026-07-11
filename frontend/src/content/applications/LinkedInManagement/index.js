@@ -43,9 +43,7 @@ import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
-import useTableListFilters from 'src/hooks/useTableListFilters';
-import useTablePagination from 'src/hooks/useTablePagination';
-import useTableSort from 'src/hooks/useTableSort';
+import useServerTable from 'src/hooks/useServerTable';
 import { LINKEDIN_NEED_ACTIONS, LINKEDIN_STATUSES, getLinkedInNeedActionColor, isLinkedInNeedActionActive } from 'src/data/linkedinOptions';
 import COUNTRIES from 'src/data/countries';
 import { getCountryCode } from 'src/data/countryCodes';
@@ -54,6 +52,7 @@ import {
   deleteLinkedInAccount,
   deleteLinkedInImage,
   exportLinkedInAccountsCsv,
+  fetchLinkedInAccountsSummary,
   getLinkedInAccount,
   importLinkedInAccountsCsv,
   listLinkedInAccounts,
@@ -76,75 +75,19 @@ import {
   SecuredStatusCell
 } from './LinkedInRowParts';
 
-const LINKEDIN_SELECT_FILTERS = [
-  { id: 'status', field: 'status' },
-  { id: 'need_action', field: 'need_action' },
-  {
-    id: 'need_action_active',
-    getValue: (row) => (isLinkedInNeedActionActive(row.need_action) ? 'active' : 'none')
-  },
-  {
-    id: 'renting_expired',
-    getValue: (row) => (isRentingExpired(row) ? 'expired' : 'no')
-  },
-  {
-    id: 'created_expiring',
-    getValue: (row) => (isCreatedExpiring(row) ? 'expiring' : 'no')
-  },
-  {
-    id: 'email_not_secured',
-    getValue: (row) => (isEmailNotSecuredActive(row) ? 'yes' : 'no')
-  }
-];
-
-const LINKEDIN_SEARCH_FIELDS = [
-  'id',
-  'title',
-  'country',
-  'email',
-  'email_recovery_email',
-  'recovery_email',
-  'linkedin_email',
-  'linkedin_link',
-  'second_email',
-  'browser',
-  'order_id',
-  'proxy_info',
-  'purchased_from',
-  'renting_to',
-  'logs'
-];
-
 const TILE_ROWS_PER_PAGE = 12;
 const TILE_ROWS_PER_PAGE_OPTIONS = [12, 24, 36];
 const TABLE_ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
-function isRentingExpired(row) {
-  if (row.status !== 'Renting' || !row.renting_by) {
-    return false;
-  }
-  const target = new Date(row.renting_by);
-  target.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return target < today;
-}
-
-function isCreatedExpiring(row) {
-  if (row.status !== 'Created' || !row.proxy_expired_by) {
-    return false;
-  }
-  const target = new Date(row.proxy_expired_by);
-  target.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-  return diffDays <= 7;
-}
-
-function isEmailNotSecuredActive(row) {
-  return (row.status === 'Created' || row.status === 'Renting') && !row.email_secured;
-}
+const EMPTY_SUMMARY = {
+  total: 0,
+  created: 0,
+  createdExpiring: 0,
+  renting: 0,
+  rentingExpired: 0,
+  emailNotSecured: 0,
+  actionRequired: 0
+};
 
 function LinkedInManagement() {
   const theme = useTheme();
@@ -153,8 +96,7 @@ function LinkedInManagement() {
   const csvInputRef = useRef(null);
   useSetPageHeader('LinkedIn Management', 'Manage LinkedIn accounts, emails, proxies, and sales records');
 
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(false);
@@ -182,29 +124,39 @@ function LinkedInManagement() {
     stopPropagation
   } = useDetailDialog();
 
+  const fetchAccounts = useCallback((opts) => listLinkedInAccounts(opts), []);
+
   const {
+    rows,
+    setRows,
+    total,
+    loading,
+    page,
+    limit,
     search,
     setSearch,
     selectValues,
     setSelectValue,
-    filteredRows,
     clearFilters,
-    hasActiveFilters
-  } = useTableListFilters(rows, {
-    searchFields: LINKEDIN_SEARCH_FIELDS,
-    selects: LINKEDIN_SELECT_FILTERS
-  });
-
-  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
-
-  const {
-    page,
-    limit,
-    paginatedRows,
+    hasActiveFilters,
+    sortField,
+    sortDirection,
+    handleSort,
     handlePageChange,
     handleLimitChange,
-    rowsPerPageOptions
-  } = useTablePagination(sortedRows, {
+    rowsPerPageOptions,
+    refresh,
+    paginatedRows
+  } = useServerTable({
+    fetcher: fetchAccounts,
+    selectIds: [
+      'status',
+      'need_action',
+      'need_action_active',
+      'renting_expired',
+      'created_expiring',
+      'email_not_secured'
+    ],
     defaultLimit: viewMode === 'tile' ? TILE_ROWS_PER_PAGE : 10,
     rowsPerPageOptions: viewMode === 'tile' ? TILE_ROWS_PER_PAGE_OPTIONS : TABLE_ROWS_PER_PAGE_OPTIONS
   });
@@ -235,38 +187,31 @@ function LinkedInManagement() {
     [selectValues.status, selectValues.need_action, setSelectValue]
   );
 
-  const summary = useMemo(() => {
-    const counts = {
-      total: rows.length,
-      created: 0,
-      createdExpiring: 0,
-      renting: 0,
-      rentingExpired: 0,
-      emailNotSecured: 0,
-      actionRequired: 0
-    };
-    rows.forEach((row) => {
-      if (row.status === 'Created') {
-        counts.created += 1;
-      }
-      if (isCreatedExpiring(row)) {
-        counts.createdExpiring += 1;
-      }
-      if (row.status === 'Renting') {
-        counts.renting += 1;
-      }
-      if (isRentingExpired(row)) {
-        counts.rentingExpired += 1;
-      }
-      if (isEmailNotSecuredActive(row)) {
-        counts.emailNotSecured += 1;
-      }
-      if (isLinkedInNeedActionActive(row.need_action)) {
-        counts.actionRequired += 1;
-      }
-    });
-    return counts;
-  }, [rows]);
+  const loadSummary = useCallback(async () => {
+    try {
+      const data = await fetchLinkedInAccountsSummary();
+      setSummary({
+        total: data.total || 0,
+        created: data.created || 0,
+        createdExpiring: data.created_expiring || 0,
+        renting: data.renting || 0,
+        rentingExpired: data.renting_expired || 0,
+        emailNotSecured: data.email_not_secured || 0,
+        actionRequired: data.action_required || 0
+      });
+    } catch {
+      /* keep previous summary */
+    }
+  }, []);
+
+  const notifyRefresh = useCallback(() => {
+    refresh();
+    loadSummary();
+  }, [refresh, loadSummary]);
+
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
 
   const dialogTitle = useMemo(
     () => (editingRecord ? 'Edit LinkedIn' : 'Add LinkedIn'),
@@ -313,21 +258,6 @@ function LinkedInManagement() {
     clearFilters();
     setSelectValue('need_action_active', 'active');
   }, [clearFilters, setSelectValue]);
-
-  const loadAccounts = useCallback(async () => {
-    setLoading(true);
-    try {
-      setRows(await listLinkedInAccounts());
-    } catch (err) {
-      enqueueSnackbar(err.message || 'Failed to load LinkedIn accounts', { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [enqueueSnackbar]);
-
-  useEffect(() => {
-    loadAccounts();
-  }, [loadAccounts]);
 
   const resetFormState = () => {
     setForm(createEmptyLinkedInForm());
@@ -439,7 +369,7 @@ function LinkedInManagement() {
         variant: 'success'
       });
       closeDialog();
-      await loadAccounts();
+      await notifyRefresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Save failed', { variant: 'error' });
     } finally {
@@ -461,7 +391,7 @@ function LinkedInManagement() {
       enqueueSnackbar('LinkedIn account deleted', { variant: 'success' });
       setDeleteOpen(false);
       setDeletingRecord(null);
-      await loadAccounts();
+      await notifyRefresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
     } finally {
@@ -472,7 +402,7 @@ function LinkedInManagement() {
   const handleExportCsv = async () => {
     setExporting(true);
     try {
-      if (!rows.length) {
+      if (!summary.total && !total) {
         enqueueSnackbar('No LinkedIn accounts to export', { variant: 'info' });
         return;
       }
@@ -500,7 +430,7 @@ function LinkedInManagement() {
       const { created = 0, updated = 0, failed = 0, errors = [] } = result || {};
 
       if (created || updated) {
-        await loadAccounts();
+        await notifyRefresh();
       }
 
       if ((created || updated) && failed) {
@@ -663,8 +593,8 @@ function LinkedInManagement() {
             selects={filterSelects}
             onClear={clearFilters}
             hasActiveFilters={hasActiveFilters}
-            filteredCount={filteredRows.length}
-            totalCount={rows.length}
+            filteredCount={total}
+            totalCount={summary.total || total}
             actions={
               <>
                 <input
@@ -698,7 +628,7 @@ function LinkedInManagement() {
                 <Button
                   variant="outlined"
                   startIcon={<RefreshTwoToneIcon />}
-                  onClick={loadAccounts}
+                  onClick={() => notifyRefresh()}
                   disabled={loading || saving || importing || exporting}
                 >
                   Refresh
@@ -785,17 +715,17 @@ function LinkedInManagement() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {loading ? (
+                  {loading && rows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={11}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11}>No LinkedIn accounts yet.</TableCell>
-                    </TableRow>
-                  ) : filteredRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={11}>No LinkedIn accounts match your filters.</TableCell>
+                      <TableCell colSpan={11}>
+                        {hasActiveFilters
+                          ? 'No LinkedIn accounts match your filters.'
+                          : 'No LinkedIn accounts yet.'}
+                      </TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
@@ -971,17 +901,15 @@ function LinkedInManagement() {
                 </TableBody>
               </Table>
             </TableContainer>
-            ) : loading ? (
+            ) : loading && rows.length === 0 ? (
               <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
                 Loading…
               </Typography>
             ) : rows.length === 0 ? (
               <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-                No LinkedIn accounts yet.
-              </Typography>
-            ) : filteredRows.length === 0 ? (
-              <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-                No LinkedIn accounts match your filters.
+                {hasActiveFilters
+                  ? 'No LinkedIn accounts match your filters.'
+                  : 'No LinkedIn accounts yet.'}
               </Typography>
             ) : (
               <Grid container spacing={2}>
@@ -997,7 +925,7 @@ function LinkedInManagement() {
               </Grid>
             )}
             <TablePaginationFooter
-              count={filteredRows.length}
+              count={total}
               page={page}
               rowsPerPage={limit}
               onPageChange={handlePageChange}

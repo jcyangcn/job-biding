@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link as RouterLink } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
@@ -33,16 +33,12 @@ import TableListFilters, { compactButtonSx } from 'src/components/TableListFilte
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
-import useTableListFilters from 'src/hooks/useTableListFilters';
-import useTablePagination from 'src/hooks/useTablePagination';
-import useTableSort from 'src/hooks/useTableSort';
+import useServerTable from 'src/hooks/useServerTable';
 import ProgressionEmailDetailDialog from './ProgressionEmailDetailDialog';
 import ProgressionEmailEditDialog from './ProgressionEmailEditDialog';
 import ProgressionEmailStatusLabel from './ProgressionEmailStatusLabel';
 import ProgressionEmailTypeLabel from './ProgressionEmailTypeLabel';
 import {
-  formatProgressionEmailStatus,
-  formatProgressionEmailType,
   isHumanInterviewType,
   PROGRESSION_EMAIL_STATUSES,
   PROGRESSION_EMAIL_TYPES
@@ -60,25 +56,29 @@ import {
   buildProgressionEmailExportRows
 } from 'src/utils/progressionEmailCsvExport';
 
-const BASE_SEARCH_FIELDS = [
-  'id',
-  'reference_no',
-  'company',
-  'email_link',
-  'log',
-  (row) => formatProgressionEmailType(row.type),
-  (row) => formatProgressionEmailStatus(row.status)
-];
+const EXPORT_PAGE_SIZE = 200;
 
-const PROGRESSION_EMAIL_SELECT_FILTERS = [
-  { id: 'type', field: 'type' },
-  { id: 'status', field: 'status' }
-];
+async function fetchAllProgressionEmailItems(profileId, options = {}, page = 1, acc = []) {
+  const result = await listProgressionEmails(profileId, {
+    ...options,
+    page,
+    pageSize: EXPORT_PAGE_SIZE
+  });
+  const batch = result.items || [];
+  const items = acc.concat(batch);
+  const total = Number(result.total) || 0;
+
+  if (!batch.length || batch.length < EXPORT_PAGE_SIZE || items.length >= total) {
+    return items;
+  }
+
+  return fetchAllProgressionEmailItems(profileId, options, page + 1, items);
+}
 
 function ProgressionEmailsTableView({
-  rows,
-  loading,
+  listProfileId,
   onRefresh,
+  onTotalChange,
   profile,
   exportProfileId,
   profiles = [],
@@ -100,12 +100,17 @@ function ProgressionEmailsTableView({
   const { open: detailOpen, selected: selectedEmail, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
 
-  const searchFields = useMemo(
-    () => (showProfileColumn ? ['profile_label', ...BASE_SEARCH_FIELDS] : BASE_SEARCH_FIELDS),
-    [showProfileColumn]
+  const fetchEmails = useCallback(
+    (opts) => listProgressionEmails(listProfileId ?? undefined, { ...opts }),
+    [listProfileId]
   );
 
   const {
+    rows,
+    total,
+    loading,
+    page,
+    limit,
     search,
     setSearch,
     dateFrom,
@@ -114,26 +119,41 @@ function ProgressionEmailsTableView({
     setDateTo,
     selectValues,
     setSelectValue,
-    filteredRows,
     clearFilters,
     hasActiveFilters,
-    showDateRange
-  } = useTableListFilters(rows, {
-    searchFields,
-    dateField: 'email_date',
-    selects: PROGRESSION_EMAIL_SELECT_FILTERS
-  });
-
-  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
-
-  const {
-    page,
-    limit,
-    paginatedRows,
+    showDateRange,
+    sortField,
+    sortDirection,
+    handleSort,
     handlePageChange,
     handleLimitChange,
-    rowsPerPageOptions
-  } = useTablePagination(sortedRows);
+    rowsPerPageOptions,
+    refresh,
+    paginatedRows
+  } = useServerTable({
+    fetcher: fetchEmails,
+    selectIds: ['type', 'status'],
+    dateField: 'email_date'
+  });
+
+  const prevListProfileIdRef = useRef(listProfileId);
+  useEffect(() => {
+    if (prevListProfileIdRef.current !== listProfileId) {
+      prevListProfileIdRef.current = listProfileId;
+      refresh();
+    }
+  }, [listProfileId, refresh]);
+
+  useEffect(() => {
+    onTotalChange?.(total);
+  }, [total, onTotalChange]);
+
+  const notifyRefresh = useCallback(async () => {
+    refresh();
+    if (onRefresh) {
+      await onRefresh();
+    }
+  }, [refresh, onRefresh]);
 
   const profileLabelToId = useMemo(() => {
     const map = {};
@@ -201,7 +221,7 @@ function ProgressionEmailsTableView({
       enqueueSnackbar('Progression email deleted', { variant: 'success' });
       setDeleteOpen(false);
       setDeletingRecord(null);
-      await onRefresh();
+      await notifyRefresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
     } finally {
@@ -213,8 +233,12 @@ function ProgressionEmailsTableView({
     setExporting(true);
     try {
       const resolvedExportProfileId =
-        exportProfileId !== undefined ? exportProfileId : profile?.id ?? null;
-      const exportRows = await listProgressionEmails(
+        exportProfileId !== undefined
+          ? exportProfileId
+          : listProfileId !== undefined
+            ? listProfileId
+            : profile?.id ?? null;
+      const exportRows = await fetchAllProgressionEmailItems(
         resolvedExportProfileId == null ? undefined : resolvedExportProfileId
       );
       if (!exportRows.length) {
@@ -269,7 +293,7 @@ function ProgressionEmailsTableView({
       );
 
       if (created) {
-        await onRefresh();
+        await notifyRefresh();
       }
 
       if (created && failed) {
@@ -307,8 +331,8 @@ function ProgressionEmailsTableView({
       selects={filterSelects}
       onClear={clearFilters}
       hasActiveFilters={hasActiveFilters}
-      filteredCount={filteredRows.length}
-      totalCount={rows.length}
+      filteredCount={total}
+      totalCount={total}
       actions={
         <>
           <input
@@ -342,7 +366,7 @@ function ProgressionEmailsTableView({
             variant="outlined"
             size={singleLine ? 'small' : 'medium'}
             startIcon={<RefreshTwoToneIcon />}
-            onClick={onRefresh}
+            onClick={notifyRefresh}
             disabled={loading}
             sx={singleLine ? compactButtonSx : undefined}
           >
@@ -447,13 +471,7 @@ function ProgressionEmailsTableView({
                   sortDirection={sortDirection}
                   onSort={handleSort}
                 />
-                <SortableTableCell
-                  label="Log"
-                  sortKey="log"
-                  sortField={sortField}
-                  sortDirection={sortDirection}
-                  onSort={handleSort}
-                />
+                <TableCell>Log</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -462,11 +480,11 @@ function ProgressionEmailsTableView({
                 <TableRow>
                   <TableCell colSpan={columnCount}>Loading…</TableCell>
                 </TableRow>
-              ) : rows.length === 0 ? (
+              ) : total === 0 && !hasActiveFilters ? (
                 <TableRow>
                   <TableCell colSpan={columnCount}>No progression emails yet.</TableCell>
                 </TableRow>
-              ) : filteredRows.length === 0 ? (
+              ) : total === 0 ? (
                 <TableRow>
                   <TableCell colSpan={columnCount}>No progression emails match your filters.</TableCell>
                 </TableRow>
@@ -523,7 +541,7 @@ function ProgressionEmailsTableView({
           </Table>
         </TableContainer>
         <TablePaginationFooter
-          count={filteredRows.length}
+          count={total}
           page={page}
           rowsPerPage={limit}
           onPageChange={handlePageChange}
@@ -546,7 +564,7 @@ function ProgressionEmailsTableView({
         open={editOpen}
         email={editingRecord}
         onClose={() => !saving && setEditOpen(false)}
-        onSaved={onRefresh}
+        onSaved={notifyRefresh}
       />
 
       <Dialog open={deleteOpen} onClose={() => !saving && setDeleteOpen(false)}>
@@ -582,9 +600,9 @@ function ProgressionEmailsTableView({
 }
 
 ProgressionEmailsTableView.propTypes = {
-  rows: PropTypes.array.isRequired,
-  loading: PropTypes.bool.isRequired,
-  onRefresh: PropTypes.func.isRequired,
+  listProfileId: PropTypes.oneOfType([PropTypes.number, PropTypes.oneOf([null])]),
+  onRefresh: PropTypes.func,
+  onTotalChange: PropTypes.func,
   profile: PropTypes.object,
   exportProfileId: PropTypes.oneOfType([PropTypes.number, PropTypes.oneOf([null])]),
   profiles: PropTypes.array,

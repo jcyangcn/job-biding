@@ -2,16 +2,18 @@ from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.db_models import JobApplication, JobIdentity, JobProfile, ResumeGeneration, User
 from app.models import JobApplicationCreateRequest, JobApplicationUpdateRequest
+from app.job_vector import build_job_vector
 from app.profile_service import (
     _format_identity_label,
     get_profile,
     profile_access_filter,
     user_can_access_profile,
 )
+from app.skill_service import list_skill_keywords
 from app.user_roles import UserRole
 
 
@@ -23,7 +25,12 @@ def _resolve_application_creator(db: Session, record: JobApplication) -> User | 
     return db.get(User, user_id)
 
 
-def application_to_response(db: Session, record: JobApplication) -> dict:
+def application_to_response(
+    db: Session,
+    record: JobApplication,
+    *,
+    include_job_description: bool = True,
+) -> dict:
     profile = get_profile(db, record.profile_id)
     profile_label = ""
     if profile:
@@ -49,7 +56,8 @@ def application_to_response(db: Session, record: JobApplication) -> dict:
         "role": record.role,
         "company": record.company,
         "link": record.link,
-        "job_description": record.job_description,
+        "job_description": record.job_description if include_job_description else "",
+        "job_vector": list(record.job_vector or []),
         "resume_generated_id": record.resume_generated_id,
         "resume_pdf_filename": resume_pdf_filename,
         "resume_online_link": record.resume_online_link,
@@ -103,6 +111,19 @@ def _resolve_applied_fields(applied: bool, applied_at: datetime | None) -> datet
     return None
 
 
+def _resolve_job_vector(
+    db: Session,
+    *,
+    job_description: str,
+    role: str | None,
+    provided: list[float] | None,
+) -> list[float]:
+    keywords = list_skill_keywords(db, role=role)
+    if provided is not None and len(provided) == len(keywords):
+        return [float(value) for value in provided]
+    return build_job_vector(job_description, keywords)
+
+
 def create_application(
     db: Session, data: JobApplicationCreateRequest, user: User
 ) -> JobApplication:
@@ -121,12 +142,22 @@ def create_application(
         if not generation:
             raise ValueError("Resume generation not found")
 
+    job_description = data.job_description.strip()
+    skill_role = (data.role or "").strip() or (profile.roles or "").strip()
+    job_vector = _resolve_job_vector(
+        db,
+        job_description=job_description,
+        role=skill_role,
+        provided=data.job_vector,
+    )
+
     record = JobApplication(
         profile_id=data.profile_id,
         role=data.role.strip(),
         company=data.company.strip(),
         link=data.link.strip(),
-        job_description=data.job_description.strip(),
+        job_description=job_description,
+        job_vector=job_vector,
         resume_generated_id=data.resume_generated_id,
         resume_online_link=(
             data.resume_online_link.strip() if data.resume_online_link else None
@@ -143,7 +174,7 @@ def create_application(
 
 
 def list_applications_for_profile(
-    db: Session, profile_id: int, user: User
+    db: Session, profile_id: int, user: User, *, include_job_description: bool = False
 ) -> list[JobApplication]:
     profile = get_profile(db, profile_id)
     if not profile:
@@ -153,37 +184,49 @@ def list_applications_for_profile(
     if not user_can_access_profile(user, profile):
         raise PermissionError("Access denied")
 
-    return list(
-        db.scalars(
-            select(JobApplication)
-            .where(JobApplication.profile_id == profile_id)
-            .order_by(JobApplication.id.desc())
-        ).all()
-    )
+    query = select(JobApplication).where(JobApplication.profile_id == profile_id)
+    if not include_job_description:
+        query = query.options(defer(JobApplication.job_description))
+    return list(db.scalars(query.order_by(JobApplication.id.desc())).all())
 
 
 def list_applications_admin(
-    db: Session, user: User, profile_id: int | None = None
+    db: Session,
+    user: User,
+    profile_id: int | None = None,
+    *,
+    include_job_description: bool = False,
 ) -> list[JobApplication]:
     if user.role != UserRole.admin:
         raise PermissionError("Access denied")
 
-    query = select(JobApplication).order_by(JobApplication.id.desc())
+    query = select(JobApplication)
     if profile_id is not None:
         query = query.where(JobApplication.profile_id == profile_id)
+    if not include_job_description:
+        query = query.options(defer(JobApplication.job_description))
+    return list(db.scalars(query.order_by(JobApplication.id.desc())).all())
 
-    return list(db.scalars(query).all())
 
-
-def list_applications_for_user(db: Session, user: User) -> list[JobApplication]:
-    return list(
-        db.scalars(
-            select(JobApplication)
-            .join(JobProfile, JobApplication.profile_id == JobProfile.id)
-            .where(profile_access_filter(user.id))
-            .order_by(JobApplication.id.desc())
-        ).all()
+def list_applications_for_user(
+    db: Session, user: User, *, include_job_description: bool = False
+) -> list[JobApplication]:
+    query = (
+        select(JobApplication)
+        .join(JobProfile, JobApplication.profile_id == JobProfile.id)
+        .where(profile_access_filter(user.id))
     )
+    if not include_job_description:
+        query = query.options(defer(JobApplication.job_description))
+    return list(db.scalars(query.order_by(JobApplication.id.desc())).all())
+
+
+def get_application_for_user(db: Session, application_id: int, user: User) -> JobApplication:
+    record = get_application(db, application_id)
+    if not record:
+        raise ValueError("Application not found")
+    _ensure_application_access(db, record, user)
+    return record
 
 
 def update_application(
@@ -205,6 +248,13 @@ def update_application(
     record.company = data.company.strip()
     record.link = data.link.strip()
     record.job_description = data.job_description.strip()
+    skill_role = (data.role or "").strip()
+    record.job_vector = _resolve_job_vector(
+        db,
+        job_description=record.job_description,
+        role=skill_role,
+        provided=data.job_vector,
+    )
     record.resume_generated_id = data.resume_generated_id
     record.resume_online_link = (
         data.resume_online_link.strip() if data.resume_online_link else None

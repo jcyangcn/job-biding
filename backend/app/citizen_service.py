@@ -3,12 +3,19 @@ import secrets
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import CITIZEN_IMAGE_DIR, CITIZEN_REVIEW_DIR, UPLOADS_DIR
 from app.db_models import Citizen
 from app.models import CitizenCreateRequest, CitizenImageInfo, CitizenUpdateRequest
+from app.pagination import (
+    normalize_page_params,
+    page_dict,
+    paginate_select,
+    parse_optional_date,
+    resolve_sort,
+)
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".pdf"}
 ALLOWED_REVIEW_FILE_EXTENSIONS = {
@@ -53,9 +60,77 @@ def citizen_to_response(record: Citizen) -> dict:
 
 
 def list_citizens(db: Session) -> list[Citizen]:
-    return list(
-        db.scalars(select(Citizen).order_by(Citizen.id.desc())).all()
-    )
+    result = list_citizens_page(db, page=1, page_size=200)
+    return result["items"]
+
+
+def list_citizens_page(
+    db: Session,
+    *,
+    page: int | None = None,
+    page_size: int | None = None,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    review_status: str | None = None,
+    country: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+) -> dict:
+    params = normalize_page_params(page, page_size)
+    query = select(Citizen)
+
+    search_text = (search or "").strip()
+    if search_text:
+        pattern = f"%{search_text}%"
+        query = query.where(
+            or_(
+                Citizen.name.ilike(pattern),
+                Citizen.country.ilike(pattern),
+                Citizen.linkedin.ilike(pattern),
+                Citizen.details.ilike(pattern),
+                Citizen.reviewer.ilike(pattern),
+                Citizen.review_status.ilike(pattern),
+                Citizen.review_log.ilike(pattern),
+                cast(Citizen.id, String).ilike(pattern),
+            )
+        )
+
+    status_text = (review_status or "").strip()
+    if status_text:
+        query = query.where(Citizen.review_status == status_text)
+
+    country_text = (country or "").strip()
+    if country_text:
+        query = query.where(Citizen.country == country_text)
+
+    from_date = parse_optional_date(date_from)
+    to_date = parse_optional_date(date_to)
+    if from_date is not None:
+        query = query.where(func.date(Citizen.created_at) >= from_date)
+    if to_date is not None:
+        query = query.where(func.date(Citizen.created_at) <= to_date)
+
+    sort_map = {
+        "id": Citizen.id,
+        "name": Citizen.name,
+        "country": Citizen.country,
+        "linkedin": Citizen.linkedin,
+        "details": Citizen.details,
+        "review_status": Citizen.review_status,
+        "reviewer": Citizen.reviewer,
+        "reviewed_at": Citizen.reviewed_at,
+        "created_at": Citizen.created_at,
+        "updated_at": Citizen.updated_at,
+    }
+    column, descending = resolve_sort(sort_by, sort_dir, sort_map, "id")
+    order_expr = column.desc() if descending else column.asc()
+    if hasattr(order_expr, "nulls_last"):
+        order_expr = order_expr.nulls_last()
+    query = query.order_by(order_expr, Citizen.id.desc())
+
+    rows, total = paginate_select(db, query, params)
+    return page_dict(list(rows), total, params)
 
 
 def get_citizen(db: Session, citizen_id: int) -> Citizen | None:

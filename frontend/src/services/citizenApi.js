@@ -1,5 +1,6 @@
 import { getApiBase } from 'src/config/api';
 import { getStoredAccessToken } from 'src/services/authApi';
+import { buildListQuery, toListQueryParams } from 'src/utils/listQuery';
 
 async function parseError(response) {
   let detail = `Request failed (${response.status})`;
@@ -23,6 +24,13 @@ function authHeaders(extra = {}) {
   return headers;
 }
 
+function asListEnvelope(body) {
+  if (Array.isArray(body)) {
+    return { items: body, total: body.length, page: 1, page_size: body.length };
+  }
+  return body;
+}
+
 async function requestJson(path, options = {}) {
   const response = await fetch(`${getApiBase()}${path}`, {
     ...options,
@@ -40,8 +48,14 @@ async function requestJson(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-export function listCitizens() {
-  return requestJson('/api/citizens');
+export function listCitizens(options = {}) {
+  const params = toListQueryParams(options);
+  return requestJson(`/api/citizens${buildListQuery(params)}`).then(asListEnvelope);
+}
+
+export async function listAllCitizens() {
+  const result = await listCitizens({ page: 1, pageSize: 200 });
+  return result.items || [];
 }
 
 export function createCitizen(payload) {

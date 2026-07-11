@@ -1,10 +1,10 @@
 import re
 import secrets
 import string
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import LINKEDIN_IMAGE_DIR, REPO_ROOT, UPLOADS_DIR
@@ -14,6 +14,13 @@ from app.models import (
     CitizenImageInfo,
     LinkedInAccountCreateRequest,
     LinkedInAccountUpdateRequest,
+)
+from app.pagination import (
+    normalize_page_params,
+    page_dict,
+    paginate_select,
+    parse_optional_date,
+    resolve_sort,
 )
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
@@ -120,9 +127,167 @@ def linkedin_account_to_response(record: LinkedInAccount) -> dict:
 
 
 def list_linkedin_accounts(db: Session) -> list[LinkedInAccount]:
+    """Full unpaginated list for CSV export and internal use."""
     return list(
         db.scalars(select(LinkedInAccount).order_by(LinkedInAccount.id.desc())).all()
     )
+
+
+def list_linkedin_accounts_page(
+    db: Session,
+    *,
+    page: int | None = None,
+    page_size: int | None = None,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    status: str | None = None,
+    need_action: str | None = None,
+    need_action_active: str | None = None,
+    renting_expired: str | None = None,
+    created_expiring: str | None = None,
+    email_not_secured: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+) -> dict:
+    params = normalize_page_params(page, page_size)
+    query = select(LinkedInAccount)
+
+    search_text = (search or "").strip()
+    if search_text:
+        pattern = f"%{search_text}%"
+        query = query.where(
+            or_(
+                LinkedInAccount.title.ilike(pattern),
+                LinkedInAccount.country.ilike(pattern),
+                LinkedInAccount.email.ilike(pattern),
+                LinkedInAccount.email_recovery_email.ilike(pattern),
+                LinkedInAccount.recovery_email.ilike(pattern),
+                LinkedInAccount.linkedin_email.ilike(pattern),
+                LinkedInAccount.linkedin_link.ilike(pattern),
+                LinkedInAccount.second_email.ilike(pattern),
+                LinkedInAccount.browser.ilike(pattern),
+                LinkedInAccount.order_id.ilike(pattern),
+                LinkedInAccount.proxy_info.ilike(pattern),
+                LinkedInAccount.purchased_from.ilike(pattern),
+                LinkedInAccount.renting_to.ilike(pattern),
+                LinkedInAccount.logs.ilike(pattern),
+                LinkedInAccount.status.ilike(pattern),
+                LinkedInAccount.need_action.ilike(pattern),
+                cast(LinkedInAccount.id, String).ilike(pattern),
+            )
+        )
+
+    status_text = (status or "").strip()
+    if status_text:
+        query = query.where(LinkedInAccount.status == status_text)
+
+    need_action_text = (need_action or "").strip()
+    if need_action_text:
+        query = query.where(LinkedInAccount.need_action == need_action_text)
+
+    if (need_action_active or "").strip().lower() == "active":
+        query = query.where(
+            LinkedInAccount.need_action.is_not(None),
+            LinkedInAccount.need_action != "None",
+            LinkedInAccount.need_action != "",
+        )
+
+    today = date.today()
+    if (renting_expired or "").strip().lower() == "expired":
+        query = query.where(
+            LinkedInAccount.status == "Renting",
+            LinkedInAccount.renting_by.is_not(None),
+            func.date(LinkedInAccount.renting_by) < today,
+        )
+
+    if (created_expiring or "").strip().lower() == "expiring":
+        expiry_limit = today + timedelta(days=7)
+        query = query.where(
+            LinkedInAccount.status == "Created",
+            LinkedInAccount.proxy_expired_by.is_not(None),
+            func.date(LinkedInAccount.proxy_expired_by) <= expiry_limit,
+        )
+
+    if (email_not_secured or "").strip().lower() == "yes":
+        query = query.where(
+            LinkedInAccount.status.in_(("Created", "Renting")),
+            LinkedInAccount.email_secured.is_(False),
+        )
+
+    from_date = parse_optional_date(date_from)
+    to_date = parse_optional_date(date_to)
+    if from_date is not None:
+        query = query.where(func.date(LinkedInAccount.created_at) >= from_date)
+    if to_date is not None:
+        query = query.where(func.date(LinkedInAccount.created_at) <= to_date)
+
+    sort_map = {
+        "id": LinkedInAccount.id,
+        "title": LinkedInAccount.title,
+        "country": LinkedInAccount.country,
+        "email": LinkedInAccount.email,
+        "status": LinkedInAccount.status,
+        "need_action": LinkedInAccount.need_action,
+        "provider": LinkedInAccount.provider,
+        "order_id": LinkedInAccount.order_id,
+        "proxy_expired_by": LinkedInAccount.proxy_expired_by,
+        "renting_by": LinkedInAccount.renting_by,
+        "linkedin_created_at": LinkedInAccount.linkedin_created_at,
+        "created_at": LinkedInAccount.created_at,
+        "updated_at": LinkedInAccount.updated_at,
+    }
+    column, descending = resolve_sort(sort_by, sort_dir, sort_map, "id")
+    order_expr = column.desc() if descending else column.asc()
+    if hasattr(order_expr, "nulls_last"):
+        order_expr = order_expr.nulls_last()
+    query = query.order_by(order_expr, LinkedInAccount.id.desc())
+
+    rows, total = paginate_select(db, query, params)
+    return page_dict(list(rows), total, params)
+
+
+def linkedin_accounts_summary(db: Session) -> dict[str, int]:
+    """Aggregate chip counts for LinkedIn management (unfiltered)."""
+    today = date.today()
+    expiry_limit = today + timedelta(days=7)
+
+    def _count(stmt) -> int:
+        return int(db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
+
+    base = select(LinkedInAccount.id)
+    return {
+        "total": _count(base),
+        "created": _count(base.where(LinkedInAccount.status == "Created")),
+        "created_expiring": _count(
+            base.where(
+                LinkedInAccount.status == "Created",
+                LinkedInAccount.proxy_expired_by.is_not(None),
+                func.date(LinkedInAccount.proxy_expired_by) <= expiry_limit,
+            )
+        ),
+        "renting": _count(base.where(LinkedInAccount.status == "Renting")),
+        "renting_expired": _count(
+            base.where(
+                LinkedInAccount.status == "Renting",
+                LinkedInAccount.renting_by.is_not(None),
+                func.date(LinkedInAccount.renting_by) < today,
+            )
+        ),
+        "email_not_secured": _count(
+            base.where(
+                LinkedInAccount.status.in_(("Created", "Renting")),
+                LinkedInAccount.email_secured.is_(False),
+            )
+        ),
+        "action_required": _count(
+            base.where(
+                LinkedInAccount.need_action.is_not(None),
+                LinkedInAccount.need_action != "None",
+                LinkedInAccount.need_action != "",
+            )
+        ),
+    }
 
 
 def get_linkedin_account(db: Session, account_id: int) -> LinkedInAccount | None:

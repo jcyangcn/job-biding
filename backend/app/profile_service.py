@@ -1,14 +1,21 @@
 from pathlib import Path
 import re
 import secrets
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.config import UPLOADS_DIR
 from app.country_codes import format_identity_label
 from app.db_models import JobIdentity, JobProfile, User
 from app.models import JobProfileCreateRequest, JobProfileUpdateRequest, ResumeDetail
+from app.pagination import (
+    normalize_page_params,
+    page_dict,
+    paginate_select,
+    parse_optional_date,
+    resolve_sort,
+)
 from app.user_roles import UserRole
 
 PROFILE_RESUME_EXTENSIONS = {".pdf", ".doc", ".docx"}
@@ -96,6 +103,7 @@ def profile_to_response(db: Session, record: JobProfile, *, include_admin_fields
         "default_resume_original_name": record.default_resume_original_name,
         "proxy": record.proxy,
         "proxy_detail": record.proxy_detail if include_admin_fields else "",
+        "resume_fromAI": bool(record.resume_from_ai),
         "reference_tag": record.reference_tag,
         "is_active": record.is_active,
         "resume_detail": _parse_resume_detail(record.resume_detail).model_dump(mode="json"),
@@ -213,14 +221,97 @@ def _validate_ref_updates(db: Session, updates: dict) -> None:
 
 
 def list_profiles(db: Session) -> list[JobProfile]:
-    return list(db.scalars(select(JobProfile).order_by(JobProfile.id)).all())
+    result = list_profiles_page(db, page=1, page_size=200)
+    return result["items"]
 
 
 def list_profiles_for_user(db: Session, user: User) -> list[JobProfile]:
-    query = select(JobProfile).order_by(JobProfile.id)
-    if user.role != UserRole.admin:
+    result = list_profiles_page(db, user, page=1, page_size=200)
+    return result["items"]
+
+
+def list_profiles_page(
+    db: Session,
+    user: User | None = None,
+    *,
+    page: int | None = None,
+    page_size: int | None = None,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    role: str | None = None,
+    active: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+) -> dict:
+    params = normalize_page_params(page, page_size)
+    caller = aliased(User)
+    query = (
+        select(JobProfile)
+        .outerjoin(JobIdentity, JobProfile.identity_id == JobIdentity.id)
+        .outerjoin(caller, JobProfile.caller_user_id == caller.id)
+    )
+
+    if user is not None and user.role != UserRole.admin:
         query = query.where(profile_access_filter(user.id))
-    return list(db.scalars(query).all())
+
+    search_text = (search or "").strip()
+    if search_text:
+        pattern = f"%{search_text}%"
+        query = query.where(
+            or_(
+                JobProfile.email.ilike(pattern),
+                JobProfile.phone.ilike(pattern),
+                JobProfile.roles.ilike(pattern),
+                JobProfile.reference_tag.ilike(pattern),
+                JobProfile.proxy.ilike(pattern),
+                JobIdentity.name.ilike(pattern),
+                JobIdentity.country.ilike(pattern),
+                caller.full_name.ilike(pattern),
+                cast(JobProfile.id, String).ilike(pattern),
+            )
+        )
+
+    role_text = (role or "").strip()
+    if role_text == "__empty__":
+        query = query.where(or_(JobProfile.roles.is_(None), JobProfile.roles == ""))
+    elif role_text:
+        query = query.where(JobProfile.roles == role_text)
+
+    active_text = (active or "").strip().lower()
+    if active_text in ("true", "1", "yes"):
+        query = query.where(JobProfile.is_active.is_(True))
+    elif active_text in ("false", "0", "no"):
+        query = query.where(JobProfile.is_active.is_(False))
+
+    from_date = parse_optional_date(date_from)
+    to_date = parse_optional_date(date_to)
+    if from_date is not None:
+        query = query.where(func.date(JobProfile.created_at) >= from_date)
+    if to_date is not None:
+        query = query.where(func.date(JobProfile.created_at) <= to_date)
+
+    sort_map = {
+        "id": JobProfile.id,
+        "email": JobProfile.email,
+        "phone": JobProfile.phone,
+        "roles": JobProfile.roles,
+        "reference_tag": JobProfile.reference_tag,
+        "created_at": JobProfile.created_at,
+        "is_active": JobProfile.is_active,
+        "identity": JobIdentity.name,
+        "identity_name": JobIdentity.name,
+        "caller_name": caller.full_name,
+        "bidder_name": JobProfile.bidder_user_ids,
+    }
+    column, descending = resolve_sort(sort_by, sort_dir, sort_map, "id")
+    order_expr = column.desc() if descending else column.asc()
+    if hasattr(order_expr, "nulls_last"):
+        order_expr = order_expr.nulls_last()
+    query = query.order_by(order_expr, JobProfile.id.asc())
+
+    rows, total = paginate_select(db, query, params)
+    return page_dict(list(rows), total, params)
 
 
 def get_profile(db: Session, profile_id: int) -> JobProfile | None:
@@ -242,6 +333,7 @@ def create_profile(db: Session, data: JobProfileCreateRequest) -> JobProfile:
         cover_letter=data.cover_letter,
         proxy=data.proxy or None,
         proxy_detail=data.proxy_detail,
+        resume_from_ai=bool(data.resume_from_ai),
         reference_tag=(data.reference_tag.strip() if data.reference_tag else None),
         is_active=data.is_active,
         resume_detail=_serialize_resume_detail(data.resume_detail),

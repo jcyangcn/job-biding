@@ -15,17 +15,6 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS resume_generations (
-    id SERIAL PRIMARY KEY,
-    job_details TEXT NOT NULL,
-    profile JSONB NOT NULL,
-    pdf_path TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_resume_generations_created_at
-    ON resume_generations (created_at DESC);
-
 CREATE TABLE IF NOT EXISTS job_identity (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -57,11 +46,25 @@ CREATE TABLE IF NOT EXISTS job_profile (
     default_resume_original_name VARCHAR(500),
     proxy VARCHAR(500),
     proxy_detail TEXT NOT NULL DEFAULT '',
+    resume_from_ai BOOLEAN NOT NULL DEFAULT TRUE,
     reference_tag VARCHAR(255),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     resume_detail JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS resume_generations (
+    id SERIAL PRIMARY KEY,
+    job_details TEXT NOT NULL,
+    profile_id INTEGER REFERENCES job_profile(id) ON DELETE SET NULL,
+    resume_content JSONB NOT NULL DEFAULT '{}',
+    resume_vector JSONB NOT NULL DEFAULT '[]',
+    pdf_path TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_resume_generations_created_at
+    ON resume_generations (created_at DESC);
 
 CREATE TABLE IF NOT EXISTS job_application (
     id SERIAL PRIMARY KEY,
@@ -70,6 +73,7 @@ CREATE TABLE IF NOT EXISTS job_application (
     company VARCHAR(255) NOT NULL,
     link VARCHAR(1000) NOT NULL,
     job_description TEXT NOT NULL DEFAULT '',
+    job_vector JSONB NOT NULL DEFAULT '[]',
     resume_generated_id INTEGER REFERENCES resume_generations(id) ON DELETE SET NULL,
     resume_online_link VARCHAR(1000),
     resume_generation_status VARCHAR(20),
@@ -142,3 +146,15 @@ CREATE TABLE IF NOT EXISTS linkedin_account (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS skills (
+    id SERIAL PRIMARY KEY,
+    role VARCHAR(255) NOT NULL,
+    field TEXT NOT NULL DEFAULT '',
+    keyword TEXT NOT NULL DEFAULT '',
+    weight DOUBLE PRECISION DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_skills_role ON skills (role);
+CREATE INDEX IF NOT EXISTS idx_skills_field ON skills (field);

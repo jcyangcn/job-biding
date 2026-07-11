@@ -1,14 +1,69 @@
-from sqlalchemy import select
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import create_user, hash_password
 from app.db_models import User
 from app.models import UserCreateRequest, UserUpdateRequest
+from app.pagination import (
+    normalize_page_params,
+    page_dict,
+    paginate_select,
+    resolve_sort,
+)
 from app.user_roles import UserRole
 
 
 def list_users(db: Session) -> list[User]:
-    return list(db.scalars(select(User).order_by(User.id)).all())
+    result = list_users_page(db, page=1, page_size=200)
+    return result["items"]
+
+
+def list_users_page(
+    db: Session,
+    *,
+    page: int | None = None,
+    page_size: int | None = None,
+    search: str | None = None,
+    role: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+) -> dict:
+    params = normalize_page_params(page, page_size)
+    query = select(User)
+
+    search_text = (search or "").strip()
+    if search_text:
+        pattern = f"%{search_text}%"
+        query = query.where(
+            or_(
+                User.username.ilike(pattern),
+                User.full_name.ilike(pattern),
+                User.description.ilike(pattern),
+                cast(User.id, String).ilike(pattern),
+            )
+        )
+
+    role_text = (role or "").strip()
+    if role_text:
+        try:
+            query = query.where(User.role == UserRole(role_text))
+        except ValueError:
+            query = query.where(False)
+
+    sort_map = {
+        "id": User.id,
+        "username": User.username,
+        "full_name": User.full_name,
+        "role": User.role,
+        "description": User.description,
+        "created_at": User.created_at,
+    }
+    column, descending = resolve_sort(sort_by, sort_dir, sort_map, "id")
+    order_expr = column.desc() if descending else column.asc()
+    query = query.order_by(order_expr, User.id.asc())
+
+    rows, total = paginate_select(db, query, params)
+    return page_dict(list(rows), total, params)
 
 
 def get_user(db: Session, user_id: int) -> User | None:

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func, text
+from sqlalchemy import Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,7 +33,15 @@ class ResumeGeneration(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_details: Mapped[str] = mapped_column(Text, nullable=False)
-    profile: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    profile_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("job_profile.id", ondelete="SET NULL"), nullable=True
+    )
+    resume_content: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    resume_vector: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'")
+    )
     pdf_path: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -97,6 +105,9 @@ class JobProfile(Base):
     proxy_detail: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=text("''")
     )
+    resume_from_ai: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
     reference_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     resume_detail: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
@@ -139,6 +150,7 @@ class JobApplication(Base):
     company: Mapped[str] = mapped_column(String(255), nullable=False)
     link: Mapped[str] = mapped_column(String(1000), nullable=False)
     job_description: Mapped[str] = mapped_column(Text, nullable=False)
+    job_vector: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default=text("'[]'"))
     resume_generated_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("resume_generations.id", ondelete="SET NULL"), nullable=True
     )
@@ -230,4 +242,19 @@ class LinkedInAccount(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+
+class Skill(Base):
+    __tablename__ = "skills"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    role: Mapped[str] = mapped_column(String(255), nullable=False)
+    field: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default=text("''"))
+    keyword: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default=text("''"))
+    weight: Mapped[float | None] = mapped_column(Float, nullable=True, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )

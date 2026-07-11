@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
 import {
@@ -36,9 +36,7 @@ import CountryLabel from 'src/components/CountryLabel';
 import CountrySelectField from 'src/components/CountrySelectField';
 import DateField from 'src/components/DateField';
 import { useDetailDialog } from 'src/components/DetailDialog';
-import useTableListFilters from 'src/hooks/useTableListFilters';
-import useTablePagination from 'src/hooks/useTablePagination';
-import useTableSort from 'src/hooks/useTableSort';
+import useServerTable from 'src/hooks/useServerTable';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import COUNTRIES, { DEFAULT_COUNTRY } from 'src/data/countries';
 import {
@@ -68,27 +66,12 @@ const emptyForm = {
   answerItems: buildSampleAnswerItems()
 };
 
-const IDENTITY_SEARCH_FIELDS = [
-  'id',
-  'name',
-  'country',
-  'address',
-  'city_state',
-  'zipcode',
-  'linkedin',
-  'github',
-  'ssn',
-  'dob'
-];
-
 function IdentityManagement() {
   const { enqueueSnackbar } = useSnackbar();
   useSetPageHeader(
     'Identity Management',
     'Manage job application identities stored in the database'
   );
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -98,52 +81,41 @@ function IdentityManagement() {
   const [answerDeleteIndex, setAnswerDeleteIndex] = useState(null);
   const { open: detailOpen, selected: selectedIdentity, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
+
+  const fetchIdentities = useCallback((opts) => listIdentities(opts), []);
+
   const {
+    rows,
+    total,
+    loading,
+    page,
+    limit,
     search,
     setSearch,
     dateFrom,
     setDateFrom,
     dateTo,
     setDateTo,
-    filteredRows,
     clearFilters,
     hasActiveFilters,
-    showDateRange
-  } = useTableListFilters(rows, {
-    searchFields: IDENTITY_SEARCH_FIELDS,
-    dateField: 'created_at'
-  });
-
-  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
-
-  const {
-    page,
-    limit,
-    paginatedRows,
+    showDateRange,
+    sortField,
+    sortDirection,
+    handleSort,
     handlePageChange,
     handleLimitChange,
-    rowsPerPageOptions
-  } = useTablePagination(sortedRows);
+    rowsPerPageOptions,
+    refresh,
+    paginatedRows
+  } = useServerTable({
+    fetcher: fetchIdentities,
+    dateField: 'created_at'
+  });
 
   const dialogTitle = useMemo(
     () => (editingRecord ? 'Edit identity' : 'Add identity'),
     [editingRecord]
   );
-
-  const loadIdentities = useCallback(async () => {
-    setLoading(true);
-    try {
-      setRows(await listIdentities());
-    } catch (err) {
-      enqueueSnackbar(err.message || 'Failed to load identities', { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [enqueueSnackbar]);
-
-  useEffect(() => {
-    loadIdentities();
-  }, [loadIdentities]);
 
   const openCreateDialog = () => {
     setEditingRecord(null);
@@ -266,7 +238,7 @@ function IdentityManagement() {
         enqueueSnackbar('Identity created', { variant: 'success' });
       }
       closeDialog();
-      await loadIdentities();
+      refresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Save failed', { variant: 'error' });
     } finally {
@@ -287,7 +259,7 @@ function IdentityManagement() {
       enqueueSnackbar('Identity deleted', { variant: 'success' });
       setDeleteOpen(false);
       setDeletingRecord(null);
-      await loadIdentities();
+      refresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
     } finally {
@@ -315,14 +287,14 @@ function IdentityManagement() {
             dateToLabel="Created to"
             onClear={clearFilters}
             hasActiveFilters={hasActiveFilters}
-            filteredCount={filteredRows.length}
-            totalCount={rows.length}
+            filteredCount={total}
+            totalCount={total}
             actions={
               <>
                 <Button
                   variant="outlined"
                   startIcon={<RefreshTwoToneIcon />}
-                  onClick={loadIdentities}
+                  onClick={() => refresh()}
                   disabled={loading || saving}
                 >
                   Refresh
@@ -419,15 +391,17 @@ function IdentityManagement() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.length === 0 ? (
+                  {loading && rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={11}>Loading…</TableCell>
+                    </TableRow>
+                  ) : rows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={11}>
-                        {loading ? 'Loading…' : 'No identities found.'}
+                        {hasActiveFilters
+                          ? 'No identities match your filters.'
+                          : 'No identities found.'}
                       </TableCell>
-                    </TableRow>
-                  ) : filteredRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={11}>No identities match your filters.</TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
@@ -488,7 +462,7 @@ function IdentityManagement() {
               </Table>
             </TableContainer>
             <TablePaginationFooter
-              count={filteredRows.length}
+              count={total}
               page={page}
               rowsPerPage={limit}
               onPageChange={handlePageChange}

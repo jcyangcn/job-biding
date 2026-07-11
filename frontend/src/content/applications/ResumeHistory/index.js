@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useSnackbar } from 'notistack';
 import {
   Box,
   Button,
@@ -21,88 +20,69 @@ import { useDetailDialog } from 'src/components/DetailDialog';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
-import useTableListFilters from 'src/hooks/useTableListFilters';
-import useTablePagination from 'src/hooks/useTablePagination';
-import useTableSort from 'src/hooks/useTableSort';
+import useServerTable from 'src/hooks/useServerTable';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { PROJECT_NAME } from 'src/config/app';
 import { fetchHealth, listResumeGenerations } from 'src/services/resumeApi';
 import ResumeGenerationDetailDialog from './ResumeGenerationDetailDialog';
 import { formatDateTime } from 'src/utils/dateFormat';
 
-function profileName(profile) {
-  if (!profile || typeof profile !== 'object') return '—';
-  return profile.name || '—';
+function profileLabel(row) {
+  if (!row) return '—';
+  if (row.profile_label) return row.profile_label;
+  if (row.profile_id != null) return `Profile #${row.profile_id}`;
+  return '—';
 }
 
-const RESUME_HISTORY_SEARCH_FIELDS = [
-  'id',
-  'job_details',
-  'pdf_path',
-  (row) => profileName(row.profile)
-];
-
 function ResumeHistory() {
-  const { enqueueSnackbar } = useSnackbar();
   useSetPageHeader(
     'Generation History',
     'Recent resume generations saved by the backend'
   );
-  const [rows, setRows] = useState([]);
   const [health, setHealth] = useState(null);
-  const [loading, setLoading] = useState(true);
   const {
     open: detailOpen,
     selected: selectedGeneration,
     openDetail,
     closeDetail
   } = useDetailDialog();
+
+  const fetchGenerations = useCallback((opts) => listResumeGenerations(opts), []);
+
   const {
+    rows,
+    total,
+    loading,
+    page,
+    limit,
     search,
     setSearch,
     dateFrom,
     setDateFrom,
     dateTo,
     setDateTo,
-    filteredRows,
     clearFilters,
     hasActiveFilters,
-    showDateRange
-  } = useTableListFilters(rows, {
-    searchFields: RESUME_HISTORY_SEARCH_FIELDS,
-    dateField: 'created_at'
-  });
-
-  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
-
-  const {
-    page,
-    limit,
-    paginatedRows,
+    showDateRange,
+    sortField,
+    sortDirection,
+    handleSort,
     handlePageChange,
     handleLimitChange,
-    rowsPerPageOptions
-  } = useTablePagination(sortedRows);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [history, healthStatus] = await Promise.all([
-        listResumeGenerations(),
-        fetchHealth().catch(() => null)
-      ]);
-      setRows(history);
-      setHealth(healthStatus);
-    } catch (err) {
-      enqueueSnackbar(err.message || 'Failed to load history', { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [enqueueSnackbar]);
+    rowsPerPageOptions,
+    refresh,
+    paginatedRows
+  } = useServerTable({
+    fetcher: fetchGenerations,
+    dateField: 'created_at',
+    defaultSort: { field: 'created_at', direction: 'desc' }
+  });
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchHealth()
+      .then(setHealth)
+      .catch(() => setHealth(null));
+  }, []);
 
   return (
     <>
@@ -124,13 +104,13 @@ function ResumeHistory() {
             dateToLabel="Created to"
             onClear={clearFilters}
             hasActiveFilters={hasActiveFilters}
-            filteredCount={filteredRows.length}
-            totalCount={rows.length}
+            filteredCount={total}
+            totalCount={total}
             actions={
               <Button
                 variant="outlined"
                 startIcon={<RefreshTwoToneIcon />}
-                onClick={loadData}
+                onClick={() => refresh()}
                 disabled={loading}
               >
                 Refresh
@@ -161,7 +141,7 @@ function ResumeHistory() {
                     />
                     <SortableTableCell
                       label="Candidate"
-                      sortKey={(row) => profileName(row.profile)}
+                      sortKey="job_details"
                       sortField={sortField}
                       sortDirection={sortDirection}
                       onSort={handleSort}
@@ -190,15 +170,15 @@ function ResumeHistory() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.length === 0 ? (
+                  {loading && rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>Loading…</TableCell>
+                    </TableRow>
+                  ) : rows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5}>
-                        {loading ? 'Loading…' : 'No generations yet.'}
+                        {hasActiveFilters ? 'No generations match your filters.' : 'No generations yet.'}
                       </TableCell>
-                    </TableRow>
-                  ) : filteredRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5}>No generations match your filters.</TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
@@ -209,13 +189,18 @@ function ResumeHistory() {
                         onClick={() => openDetail(row)}
                       >
                         <TableCell>{row.id}</TableCell>
-                        <TableCell>{profileName(row.profile)}</TableCell>
-                        <TableCell sx={{ maxWidth: 360 }}>
-                          <Typography noWrap title={row.job_details}>
-                            {row.job_details}
+                        <TableCell>{profileLabel(row)}</TableCell>
+                        <TableCell sx={{ maxWidth: 320 }}>
+                          <Typography noWrap title={row.job_details || ''}>
+                            {(row.job_details || '').slice(0, 120)}
+                            {(row.job_details || '').length > 120 ? '…' : ''}
                           </Typography>
                         </TableCell>
-                        <TableCell>{row.pdf_path || '—'}</TableCell>
+                        <TableCell sx={{ maxWidth: 200 }}>
+                          <Typography noWrap title={row.pdf_path || ''}>
+                            {row.pdf_path || '—'}
+                          </Typography>
+                        </TableCell>
                         <TableCell>{formatDateTime(row.created_at)}</TableCell>
                       </TableRow>
                     ))
@@ -224,7 +209,7 @@ function ResumeHistory() {
               </Table>
             </TableContainer>
             <TablePaginationFooter
-              count={filteredRows.length}
+              count={total}
               page={page}
               rowsPerPage={limit}
               onPageChange={handlePageChange}

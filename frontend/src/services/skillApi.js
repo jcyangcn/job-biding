@@ -52,33 +52,41 @@ async function request(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-export function listUsers(options = {}) {
+export function listSkills(options = {}) {
   const params = toListQueryParams(options);
-  return request(`/api/users${buildListQuery(params)}`).then(asListEnvelope);
+  return request(`/api/skills${buildListQuery(params)}`).then(asListEnvelope);
 }
 
-/** Fetch up to 200 users for dropdowns. */
-export async function listAllUsers() {
-  const result = await listUsers({ page: 1, pageSize: 200 });
+export async function listAllSkills(options = {}) {
+  const result = await listSkills({ page: 1, pageSize: 200, ...options });
   return result.items || [];
 }
 
-export function createUser(payload) {
-  return request('/api/users', {
+export async function listSkillKeywords(role) {
+  const params = {};
+  if (role) {
+    params.role = role;
+  }
+  const body = await request(`/api/skills/keywords${buildListQuery(params)}`);
+  return Array.isArray(body?.keywords) ? body.keywords : [];
+}
+
+export function createSkill(payload) {
+  return request('/api/skills', {
     method: 'POST',
     body: JSON.stringify(payload)
   });
 }
 
-export function updateUser(userId, payload) {
-  return request(`/api/users/${userId}`, {
+export function updateSkill(skillId, payload) {
+  return request(`/api/skills/${skillId}`, {
     method: 'PUT',
     body: JSON.stringify(payload)
   });
 }
 
-export function deleteUser(userId) {
-  return request(`/api/users/${userId}`, {
+export function deleteSkill(skillId) {
+  return request(`/api/skills/${skillId}`, {
     method: 'DELETE'
   });
 }

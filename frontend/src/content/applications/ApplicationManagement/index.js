@@ -7,8 +7,8 @@ import ApplicationsTableView from '../Applications/ApplicationsTableView';
 import ProfileSidebar, { ALL_PROFILES } from './ProfileSidebar';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { listJobApplications } from 'src/services/jobApplicationApi';
-import { listIdentities } from 'src/services/identityApi';
-import { listProfiles } from 'src/services/profileApi';
+import { listAllIdentities } from 'src/services/identityApi';
+import { listAllProfiles } from 'src/services/profileApi';
 import { mergeApplicationResumeStatus } from 'src/utils/mergeApplicationResumeStatus';
 
 function ApplicationManagement() {
@@ -53,11 +53,11 @@ function ApplicationManagement() {
     setLoadingProfiles(true);
     try {
       const [profileRows, identityRows] = await Promise.all([
-        listProfiles(),
-        listIdentities()
+        listAllProfiles(),
+        listAllIdentities()
       ]);
-      setProfiles(profileRows);
-      setIdentities(identityRows);
+      setProfiles(Array.isArray(profileRows) ? profileRows : []);
+      setIdentities(Array.isArray(identityRows) ? identityRows : []);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load profiles', { variant: 'error' });
     } finally {

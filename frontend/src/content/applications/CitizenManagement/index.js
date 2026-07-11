@@ -41,9 +41,7 @@ import CountryLabel from 'src/components/CountryLabel';
 import CountrySelectField from 'src/components/CountrySelectField';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
-import useTableListFilters from 'src/hooks/useTableListFilters';
-import useTablePagination from 'src/hooks/useTablePagination';
-import useTableSort from 'src/hooks/useTableSort';
+import useServerTable from 'src/hooks/useServerTable';
 import COUNTRIES, { DEFAULT_COUNTRY } from 'src/data/countries';
 import {
   CITIZEN_REVIEW_STATUSES,
@@ -61,7 +59,7 @@ import {
   uploadCitizenImage,
   uploadCitizenReviewFile
 } from 'src/services/citizenApi';
-import { listUsers } from 'src/services/usersApi';
+import { listAllUsers } from 'src/services/usersApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 import CitizenImageTile from './CitizenImageTile';
 import CitizenImagePreviewOverlay from './CitizenImagePreviewOverlay';
@@ -84,19 +82,6 @@ function createEmptyForm() {
   };
 }
 
-const CITIZEN_SELECT_FILTERS = [{ id: 'review_status', field: 'review_status' }];
-
-const CITIZEN_SEARCH_FIELDS = [
-  'id',
-  'name',
-  'country',
-  'linkedin',
-  'details',
-  'review_status',
-  'reviewer',
-  'review_log'
-];
-
 function CitizenManagement() {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
@@ -104,9 +89,7 @@ function CitizenManagement() {
   const reviewFileInputRef = useRef(null);
   useSetPageHeader('Citizen Management', 'Manage citizens with country, details, and images');
 
-  const [rows, setRows] = useState([]);
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -126,27 +109,32 @@ function CitizenManagement() {
     stopPropagation
   } = useDetailDialog();
 
+  const fetchCitizens = useCallback((opts) => listCitizens(opts), []);
+
   const {
+    rows,
+    total,
+    loading,
+    page,
+    limit,
     search,
     setSearch,
     selectValues,
     setSelectValue,
-    filteredRows
-  } = useTableListFilters(rows, {
-    searchFields: CITIZEN_SEARCH_FIELDS,
-    selects: CITIZEN_SELECT_FILTERS
-  });
-
-  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
-
-  const {
-    page,
-    limit,
-    paginatedRows,
+    clearFilters,
+    hasActiveFilters,
+    sortField,
+    sortDirection,
+    handleSort,
     handlePageChange,
     handleLimitChange,
-    rowsPerPageOptions
-  } = useTablePagination(sortedRows);
+    rowsPerPageOptions,
+    refresh,
+    paginatedRows
+  } = useServerTable({
+    fetcher: fetchCitizens,
+    selectIds: ['review_status']
+  });
 
   const filterSelects = useMemo(
     () => [
@@ -194,22 +182,21 @@ function CitizenManagement() {
     setImagePreview(preview);
   };
 
-  const loadCitizens = useCallback(async () => {
-    setLoading(true);
+  const loadUsers = useCallback(async () => {
     try {
-      const [citizenRows, userRows] = await Promise.all([listCitizens(), listUsers()]);
-      setRows(citizenRows);
-      setUsers(userRows);
+      setUsers(await listAllUsers());
     } catch (err) {
-      enqueueSnackbar(err.message || 'Failed to load citizens', { variant: 'error' });
-    } finally {
-      setLoading(false);
+      enqueueSnackbar(err.message || 'Failed to load users', { variant: 'error' });
     }
   }, [enqueueSnackbar]);
 
   useEffect(() => {
-    loadCitizens();
-  }, [loadCitizens]);
+    loadUsers();
+  }, [loadUsers]);
+
+  const notifyRefresh = useCallback(() => {
+    refresh();
+  }, [refresh]);
 
   const openCreateDialog = () => {
     setEditingRecord(null);
@@ -324,7 +311,7 @@ function CitizenManagement() {
       enqueueSnackbar(editingRecord ? 'Citizen updated' : 'Citizen created', {
         variant: 'success'
       });
-      await loadCitizens();
+      await notifyRefresh();
       closeDialog();
     } catch (err) {
       enqueueSnackbar(err.message || 'Save failed', { variant: 'error' });
@@ -378,7 +365,7 @@ function CitizenManagement() {
       if (editingRecord?.id === citizenId) {
         setEditingRecord(updated);
       }
-      await loadCitizens();
+      await notifyRefresh();
       enqueueSnackbar('Image deleted', { variant: 'success' });
     } catch (err) {
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
@@ -402,7 +389,7 @@ function CitizenManagement() {
       if (editingRecord?.id === citizenId) {
         setEditingRecord(updated);
       }
-      await loadCitizens();
+      await notifyRefresh();
       enqueueSnackbar('Review file deleted', { variant: 'success' });
     } catch (err) {
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
@@ -424,7 +411,7 @@ function CitizenManagement() {
       enqueueSnackbar('Citizen deleted', { variant: 'success' });
       setDeleteOpen(false);
       setDeletingRecord(null);
-      await loadCitizens();
+      await notifyRefresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
     } finally {
@@ -448,14 +435,16 @@ function CitizenManagement() {
             searchPlaceholder="Search name, country, LinkedIn, details…"
             showDateRange={false}
             selects={filterSelects}
-            filteredCount={filteredRows.length}
-            totalCount={rows.length}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            filteredCount={total}
+            totalCount={total}
             actions={
               <>
                 <Button
                   variant="outlined"
                   startIcon={<RefreshTwoToneIcon />}
-                  onClick={loadCitizens}
+                  onClick={() => notifyRefresh()}
                   disabled={loading}
                 >
                   Refresh
@@ -541,14 +530,16 @@ function CitizenManagement() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {loading ? (
+                  {loading && rows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={10}>Loading…</TableCell>
                     </TableRow>
-                  ) : filteredRows.length === 0 ? (
+                  ) : rows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={10}>
-                        {rows.length === 0 ? 'No citizens yet.' : 'No citizens match your filters.'}
+                        {hasActiveFilters
+                          ? 'No citizens match your filters.'
+                          : 'No citizens yet.'}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -646,7 +637,7 @@ function CitizenManagement() {
               </Table>
             </TableContainer>
             <TablePaginationFooter
-              count={filteredRows.length}
+              count={total}
               page={page}
               rowsPerPage={limit}
               onPageChange={handlePageChange}

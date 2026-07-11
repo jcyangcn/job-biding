@@ -23,12 +23,27 @@ function authHeaders() {
   return headers;
 }
 
-export function listJobApplications(profileId) {
-  const query =
-    profileId === undefined || profileId === null || profileId === ''
-      ? ''
-      : `?profile_id=${profileId}`;
+export function listJobApplications(profileId, options = {}) {
+  const params = new URLSearchParams();
+  if (profileId !== undefined && profileId !== null && profileId !== '') {
+    params.set('profile_id', String(profileId));
+  }
+  if (options.includeJobDescription) {
+    params.set('include_job_description', 'true');
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
   return fetch(`${getApiBase()}/api/job-applications${query}`, {
+    headers: authHeaders()
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
+export function getJobApplication(applicationId) {
+  return fetch(`${getApiBase()}/api/job-applications/${applicationId}`, {
     headers: authHeaders()
   }).then(async (response) => {
     if (!response.ok) {

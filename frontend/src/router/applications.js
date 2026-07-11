@@ -61,6 +61,9 @@ const CitizenManagement = Loader(
 const LinkedInManagement = Loader(
   lazy(() => import('src/content/applications/LinkedInManagement'))
 );
+const SkillManagement = Loader(
+  lazy(() => import('src/content/applications/SkillManagement'))
+);
 const Applications = Loader(
   lazy(() => import('src/content/applications/Applications'))
 );
@@ -167,6 +170,14 @@ const applicationsRoutes = [
     element: (
       <RequireAdmin>
         <LinkedInManagement />
+      </RequireAdmin>
+    )
+  },
+  {
+    path: 'skill-management',
+    element: (
+      <RequireAdmin>
+        <SkillManagement />
       </RequireAdmin>
     )
   },

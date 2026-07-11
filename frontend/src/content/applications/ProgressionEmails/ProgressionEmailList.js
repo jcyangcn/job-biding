@@ -7,15 +7,13 @@ import ArrowBackTwoToneIcon from '@mui/icons-material/ArrowBackTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import ProgressionEmailsTableView from './ProgressionEmailsTableView';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
-import { listProgressionEmails } from 'src/services/progressionEmailApi';
-import { listProfiles } from 'src/services/profileApi';
+import { listAllProfiles } from 'src/services/profileApi';
 
 function ProgressionEmailList() {
   const { profileId } = useParams();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const [profile, setProfile] = useState(null);
-  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const headerLeading = useMemo(
@@ -36,14 +34,11 @@ function ProgressionEmailList() {
     profile ? headerLeading : null
   );
 
-  const loadData = useCallback(async () => {
+  const loadProfile = useCallback(async () => {
     setLoading(true);
     try {
       const numericId = Number(profileId);
-      const [profileRows, emailRows] = await Promise.all([
-        listProfiles(),
-        listProgressionEmails(numericId)
-      ]);
+      const profileRows = await listAllProfiles();
       const match = profileRows.find((row) => row.id === numericId && row.is_active);
       if (!match) {
         enqueueSnackbar('Profile not found or access denied', { variant: 'warning' });
@@ -51,9 +46,8 @@ function ProgressionEmailList() {
         return;
       }
       setProfile(match);
-      setRows(emailRows);
     } catch (err) {
-      const message = err.message || 'Failed to load progression emails';
+      const message = err.message || 'Failed to load profile';
       enqueueSnackbar(message, { variant: 'error' });
       if (/access denied|403/i.test(message)) {
         navigate('/applications/progression-emails', { replace: true });
@@ -64,8 +58,8 @@ function ProgressionEmailList() {
   }, [enqueueSnackbar, navigate, profileId]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadProfile();
+  }, [loadProfile]);
 
   if (loading && !profile) {
     return (
@@ -86,9 +80,7 @@ function ProgressionEmailList() {
       </Helmet>
       <Container maxWidth="lg" sx={{ pt: 3 }}>
         <ProgressionEmailsTableView
-          rows={rows}
-          loading={loading}
-          onRefresh={loadData}
+          listProfileId={Number(profileId)}
           profile={profile}
           singleLine
         />

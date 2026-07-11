@@ -33,7 +33,7 @@ import {
   createProgressionEmail,
   previewProgressionEmailReference
 } from 'src/services/progressionEmailApi';
-import { listProfiles } from 'src/services/profileApi';
+import { listAllProfiles } from 'src/services/profileApi';
 
 function ProgressionEmailCreate() {
   const { profileId } = useParams();
@@ -75,7 +75,7 @@ function ProgressionEmailCreate() {
     try {
       const numericId = Number(profileId);
       const [profileRows, referencePreview] = await Promise.all([
-        listProfiles(),
+        listAllProfiles(),
         previewProgressionEmailReference(numericId)
       ]);
       const match = profileRows.find((row) => row.id === numericId && row.is_active);

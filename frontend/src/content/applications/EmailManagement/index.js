@@ -6,9 +6,8 @@ import { PROJECT_NAME } from 'src/config/app';
 import ProfileSidebar, { ALL_PROFILES } from '../ApplicationManagement/ProfileSidebar';
 import ProgressionEmailsTableView from '../ProgressionEmails/ProgressionEmailsTableView';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
-import { listProgressionEmails } from 'src/services/progressionEmailApi';
-import { listIdentities } from 'src/services/identityApi';
-import { listProfiles } from 'src/services/profileApi';
+import { listAllIdentities } from 'src/services/identityApi';
+import { listAllProfiles } from 'src/services/profileApi';
 
 function EmailManagement() {
   const theme = useTheme();
@@ -24,37 +23,24 @@ function EmailManagement() {
   const [profiles, setProfiles] = useState([]);
   const [identities, setIdentities] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState(ALL_PROFILES);
-  const [allEmails, setAllEmails] = useState([]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
-  const [loadingEmails, setLoadingEmails] = useState(true);
+  const [emailCounts, setEmailCounts] = useState({ total: 0 });
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) || null,
     [profiles, selectedProfileId]
   );
 
-  const displayedRows = useMemo(() => {
-    if (selectedProfileId === ALL_PROFILES) {
-      return allEmails;
-    }
-    return allEmails.filter((row) => row.profile_id === selectedProfileId);
-  }, [allEmails, selectedProfileId]);
-
-  const emailCounts = useMemo(() => {
-    const counts = { total: allEmails.length };
-    allEmails.forEach((row) => {
-      counts[row.profile_id] = (counts[row.profile_id] || 0) + 1;
-    });
-    return counts;
-  }, [allEmails]);
-
   const loadProfiles = useCallback(async () => {
     setLoadingProfiles(true);
     try {
-      const [profileRows, identityRows] = await Promise.all([
-        listProfiles(),
-        listIdentities()
+      const [profileResult, identityRows] = await Promise.all([
+        listAllProfiles(),
+        listAllIdentities()
       ]);
+      const profileRows = Array.isArray(profileResult)
+        ? profileResult
+        : profileResult?.items || [];
       setProfiles(profileRows);
       setIdentities(identityRows);
     } catch (err) {
@@ -64,28 +50,13 @@ function EmailManagement() {
     }
   }, [enqueueSnackbar]);
 
-  const loadEmails = useCallback(async () => {
-    setLoadingEmails(true);
-    try {
-      setAllEmails(await listProgressionEmails());
-    } catch (err) {
-      enqueueSnackbar(err.message || 'Failed to load progression emails', { variant: 'error' });
-    } finally {
-      setLoadingEmails(false);
-    }
-  }, [enqueueSnackbar]);
-
   useEffect(() => {
     loadProfiles();
   }, [loadProfiles]);
 
-  useEffect(() => {
-    loadEmails();
-  }, [loadEmails]);
-
-  const handleRefresh = async () => {
-    await loadEmails();
-  };
+  const handleTotalChange = useCallback((total) => {
+    setEmailCounts({ total });
+  }, []);
 
   return (
     <>
@@ -94,11 +65,9 @@ function EmailManagement() {
       </Helmet>
       <Container maxWidth="lg" sx={{ pt: 3 }}>
         <ProgressionEmailsTableView
-          rows={displayedRows}
-          loading={loadingEmails}
-          onRefresh={handleRefresh}
+          listProfileId={selectedProfileId === ALL_PROFILES ? null : selectedProfileId}
+          onTotalChange={handleTotalChange}
           profile={selectedProfileId === ALL_PROFILES ? null : selectedProfile}
-          exportProfileId={null}
           profiles={profiles}
           identities={identities}
           showProfileColumn={selectedProfileId === ALL_PROFILES}

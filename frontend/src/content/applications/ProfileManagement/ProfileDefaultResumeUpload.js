@@ -6,11 +6,18 @@ import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import { uploadProfileDefaultResume } from 'src/services/profileApi';
 
-function ProfileDefaultResumeUpload({ editingRecord, saving, onUploaded }) {
+function ProfileDefaultResumeUpload({
+  editingRecord,
+  pendingFile,
+  saving,
+  onUploaded,
+  onPendingFileChange
+}) {
   const { enqueueSnackbar } = useSnackbar();
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
-  const filename = editingRecord?.default_resume_original_name;
+  const filename =
+    editingRecord?.default_resume_original_name || pendingFile?.name || '';
 
   const handlePickFile = () => {
     fileInputRef.current?.click();
@@ -19,7 +26,16 @@ function ProfileDefaultResumeUpload({ editingRecord, saving, onUploaded }) {
   const handleFileSelected = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || !editingRecord) {
+    if (!file) {
+      return;
+    }
+
+    // On Add profile, queue the file until the profile is created.
+    if (!editingRecord) {
+      onPendingFileChange?.(file);
+      enqueueSnackbar('Resume selected — it will upload when you save the profile', {
+        variant: 'info'
+      });
       return;
     }
 
@@ -27,6 +43,7 @@ function ProfileDefaultResumeUpload({ editingRecord, saving, onUploaded }) {
     try {
       const updated = await uploadProfileDefaultResume(editingRecord.id, file);
       enqueueSnackbar('Default resume uploaded', { variant: 'success' });
+      onPendingFileChange?.(null);
       onUploaded(updated);
     } catch (err) {
       enqueueSnackbar(err.message || 'Resume upload failed', { variant: 'error' });
@@ -50,7 +67,7 @@ function ProfileDefaultResumeUpload({ editingRecord, saving, onUploaded }) {
           size="small"
           startIcon={<FileUploadTwoToneIcon />}
           onClick={handlePickFile}
-          disabled={!editingRecord || saving || uploading}
+          disabled={saving || uploading}
         >
           {uploading ? 'Uploading…' : 'Upload default resume'}
         </Button>
@@ -68,8 +85,13 @@ function ProfileDefaultResumeUpload({ editingRecord, saving, onUploaded }) {
           >
             <PictureAsPdfTwoToneIcon fontSize="small" color="action" />
             {filename}
+            {!editingRecord && pendingFile ? ' (pending save)' : ''}
           </Typography>
-        ) : null}
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            PDF, DOC, or DOCX
+          </Typography>
+        )}
       </Box>
     </Box>
   );
@@ -77,8 +99,10 @@ function ProfileDefaultResumeUpload({ editingRecord, saving, onUploaded }) {
 
 ProfileDefaultResumeUpload.propTypes = {
   editingRecord: PropTypes.object,
+  pendingFile: PropTypes.object,
   saving: PropTypes.bool.isRequired,
-  onUploaded: PropTypes.func.isRequired
+  onUploaded: PropTypes.func.isRequired,
+  onPendingFileChange: PropTypes.func
 };
 
 export default ProfileDefaultResumeUpload;

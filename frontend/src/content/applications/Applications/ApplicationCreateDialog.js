@@ -26,18 +26,21 @@ import AutoAwesomeTwoToneIcon from '@mui/icons-material/AutoAwesomeTwoTone';
 import CloseIcon from '@mui/icons-material/Close';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
+import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
 import { createJobApplication, listJobApplications, updateJobApplication } from 'src/services/jobApplicationApi';
-import { listIdentities } from 'src/services/identityApi';
+import { listAllIdentities } from 'src/services/identityApi';
 import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
 import {
   buildResumeRequest,
   generateResumePdf,
-  listResumeGenerations
+  listAllResumeGenerations
 } from 'src/services/resumeApi';
 import { appliedAtToIso, formatDateTime } from 'src/utils/dateFormat';
 import { isDuplicateCompanyName } from 'src/utils/normalizeCompanyName';
+import { buildJobVector } from 'src/utils/jobVector';
+import { listSkillKeywords } from 'src/services/skillApi';
 
 const APPLICATION_SNACKBAR = {
   anchorOrigin: { vertical: 'top', horizontal: 'center' }
@@ -48,6 +51,7 @@ const EMPTY_FORM = {
   company: '',
   link: '',
   job_description: '',
+  job_vector: [],
   resume_generated_id: '',
   resume_online_link: '',
   applied: false,
@@ -88,6 +92,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
   const [existingApplications, setExistingApplications] = useState([]);
   const [resumeSource, setResumeSource] = useState('generated');
   const [draftApplicationId, setDraftApplicationId] = useState(null);
+  const [skillKeywords, setSkillKeywords] = useState([]);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
@@ -141,24 +146,36 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
       setAppliedConfirmOpen(false);
       setResumeSource('generated');
       setDraftApplicationId(null);
+      setSkillKeywords([]);
       setForm({
         ...EMPTY_FORM,
+        role: profile.roles || '',
         applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
       });
 
       try {
-        const [generationRows, identityRows, applicationRows] = await Promise.all([
-          listResumeGenerations(),
-          listIdentities(),
-          listJobApplications(profile.id)
+        const skillRole = (profile.roles || '').trim() || 'Full stack engineer';
+        const [generationRows, identityRows, applicationRows, keywords] = await Promise.all([
+          listAllResumeGenerations(),
+          listAllIdentities(),
+          listJobApplications(profile.id),
+          listSkillKeywords(skillRole)
         ]);
         if (cancelled) return;
 
+        const identities = Array.isArray(identityRows) ? identityRows : [];
+        const applications = Array.isArray(applicationRows) ? applicationRows : [];
+        const generations = Array.isArray(generationRows) ? generationRows : [];
         const matchedIdentity =
-          identityRows.find((row) => row.id === profile.identity_id) || null;
+          identities.find((row) => row.id === profile.identity_id) || null;
         setIdentity(matchedIdentity);
-        setExistingApplications(applicationRows);
-        setResumeGenerations(generationRows);
+        setExistingApplications(applications);
+        setResumeGenerations(generations);
+        setSkillKeywords(Array.isArray(keywords) ? keywords : []);
+        setForm((current) => ({
+          ...current,
+          job_vector: buildJobVector(current.job_description, keywords || [])
+        }));
       } catch (err) {
         if (!cancelled) {
           notify(err.message || 'Failed to load application data', { variant: 'error' });
@@ -179,6 +196,11 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
 
   const handleFormChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const handleRefreshJobVector = () => {
+    const nextVector = buildJobVector(form.job_description, skillKeywords);
+    setForm((current) => ({ ...current, job_vector: nextVector }));
   };
 
   const handleCompanyChange = (event) => {
@@ -238,6 +260,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
       company: form.company.trim(),
       link: form.link.trim(),
       job_description: form.job_description.trim(),
+      job_vector: Array.isArray(form.job_vector) ? form.job_vector : [],
       resume_generated_id:
         resumeSource === 'generated' && resumeGeneratedId
           ? resumeGeneratedId
@@ -338,7 +361,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
       if (!mountedRef.current) return;
 
       try {
-        const generationRows = await listResumeGenerations();
+        const generationRows = await listAllResumeGenerations();
         if (!mountedRef.current) return;
         setResumeGenerations(generationRows);
         const selectedId = generationId || generationRows[0]?.id || '';
@@ -498,6 +521,45 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
                   onChange={handleFormChange('job_description')}
                   disabled={loading}
                 />
+
+                <Box
+                  display="flex"
+                  alignItems="flex-start"
+                  gap={1}
+                  sx={{ flexShrink: 0 }}
+                >
+                  <TextField
+                    fullWidth
+                    label="Job vector"
+                    value={JSON.stringify(form.job_vector || [])}
+                    multiline
+                    minRows={3}
+                    maxRows={6}
+                    InputProps={{
+                      readOnly: true,
+                      sx: {
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                        fontSize: '0.85rem'
+                      }
+                    }}
+                    helperText={
+                      skillKeywords.length
+                        ? `${skillKeywords.length} keywords · empty JD = all zeros · Refresh after editing JD`
+                        : 'No skill keywords found — vector stays empty'
+                    }
+                    disabled={loading}
+                  />
+                  <Button
+                    variant="outlined"
+                    startIcon={<RefreshTwoToneIcon />}
+                    onClick={handleRefreshJobVector}
+                    disabled={loading || !skillKeywords.length}
+                    sx={{ mt: 1, flexShrink: 0, whiteSpace: 'nowrap' }}
+                  >
+                    Refresh
+                  </Button>
+                </Box>
 
                 <Stack spacing={0.5} sx={{ flexShrink: 0 }}>
                   <Typography

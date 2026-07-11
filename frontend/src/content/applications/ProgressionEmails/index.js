@@ -13,8 +13,8 @@ import EmailTwoToneIcon from '@mui/icons-material/EmailTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import ProgressionEmailProfileRow from './ProgressionEmailProfileRow';
-import { listIdentities } from 'src/services/identityApi';
-import { listProfiles } from 'src/services/profileApi';
+import { listAllIdentities } from 'src/services/identityApi';
+import { listAllProfiles } from 'src/services/profileApi';
 
 function ProgressionEmails() {
   const navigate = useNavigate();
@@ -41,8 +41,8 @@ function ProgressionEmails() {
     setLoading(true);
     try {
       const [profileRows, identityRows] = await Promise.all([
-        listProfiles(),
-        listIdentities()
+        listAllProfiles(),
+        listAllIdentities()
       ]);
       setProfiles(profileRows);
       setIdentities(identityRows);

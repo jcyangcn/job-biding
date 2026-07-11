@@ -8,7 +8,7 @@ import { PROJECT_NAME } from 'src/config/app';
 import ApplicationsTableView from './ApplicationsTableView';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { listJobApplications } from 'src/services/jobApplicationApi';
-import { listProfiles } from 'src/services/profileApi';
+import { listAllProfiles } from 'src/services/profileApi';
 import { mergeApplicationResumeStatus } from 'src/utils/mergeApplicationResumeStatus';
 
 function ApplicationList() {
@@ -52,10 +52,11 @@ function ApplicationList() {
       }
 
       const [profileRows, applicationRows] = await Promise.all([
-        listProfiles(),
+        listAllProfiles(),
         listJobApplications(numericId)
       ]);
-      const match = profileRows.find((row) => row.id === numericId && row.is_active);
+      const profiles = Array.isArray(profileRows) ? profileRows : [];
+      const match = profiles.find((row) => row.id === numericId && row.is_active);
       if (!match) {
         enqueueSnackbar('Profile not found or access denied', { variant: 'warning' });
         navigate('/applications/job-applications', { replace: true });

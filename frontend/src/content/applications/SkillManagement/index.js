@@ -12,7 +12,6 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  MenuItem,
   Table,
   TableBody,
   TableCell,
@@ -28,58 +27,72 @@ import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
-import UserDetailDialog from './UserDetailDialog';
+import SkillDetailDialog from './SkillDetailDialog';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useServerTable from 'src/hooks/useServerTable';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
+import { formatDateTime } from 'src/utils/dateFormat';
 import {
-  createUser,
-  deleteUser,
-  listUsers,
-  updateUser
-} from 'src/services/usersApi';
-
-const USER_ROLES = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'bidder', label: 'Bidder' },
-  { value: 'caller', label: 'Caller' }
-];
+  createSkill,
+  deleteSkill,
+  listSkills,
+  updateSkill
+} from 'src/services/skillApi';
 
 const emptyForm = {
-  full_name: '',
-  username: '',
-  password: '',
-  role: 'bidder',
-  description: ''
+  role: 'Full stack engineer',
+  field: '',
+  keyword: '',
+  weight: '1'
 };
 
-function UserManagement() {
+function formatJsonField(value) {
+  const text = value == null ? '' : String(value);
+  if (!text.trim()) {
+    return '';
+  }
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
+}
+
+function previewJsonCell(value, maxLength = 80) {
+  const text = value == null ? '' : String(value).replace(/\s+/g, ' ').trim();
+  if (!text) {
+    return '—';
+  }
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength)}…`;
+}
+
+function SkillManagement() {
   const { enqueueSnackbar } = useSnackbar();
-  useSetPageHeader('User Management', 'Add, edit, and delete users');
+  useSetPageHeader('Skill Management', 'Manage role/field keywords and weights');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
-  const [deletingUser, setDeletingUser] = useState(null);
+  const [editingSkill, setEditingSkill] = useState(null);
+  const [deletingSkill, setDeletingSkill] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const { open: detailOpen, selected: selectedUser, openDetail, closeDetail, stopPropagation } =
+  const { open: detailOpen, selected: selectedSkill, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
 
-  const fetchUsers = useCallback((opts) => listUsers(opts), []);
+  const fetchSkills = useCallback((opts) => listSkills(opts), []);
 
   const {
-    rows,
     total,
     loading,
     page,
     limit,
     search,
     setSearch,
-    selectValues,
-    setSelectValue,
     clearFilters,
     hasActiveFilters,
     showDateRange,
@@ -92,30 +105,29 @@ function UserManagement() {
     refresh,
     paginatedRows
   } = useServerTable({
-    fetcher: fetchUsers,
-    selectIds: ['role']
+    fetcher: fetchSkills,
+    defaultSort: { field: 'id', direction: 'desc' }
   });
 
   const dialogTitle = useMemo(
-    () => (editingUser ? 'Edit user' : 'Add user'),
-    [editingUser]
+    () => (editingSkill ? 'Edit skill' : 'Add skill'),
+    [editingSkill]
   );
 
   const openCreateDialog = () => {
-    setEditingUser(null);
+    setEditingSkill(null);
     setForm(emptyForm);
     setDialogOpen(true);
   };
 
-  const openEditDialog = (user) => {
+  const openEditDialog = (skill) => {
     closeDetail();
-    setEditingUser(user);
+    setEditingSkill(skill);
     setForm({
-      full_name: user.full_name,
-      username: user.username,
-      password: '',
-      role: user.role,
-      description: user.description || ''
+      role: skill.role || '',
+      field: formatJsonField(skill.field),
+      keyword: formatJsonField(skill.keyword),
+      weight: skill.weight == null || skill.weight === '' ? '1' : String(skill.weight)
     });
     setDialogOpen(true);
   };
@@ -123,7 +135,7 @@ function UserManagement() {
   const closeDialog = () => {
     if (!saving) {
       setDialogOpen(false);
-      setEditingUser(null);
+      setEditingSkill(null);
       setForm(emptyForm);
     }
   };
@@ -133,40 +145,35 @@ function UserManagement() {
   };
 
   const handleSave = async () => {
-    if (!form.full_name.trim() || !form.username.trim() || !form.role) {
-      enqueueSnackbar('Full name, username, and role are required', { variant: 'warning' });
-      return;
+    const weightText = String(form.weight ?? '').trim();
+    let weightValue = 1.0;
+    if (weightText !== '') {
+      weightValue = Number(weightText);
+      if (Number.isNaN(weightValue) || weightValue < 0) {
+        enqueueSnackbar('Weight must be a number ≥ 0', { variant: 'warning' });
+        return;
+      }
     }
-    if (!editingUser && !form.password.trim()) {
-      enqueueSnackbar('Password is required for new users', { variant: 'warning' });
-      return;
-    }
+
+    const payload = {
+      role: form.role.trim(),
+      field: form.field.trim(),
+      keyword: form.keyword.trim(),
+      weight: weightValue
+    };
 
     setSaving(true);
     try {
-      if (editingUser) {
-        const payload = {
-          full_name: form.full_name.trim(),
-          username: form.username.trim(),
-          role: form.role,
-          description: form.description.trim() || null
-        };
-        if (form.password.trim()) {
-          payload.password = form.password;
-        }
-        await updateUser(editingUser.id, payload);
-        enqueueSnackbar('User updated', { variant: 'success' });
+      if (editingSkill) {
+        await updateSkill(editingSkill.id, payload);
+        enqueueSnackbar('Skill updated', { variant: 'success' });
       } else {
-        await createUser({
-          full_name: form.full_name.trim(),
-          username: form.username.trim(),
-          password: form.password,
-          role: form.role || 'bidder',
-          description: form.description.trim() || null
-        });
-        enqueueSnackbar('User created', { variant: 'success' });
+        await createSkill(payload);
+        enqueueSnackbar('Skill created', { variant: 'success' });
       }
-      closeDialog();
+      setDialogOpen(false);
+      setEditingSkill(null);
+      setForm(emptyForm);
       refresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Save failed', { variant: 'error' });
@@ -175,19 +182,19 @@ function UserManagement() {
     }
   };
 
-  const confirmDelete = (user) => {
-    setDeletingUser(user);
+  const confirmDelete = (skill) => {
+    setDeletingSkill(skill);
     setDeleteOpen(true);
   };
 
   const handleDelete = async () => {
-    if (!deletingUser) return;
+    if (!deletingSkill) return;
     setSaving(true);
     try {
-      await deleteUser(deletingUser.id);
-      enqueueSnackbar('User deleted', { variant: 'success' });
+      await deleteSkill(deletingSkill.id);
+      enqueueSnackbar('Skill deleted', { variant: 'success' });
       setDeleteOpen(false);
-      setDeletingUser(null);
+      setDeletingSkill(null);
       refresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
@@ -199,24 +206,15 @@ function UserManagement() {
   return (
     <>
       <Helmet>
-        <title>User Management - {PROJECT_NAME}</title>
+        <title>Skill Management - {PROJECT_NAME}</title>
       </Helmet>
       <Container maxWidth="lg" sx={{ pt: 3 }}>
         <Box sx={{ mb: 2 }}>
           <TableListFilters
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search name, username, role, description…"
+            searchPlaceholder="Search role, field, keyword…"
             showDateRange={showDateRange}
-            selects={[
-              {
-                id: 'role',
-                label: 'Role',
-                value: selectValues.role,
-                onChange: (value) => setSelectValue('role', value),
-                options: USER_ROLES
-              }
-            ]}
             onClear={clearFilters}
             hasActiveFilters={hasActiveFilters}
             filteredCount={total}
@@ -237,7 +235,7 @@ function UserManagement() {
                   onClick={openCreateDialog}
                   disabled={saving}
                 >
-                  Add user
+                  Add skill
                 </Button>
               </>
             }
@@ -257,20 +255,6 @@ function UserManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
-                      label="Full name"
-                      sortKey="full_name"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Username"
-                      sortKey="username"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
                       label="Role"
                       sortKey="role"
                       sortField={sortField}
@@ -278,8 +262,29 @@ function UserManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
-                      label="Description"
-                      sortKey="description"
+                      label="Field"
+                      sortKey="field"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Keyword"
+                      sortKey="keyword"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Weight"
+                      sortKey="weight"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Created"
+                      sortKey="created_at"
                       sortField={sortField}
                       sortDirection={sortDirection}
                       onSort={handleSort}
@@ -288,53 +293,55 @@ function UserManagement() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {loading && rows.length === 0 ? (
+                  {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6}>Loading…</TableCell>
+                      <TableCell colSpan={7}>
+                        <Typography variant="body2" color="text.secondary">
+                          Loading…
+                        </Typography>
+                      </TableCell>
                     </TableRow>
-                  ) : rows.length === 0 ? (
+                  ) : paginatedRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6}>
-                        {hasActiveFilters ? 'No users match your filters.' : 'No users found.'}
+                      <TableCell colSpan={7}>
+                        <Typography variant="body2" color="text.secondary">
+                          {hasActiveFilters
+                            ? 'No skills match your filters.'
+                            : 'No skills found.'}
+                        </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
                       <TableRow
-                        key={row.id}
                         hover
-                        sx={{ cursor: 'pointer' }}
+                        key={row.id}
                         onClick={() => openDetail(row)}
+                        sx={{ cursor: 'pointer' }}
                       >
                         <TableCell>{row.id}</TableCell>
-                        <TableCell>{row.full_name}</TableCell>
-                        <TableCell>{row.username}</TableCell>
-                        <TableCell>
-                          {USER_ROLES.find((option) => option.value === row.role)?.label ||
-                            row.role}
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 280 }}>
-                          <Typography noWrap title={row.description || ''}>
-                            {row.description || '—'}
-                          </Typography>
-                        </TableCell>
+                        <TableCell>{row.role || '—'}</TableCell>
+                        <TableCell title={row.field || ''}>{previewJsonCell(row.field)}</TableCell>
+                        <TableCell title={row.keyword || ''}>{previewJsonCell(row.keyword)}</TableCell>
+                        <TableCell>{row.weight == null ? '—' : row.weight}</TableCell>
+                        <TableCell>{formatDateTime(row.created_at)}</TableCell>
                         <TableCell align="right" onClick={stopPropagation}>
-                          <Tooltip title="Edit">
+                          <Tooltip title="Edit" arrow>
                             <IconButton
                               color="primary"
                               onClick={() => openEditDialog(row)}
                               disabled={saving}
                             >
-                              <EditTwoToneIcon />
+                              <EditTwoToneIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Delete">
+                          <Tooltip title="Delete" arrow>
                             <IconButton
                               color="error"
                               onClick={() => confirmDelete(row)}
                               disabled={saving}
                             >
-                              <DeleteTwoToneIcon />
+                              <DeleteTwoToneIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         </TableCell>
@@ -348,61 +355,65 @@ function UserManagement() {
               count={total}
               page={page}
               rowsPerPage={limit}
+              rowsPerPageOptions={rowsPerPageOptions}
               onPageChange={handlePageChange}
               onRowsPerPageChange={handleLimitChange}
-              rowsPerPageOptions={rowsPerPageOptions}
             />
           </CardContent>
         </Card>
       </Container>
 
-      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="sm">
+      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="md">
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <TextField
             fullWidth
             margin="normal"
-            label="Full name"
-            value={form.full_name}
-            onChange={handleFormChange('full_name')}
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Username"
-            value={form.username}
-            onChange={handleFormChange('username')}
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            label={editingUser ? 'Password (leave blank to keep)' : 'Password'}
-            type="password"
-            value={form.password}
-            onChange={handleFormChange('password')}
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            select
             label="Role"
             value={form.role}
             onChange={handleFormChange('role')}
-          >
-            {USER_ROLES.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </TextField>
+            autoFocus
+          />
           <TextField
             fullWidth
             margin="normal"
-            label="Description"
+            label="Field (JSON)"
+            value={form.field}
+            onChange={handleFormChange('field')}
             multiline
-            minRows={2}
-            value={form.description}
-            onChange={handleFormChange('description')}
+            minRows={8}
+            placeholder={'{\n  "category": "Languages & Core Technologies",\n  "items": ["React", "Node.js"]\n}'}
+            InputProps={{
+              sx: {
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                fontSize: '0.85rem'
+              }
+            }}
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Keyword (JSON)"
+            value={form.keyword}
+            onChange={handleFormChange('keyword')}
+            multiline
+            minRows={8}
+            placeholder={'[\n  "React",\n  "Vue.js",\n  "Angular"\n]'}
+            InputProps={{
+              sx: {
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                fontSize: '0.85rem'
+              }
+            }}
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Weight"
+            type="number"
+            inputProps={{ min: 0, step: 0.1 }}
+            value={form.weight}
+            onChange={handleFormChange('weight')}
           />
         </DialogContent>
         <DialogActions>
@@ -416,10 +427,11 @@ function UserManagement() {
       </Dialog>
 
       <Dialog open={deleteOpen} onClose={() => !saving && setDeleteOpen(false)}>
-        <DialogTitle>Delete user</DialogTitle>
+        <DialogTitle>Delete skill</DialogTitle>
         <DialogContent>
           <Typography>
-            Delete <b>{deletingUser?.username}</b>? This cannot be undone.
+            Delete keyword <b>{deletingSkill?.keyword}</b> for role{' '}
+            <b>{deletingSkill?.role}</b>? This cannot be undone.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -432,13 +444,9 @@ function UserManagement() {
         </DialogActions>
       </Dialog>
 
-      <UserDetailDialog
-        open={detailOpen}
-        user={selectedUser}
-        onClose={closeDetail}
-      />
+      <SkillDetailDialog open={detailOpen} skill={selectedSkill} onClose={closeDetail} />
     </>
   );
 }
 
-export default UserManagement;
+export default SkillManagement;

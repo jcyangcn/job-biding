@@ -7,6 +7,7 @@ import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
 import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
+import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
 import {
   Box,
@@ -93,21 +94,21 @@ const COLUMN_WIDTHS = {
   company: '12%',
   link: '14%',
   resume: '16%',
-  applied: '14%',
-  actions: '12%'
+  applied: '12%',
+  actions: '14%'
 };
 
 /** When Profile is shown, slightly shrink neighboring columns. */
 const COLUMN_WIDTHS_WITH_PROFILE = {
   no: '4%',
-  profile: '9%',
+  profile: '8%',
   bidder: '8%',
-  role: '15%',
+  role: '14%',
   company: '10%',
   link: '12%',
   resume: '14%',
   applied: '12%',
-  actions: '16%'
+  actions: '18%'
 };
 
 function colSx(width) {
@@ -133,7 +134,6 @@ const BASE_SEARCH_FIELDS = [
   'role',
   'company',
   'link',
-  'job_description',
   (row) => formatResumeSource(row)
 ];
 
@@ -309,7 +309,8 @@ function ApplicationsTableView({
       const resolvedExportProfileId =
         exportProfileId !== undefined ? exportProfileId : profile?.id ?? null;
       const exportRows = await listJobApplications(
-        resolvedExportProfileId == null ? undefined : resolvedExportProfileId
+        resolvedExportProfileId == null ? undefined : resolvedExportProfileId,
+        { includeJobDescription: true }
       );
       if (!exportRows.length) {
         enqueueSnackbar('No applications to export', { variant: 'info' });
@@ -643,6 +644,15 @@ function ApplicationsTableView({
                             disabled={saving}
                           >
                             <VisibilityTwoToneIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edit">
+                          <IconButton
+                            color="primary"
+                            onClick={() => openEditDialog(row)}
+                            disabled={saving}
+                          >
+                            <EditTwoToneIcon />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete">

@@ -34,18 +34,20 @@ import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
 import ApplicationResumePdfDialog from './ApplicationResumePdfDialog';
-import { listJobApplications, updateJobApplication } from 'src/services/jobApplicationApi';
-import { listIdentities } from 'src/services/identityApi';
-import { listProfiles } from 'src/services/profileApi';
+import { listJobApplications, updateJobApplication, getJobApplication } from 'src/services/jobApplicationApi';
+import { listAllIdentities } from 'src/services/identityApi';
+import { listAllProfiles } from 'src/services/profileApi';
 import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
 import {
   buildResumeRequest,
   generateResumePdf,
   getResumeDownloadUrl,
-  listResumeGenerations
+  listAllResumeGenerations
 } from 'src/services/resumeApi';
 import { appliedAtToIso, formatDateTime, formatDateTimeValue } from 'src/utils/dateFormat';
 import { isDuplicateCompanyName } from 'src/utils/normalizeCompanyName';
+import { buildJobVector } from 'src/utils/jobVector';
+import { listSkillKeywords } from 'src/services/skillApi';
 
 function resumeFilenameFromPath(pdfPath) {
   if (!pdfPath) return '';
@@ -62,6 +64,7 @@ const EMPTY_FORM = {
   company: '',
   link: '',
   job_description: '',
+  job_vector: [],
   resume_generated_id: '',
   resume_online_link: '',
   applied: false,
@@ -104,6 +107,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const [resumeSource, setResumeSource] = useState('generated');
   const [resumePdfFilename, setResumePdfFilename] = useState('');
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [skillKeywords, setSkillKeywords] = useState([]);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
@@ -178,6 +182,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         company: application.company || '',
         link: application.link || '',
         job_description: application.job_description || '',
+        job_vector: Array.isArray(application.job_vector) ? application.job_vector : [],
         resume_generated_id: application.resume_generated_id || '',
         resume_online_link: application.resume_online_link || '',
         applied: Boolean(application.applied),
@@ -186,28 +191,72 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       });
 
       try {
-        const [generationRows, identityRows, profileRows, applicationRows] = await Promise.all([
-          listResumeGenerations(),
-          listIdentities(),
-          listProfiles(),
-          listJobApplications(application.profile_id)
-        ]);
+        const skillRole =
+          (application.role || '').trim() || 'Full stack engineer';
+        const [fullApplication, generationRows, identityRows, profileRows, applicationRows, keywords] =
+          await Promise.all([
+            getJobApplication(application.id),
+            listAllResumeGenerations(),
+            listAllIdentities(),
+            listAllProfiles(),
+            listJobApplications(application.profile_id),
+            listSkillKeywords(skillRole)
+          ]);
         if (cancelled) return;
 
+        setSkillKeywords(Array.isArray(keywords) ? keywords : []);
+        const jd = fullApplication.job_description || '';
+        const existingVector = Array.isArray(fullApplication.job_vector)
+          ? fullApplication.job_vector
+          : null;
+        setForm({
+          role: fullApplication.role || '',
+          company: fullApplication.company || '',
+          link: fullApplication.link || '',
+          job_description: jd,
+          job_vector:
+            !jd.trim()
+              ? buildJobVector('', keywords || [])
+              : existingVector && existingVector.length === (keywords || []).length
+                ? existingVector
+                : buildJobVector(jd, keywords || []),
+          resume_generated_id: fullApplication.resume_generated_id || '',
+          resume_online_link: fullApplication.resume_online_link || '',
+          applied: Boolean(fullApplication.applied),
+          applied_at:
+            formatDateTimeValue(fullApplication.applied_at) ||
+            format(new Date(), 'yyyy-MM-dd HH:mm')
+        });
+        setResumePdfFilename(
+          fullApplication.resume_pdf_filename || application.resume_pdf_filename || ''
+        );
+        const loadedSource = fullApplication.resume_generated_id
+          ? 'generated'
+          : fullApplication.resume_online_link
+            ? 'online'
+            : 'generated';
+        setResumeSource(loadedSource);
+
+        const profiles = Array.isArray(profileRows) ? profileRows : [];
+        const identities = Array.isArray(identityRows) ? identityRows : [];
+        const applications = Array.isArray(applicationRows) ? applicationRows : [];
+        const generations = Array.isArray(generationRows) ? generationRows : [];
+
         const matchedProfile =
-          profileRows.find((row) => row.id === application.profile_id) || null;
+          profiles.find((row) => row.id === application.profile_id) || null;
         const matchedIdentity = matchedProfile
-          ? identityRows.find((row) => row.id === matchedProfile.identity_id) || null
+          ? identities.find((row) => row.id === matchedProfile.identity_id) || null
           : null;
 
         setProfile(matchedProfile);
         setIdentity(matchedIdentity);
-        setExistingApplications(applicationRows);
-        setResumeGenerations(generationRows);
+        setExistingApplications(applications);
+        setResumeGenerations(generations);
 
-        if (!application.resume_pdf_filename && application.resume_generated_id) {
-          const matchedGeneration = generationRows.find(
-            (generation) => String(generation.id) === String(application.resume_generated_id)
+        if (!fullApplication.resume_pdf_filename && fullApplication.resume_generated_id) {
+          const matchedGeneration = generations.find(
+            (generation) =>
+              String(generation.id) === String(fullApplication.resume_generated_id)
           );
           const fromPath = resumeFilenameFromPath(matchedGeneration?.pdf_path);
           if (fromPath) {
@@ -217,8 +266,8 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
 
         setCompanyDuplicate(
           isDuplicateCompanyName(
-            (application.company || '').trim(),
-            applicationRows
+            (fullApplication.company || '').trim(),
+            applications
               .filter((app) => app.id !== application.id)
               .map((app) => app.company)
           )
@@ -243,6 +292,11 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
 
   const handleFormChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const handleRefreshJobVector = () => {
+    const nextVector = buildJobVector(form.job_description, skillKeywords);
+    setForm((current) => ({ ...current, job_vector: nextVector }));
   };
 
   const handleCompanyChange = (event) => {
@@ -336,6 +390,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         company: form.company.trim(),
         link: form.link.trim() || application.link,
         job_description: form.job_description.trim(),
+        job_vector: Array.isArray(form.job_vector) ? form.job_vector : [],
         resume_generated_id: form.resume_generated_id ? Number(form.resume_generated_id) : null,
         resume_online_link: null,
         applied: form.applied,
@@ -369,7 +424,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       }
 
       try {
-        const generationRows = await listResumeGenerations();
+        const generationRows = await listAllResumeGenerations();
         if (generateTokenRef.current !== generateToken) return;
         setResumeGenerations(generationRows);
         const selectedId = generationId || generationRows[0]?.id || '';
@@ -418,6 +473,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         company: form.company.trim(),
         link: form.link.trim(),
         job_description: form.job_description.trim(),
+        job_vector: Array.isArray(form.job_vector) ? form.job_vector : [],
         resume_generated_id:
           resumeSource === 'generated' && form.resume_generated_id
             ? Number(form.resume_generated_id)
@@ -536,6 +592,45 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                   onChange={handleFormChange('job_description')}
                   disabled={loading}
                 />
+
+                <Box
+                  display="flex"
+                  alignItems="flex-start"
+                  gap={1}
+                  sx={{ flexShrink: 0 }}
+                >
+                  <TextField
+                    fullWidth
+                    label="Job vector"
+                    value={JSON.stringify(form.job_vector || [])}
+                    multiline
+                    minRows={3}
+                    maxRows={6}
+                    InputProps={{
+                      readOnly: true,
+                      sx: {
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                        fontSize: '0.85rem'
+                      }
+                    }}
+                    helperText={
+                      skillKeywords.length
+                        ? `${skillKeywords.length} keywords · empty JD = all zeros · Refresh after editing JD`
+                        : 'No skill keywords found — vector stays empty'
+                    }
+                    disabled={loading}
+                  />
+                  <Button
+                    variant="outlined"
+                    startIcon={<RefreshTwoToneIcon />}
+                    onClick={handleRefreshJobVector}
+                    disabled={loading || !skillKeywords.length}
+                    sx={{ mt: 1, flexShrink: 0, whiteSpace: 'nowrap' }}
+                  >
+                    Refresh
+                  </Button>
+                </Box>
 
                 <Stack spacing={0.5} sx={{ flexShrink: 0 }}>
                   <Typography

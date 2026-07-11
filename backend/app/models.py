@@ -1,7 +1,7 @@
 from typing import Literal
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 UserRoleLiteral = Literal["admin", "bidder", "caller"]
 CitizenStatusLiteral = Literal["Good", "Bad", "None"]
@@ -99,7 +99,10 @@ class GenerateResumeResponse(BaseModel):
 class ResumeGenerationRecord(BaseModel):
     id: int
     job_details: str
-    profile: dict
+    profile_id: int | None = None
+    profile_label: str = ""
+    resume_content: dict = Field(default_factory=dict)
+    resume_vector: list[float] = Field(default_factory=list)
     pdf_path: str
     created_at: datetime
 
@@ -131,6 +134,29 @@ class UserResponse(BaseModel):
     username: str
     role: UserRoleLiteral
     description: str | None = None
+
+
+class SkillCreateRequest(BaseModel):
+    role: str = Field(default="", max_length=255)
+    field: str = Field(default="")
+    keyword: str = Field(default="")
+    weight: float | None = Field(default=1.0, ge=0)
+
+
+class SkillUpdateRequest(BaseModel):
+    role: str | None = Field(default=None, max_length=255)
+    field: str | None = Field(default=None)
+    keyword: str | None = Field(default=None)
+    weight: float | None = Field(default=None, ge=0)
+
+
+class SkillResponse(BaseModel):
+    id: int
+    role: str
+    field: str
+    keyword: str
+    weight: float | None = 1.0
+    created_at: datetime
 
 
 class LoginResponse(BaseModel):
@@ -235,9 +261,12 @@ class JobProfileCreateRequest(BaseModel):
     cover_letter: str = Field(default="")
     proxy: str | None = Field(default=None, max_length=500)
     proxy_detail: str = Field(default="")
+    resume_from_ai: bool = Field(default=True, alias="resume_fromAI")
     reference_tag: str | None = Field(default=None, max_length=255)
     is_active: bool = True
     resume_detail: ResumeDetail = Field(default_factory=ResumeDetail)
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class JobProfileUpdateRequest(BaseModel):
@@ -253,9 +282,12 @@ class JobProfileUpdateRequest(BaseModel):
     cover_letter: str = Field(default="")
     proxy: str | None = Field(default=None, max_length=500)
     proxy_detail: str = Field(default="")
+    resume_from_ai: bool | None = Field(default=None, alias="resume_fromAI")
     reference_tag: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
     resume_detail: ResumeDetail | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class JobProfileResponse(BaseModel):
@@ -277,10 +309,13 @@ class JobProfileResponse(BaseModel):
     default_resume_original_name: str | None = None
     proxy: str | None = None
     proxy_detail: str = ""
+    resume_from_ai: bool = Field(default=True, alias="resume_fromAI", serialization_alias="resume_fromAI")
     reference_tag: str | None = None
     is_active: bool
     resume_detail: ResumeDetail
     created_at: datetime
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class JobApplicationCreateRequest(BaseModel):
@@ -289,6 +324,7 @@ class JobApplicationCreateRequest(BaseModel):
     company: str = Field(default="", max_length=255)
     link: str = Field(min_length=1, max_length=1000)
     job_description: str = Field(default="")
+    job_vector: list[float] = Field(default_factory=list)
     resume_generated_id: int | None = None
     resume_online_link: str | None = Field(default=None, max_length=1000)
     applied: bool = False
@@ -300,6 +336,7 @@ class JobApplicationUpdateRequest(BaseModel):
     company: str = Field(default="", max_length=255)
     link: str = Field(min_length=1, max_length=1000)
     job_description: str = Field(default="")
+    job_vector: list[float] | None = None
     resume_generated_id: int | None = None
     resume_online_link: str | None = Field(default=None, max_length=1000)
     applied: bool | None = None
@@ -316,6 +353,7 @@ class JobApplicationResponse(BaseModel):
     company: str
     link: str
     job_description: str
+    job_vector: list[float] = Field(default_factory=list)
     resume_generated_id: int | None = None
     resume_pdf_filename: str | None = None
     resume_online_link: str | None = None

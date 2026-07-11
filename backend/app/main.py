@@ -17,8 +17,14 @@ from app.config import GENERATED_DIR, INSTRUCTION_DIR, REPO_ROOT, settings
 from app.database import get_db, init_db
 from app.auth import authenticate_user, create_access_token, user_to_response
 from app.dependencies import get_current_user, get_current_user_response, require_admin
-from app.db_models import ResumeGeneration, User
-from app.history import save_resume_generation
+from app.db_models import JobApplication, JobProfile, User
+from app.history import (
+    build_resume_content_payload,
+    build_resume_vector,
+    list_resume_generations_page,
+    resume_generation_to_response,
+    save_resume_generation,
+)
 from app.identity_service import (
     create_identity,
     delete_identity,
@@ -58,6 +64,7 @@ from app.application_service import (
     attach_generated_resume_to_application,
     create_application,
     delete_application,
+    get_application_for_user,
     list_applications_admin,
     list_applications_for_profile,
     list_applications_for_user,
@@ -92,10 +99,12 @@ from app.models import (
     LoginRequest,
     LoginResponse,
     Profile,
-    ResumeGenerationRecord,
     UserCreateRequest,
     UserResponse,
     UserUpdateRequest,
+    SkillCreateRequest,
+    SkillResponse,
+    SkillUpdateRequest,
     JobIdentityCreateRequest,
     JobIdentityResponse,
     JobIdentityUpdateRequest,
@@ -126,6 +135,15 @@ from app.user_service import (
     get_user,
     list_users,
     update_user,
+)
+from app.skill_service import (
+    create_skill,
+    delete_skill,
+    get_skill,
+    list_skill_keywords,
+    list_skills_page,
+    skill_to_response,
+    update_skill,
 )
 
 FRONTEND_DIR = REPO_ROOT / "frontend"
@@ -319,6 +337,83 @@ def delete_user_endpoint(
     return {"ok": True}
 
 
+@app.get("/api/skills")
+def list_skills_endpoint(
+    page: int = 1,
+    page_size: int = 10,
+    search: str | None = None,
+    role: str | None = None,
+    field: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    result = list_skills_page(
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        role=role,
+        field=field,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    return {
+        "items": [skill_to_response(row) for row in result["items"]],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+    }
+
+
+@app.get("/api/skills/keywords")
+def list_skill_keywords_endpoint(
+    role: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    keywords = list_skill_keywords(db, role=role)
+    return {"keywords": keywords, "length": len(keywords)}
+
+
+@app.post("/api/skills", response_model=SkillResponse)
+def create_skill_endpoint(
+    request: SkillCreateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = create_skill(db, request)
+    return skill_to_response(record)
+
+
+@app.put("/api/skills/{skill_id}", response_model=SkillResponse)
+def update_skill_endpoint(
+    skill_id: int,
+    request: SkillUpdateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_skill(db, skill_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    updated = update_skill(db, record, request)
+    return skill_to_response(updated)
+
+
+@app.delete("/api/skills/{skill_id}")
+def delete_skill_endpoint(
+    skill_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_skill(db, skill_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    delete_skill(db, record)
+    return {"ok": True}
+
+
 @app.get("/api/job-identities", response_model=list[JobIdentityResponse])
 def get_job_identities(
     db: Session = Depends(get_db),
@@ -481,21 +576,54 @@ def delete_job_profile_endpoint(
 @app.get("/api/job-applications", response_model=list[JobApplicationResponse])
 def list_job_applications_endpoint(
     profile_id: int | None = None,
+    include_job_description: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     try:
         if user.role == UserRole.admin:
-            rows = list_applications_admin(db, user, profile_id=profile_id)
+            rows = list_applications_admin(
+                db,
+                user,
+                profile_id=profile_id,
+                include_job_description=include_job_description,
+            )
         elif profile_id is not None:
-            rows = list_applications_for_profile(db, profile_id, user)
+            rows = list_applications_for_profile(
+                db,
+                profile_id,
+                user,
+                include_job_description=include_job_description,
+            )
         else:
-            rows = list_applications_for_user(db, user)
+            rows = list_applications_for_user(
+                db, user, include_job_description=include_job_description
+            )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return [application_to_response(db, row) for row in rows]
+    return [
+        application_to_response(
+            db, row, include_job_description=include_job_description
+        )
+        for row in rows
+    ]
+
+
+@app.get("/api/job-applications/{application_id}", response_model=JobApplicationResponse)
+def get_job_application_endpoint(
+    application_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        record = get_application_for_user(db, application_id, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return application_to_response(db, record, include_job_description=True)
 
 
 @app.post("/api/job-applications", response_model=JobApplicationResponse)
@@ -1046,27 +1174,51 @@ def get_default_jd():
     return PlainTextResponse(path.read_text(encoding="utf-8"))
 
 
-@app.get("/api/resume-generations", response_model=list[ResumeGenerationRecord])
+@app.get("/api/resume-generations")
 def list_resume_generations(
-    limit: int = 50,
+    page: int = 1,
+    page_size: int = 10,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ):
-    limit = max(1, min(limit, 200))
-    rows = db.scalars(
-        select(ResumeGeneration)
-        .order_by(ResumeGeneration.created_at.desc())
-        .limit(limit)
-    ).all()
-    return [
-        ResumeGenerationRecord(
-            id=row.id,
-            job_details=row.job_details,
-            profile=row.profile,
-            pdf_path=row.pdf_path,
-            created_at=row.created_at,
-        )
-        for row in rows
-    ]
+    result = list_resume_generations_page(
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    return {
+        "items": [resume_generation_to_response(db, row) for row in result["items"]],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+    }
+
+
+def _resolve_resume_vector_role(
+    db: Session,
+    *,
+    profile_id: int | None,
+    application_id: int | None,
+) -> str | None:
+    if profile_id is not None:
+        profile = db.get(JobProfile, profile_id)
+        if profile and (profile.roles or "").strip():
+            return profile.roles.strip()
+    if application_id is not None:
+        application = db.get(JobApplication, application_id)
+        if application and (application.role or "").strip():
+            return application.role.strip()
+    return None
 
 
 def _create_resume_response(
@@ -1114,11 +1266,21 @@ def _create_resume_response(
                 pass
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    resume_content = build_resume_content_payload(content)
+    role = _resolve_resume_vector_role(
+        db,
+        profile_id=request.profile_id,
+        application_id=request.application_id,
+    )
+    resume_vector = build_resume_vector(db, resume_content=resume_content, role=role)
+
     try:
         record = save_resume_generation(
             db,
             job_details=request.job_description,
-            profile=profile,
+            profile_id=request.profile_id,
+            resume_content=resume_content,
+            resume_vector=resume_vector,
             pdf_path=output_path,
             repo_root=REPO_ROOT,
         )

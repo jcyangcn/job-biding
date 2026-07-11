@@ -37,20 +37,19 @@ import TableListFilters, { compactButtonSx } from 'src/components/TableListFilte
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
-import useTableListFilters from 'src/hooks/useTableListFilters';
-import useTablePagination from 'src/hooks/useTablePagination';
-import useTableSort from 'src/hooks/useTableSort';
+import useServerTable from 'src/hooks/useServerTable';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { uniqueFieldValues } from 'src/utils/tableListFilters';
 import { formatIdentityLabel } from 'src/data/countryCodes';
-import { listIdentities } from 'src/services/identityApi';
+import { listAllIdentities } from 'src/services/identityApi';
 import {
   createProfile,
   deleteProfile,
   listProfiles,
-  updateProfile
+  updateProfile,
+  uploadProfileDefaultResume
 } from 'src/services/profileApi';
-import { listUsers } from 'src/services/usersApi';
+import { listAllUsers } from 'src/services/usersApi';
 import ResumeDetailForm from './ResumeDetailForm';
 import {
   emptyResumeDetail,
@@ -72,34 +71,12 @@ const emptyForm = {
   cover_letter: '',
   proxy: '',
   proxy_detail: '',
+  resume_fromAI: true,
   is_active: true,
   resume_detail: emptyResumeDetail()
 };
 
-const PROFILE_SEARCH_FIELDS = [
-  'id',
-  'identity_name',
-  'bidder_name',
-  'bidder_names',
-  'caller_name',
-  'roles',
-  'reference_tag',
-  'email',
-  'phone',
-  'proxy',
-  (row) => (row.is_active ? 'active' : 'inactive')
-];
-
 const PROFILE_EMPTY_ROLE = '__empty__';
-
-const PROFILE_SELECT_FILTERS = [
-  {
-    id: 'role',
-    getValue: (row) => row.roles?.trim() || PROFILE_EMPTY_ROLE,
-    emptyValue: PROFILE_EMPTY_ROLE
-  },
-  { id: 'active', getValue: (row) => String(row.is_active) }
-];
 
 const ACTIVE_FILTER_OPTIONS = [
   { value: 'true', label: 'Active' },
@@ -112,19 +89,27 @@ function ProfileManagement() {
     'Profile Management',
     'Manage job profiles linked to identities, bidders, and callers'
   );
-  const [rows, setRows] = useState([]);
   const [identities, setIdentities] = useState([]);
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [roleOptions, setRoleOptions] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deletingRecord, setDeletingRecord] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [pendingResumeFile, setPendingResumeFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const { open: detailOpen, selected: selectedProfile, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
+
+  const fetchProfiles = useCallback((opts) => listProfiles(opts), []);
+
   const {
+    rows,
+    total,
+    loading,
+    page,
+    limit,
     search,
     setSearch,
     dateFrom,
@@ -133,35 +118,22 @@ function ProfileManagement() {
     setDateTo,
     selectValues,
     setSelectValue,
-    filteredRows,
     clearFilters,
     hasActiveFilters,
-    showDateRange
-  } = useTableListFilters(rows, {
-    searchFields: PROFILE_SEARCH_FIELDS,
-    dateField: 'created_at',
-    selects: PROFILE_SELECT_FILTERS
-  });
-
-  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
-
-  const {
-    page,
-    limit,
-    paginatedRows,
+    showDateRange,
+    sortField,
+    sortDirection,
+    handleSort,
     handlePageChange,
     handleLimitChange,
-    rowsPerPageOptions
-  } = useTablePagination(sortedRows);
-
-  const roleOptions = useMemo(
-    () =>
-      uniqueFieldValues(rows, 'roles', { emptyValue: PROFILE_EMPTY_ROLE }).map((value) => ({
-        value,
-        label: value === PROFILE_EMPTY_ROLE ? '(No role)' : value
-      })),
-    [rows]
-  );
+    rowsPerPageOptions,
+    refresh,
+    paginatedRows
+  } = useServerTable({
+    fetcher: fetchProfiles,
+    selectIds: ['role', 'active'],
+    dateField: 'created_at'
+  });
 
   const selectedIdentity = useMemo(
     () => identities.find((item) => item.id === form.identity_id) || null,
@@ -182,30 +154,40 @@ function ProfileManagement() {
     [editingRecord]
   );
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadDialogOptions = useCallback(async () => {
     try {
-      const [profileRows, identityRows, userRows] = await Promise.all([
-        listProfiles(),
-        listIdentities(),
-        listUsers()
+      const [identityRows, userRows, profileResult] = await Promise.all([
+        listAllIdentities(),
+        listAllUsers(),
+        listProfiles({ page: 1, pageSize: 200 })
       ]);
-      setRows(profileRows);
       setIdentities(identityRows);
       setUsers(userRows);
+      setRoleOptions(
+        uniqueFieldValues(profileResult.items || [], 'roles', {
+          emptyValue: PROFILE_EMPTY_ROLE
+        }).map((value) => ({
+          value,
+          label: value === PROFILE_EMPTY_ROLE ? '(No role)' : value
+        }))
+      );
     } catch (err) {
-      enqueueSnackbar(err.message || 'Failed to load profiles', { variant: 'error' });
-    } finally {
-      setLoading(false);
+      enqueueSnackbar(err.message || 'Failed to load form options', { variant: 'error' });
     }
   }, [enqueueSnackbar]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadDialogOptions();
+  }, [loadDialogOptions]);
+
+  const notifyRefresh = useCallback(async () => {
+    refresh();
+    await loadDialogOptions();
+  }, [refresh, loadDialogOptions]);
 
   const openCreateDialog = () => {
     setEditingRecord(null);
+    setPendingResumeFile(null);
     setForm(emptyForm);
     setDialogOpen(true);
   };
@@ -213,6 +195,7 @@ function ProfileManagement() {
   const openEditDialog = (record) => {
     closeDetail();
     setEditingRecord(record);
+    setPendingResumeFile(null);
     setForm({
       identity_id: record.identity_id,
       bidder_user_ids: record.bidder_user_ids?.length
@@ -231,6 +214,7 @@ function ProfileManagement() {
       cover_letter: record.cover_letter || '',
       proxy: record.proxy || '',
       proxy_detail: record.proxy_detail || '',
+      resume_fromAI: record.resume_fromAI !== false,
       is_active: record.is_active,
       resume_detail: normalizeResumeDetail(record.resume_detail)
     });
@@ -241,6 +225,7 @@ function ProfileManagement() {
     if (!saving) {
       setDialogOpen(false);
       setEditingRecord(null);
+      setPendingResumeFile(null);
       setForm(emptyForm);
     }
   };
@@ -253,7 +238,7 @@ function ProfileManagement() {
 
   const handleDefaultResumeUploaded = async (updatedProfile) => {
     setEditingRecord(updatedProfile);
-    await loadData();
+    await notifyRefresh();
   };
 
   const buildPayload = () => ({
@@ -270,6 +255,7 @@ function ProfileManagement() {
     cover_letter: form.cover_letter.trim(),
     proxy: form.proxy.trim() || null,
     proxy_detail: form.proxy_detail.trim(),
+    resume_fromAI: Boolean(form.resume_fromAI),
     is_active: form.is_active,
     resume_detail: serializeResumeDetailForApi(form.resume_detail)
   });
@@ -294,11 +280,29 @@ function ProfileManagement() {
         await updateProfile(editingRecord.id, payload);
         enqueueSnackbar('Profile updated', { variant: 'success' });
       } else {
-        await createProfile(payload);
-        enqueueSnackbar('Profile created', { variant: 'success' });
+        const created = await createProfile(payload);
+        if (pendingResumeFile) {
+          try {
+            await uploadProfileDefaultResume(created.id, pendingResumeFile);
+            enqueueSnackbar('Profile created and default resume uploaded', {
+              variant: 'success'
+            });
+          } catch (uploadErr) {
+            enqueueSnackbar(
+              uploadErr.message ||
+                'Profile created, but default resume upload failed. Edit the profile to retry.',
+              { variant: 'warning' }
+            );
+          }
+        } else {
+          enqueueSnackbar('Profile created', { variant: 'success' });
+        }
       }
-      closeDialog();
-      await loadData();
+      setDialogOpen(false);
+      setEditingRecord(null);
+      setPendingResumeFile(null);
+      setForm(emptyForm);
+      await notifyRefresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Save failed', { variant: 'error' });
     } finally {
@@ -319,7 +323,7 @@ function ProfileManagement() {
       enqueueSnackbar('Profile deleted', { variant: 'success' });
       setDeleteOpen(false);
       setDeletingRecord(null);
-      await loadData();
+      await notifyRefresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
     } finally {
@@ -364,15 +368,15 @@ function ProfileManagement() {
             ]}
             onClear={clearFilters}
             hasActiveFilters={hasActiveFilters}
-            filteredCount={filteredRows.length}
-            totalCount={rows.length}
+            filteredCount={total}
+            totalCount={total}
             actions={
               <>
                 <Button
                   variant="outlined"
                   size="small"
                   startIcon={<RefreshTwoToneIcon />}
-                  onClick={loadData}
+                  onClick={() => notifyRefresh()}
                   disabled={loading || saving}
                   sx={compactButtonSx}
                 >
@@ -465,15 +469,17 @@ function ProfileManagement() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.length === 0 ? (
+                  {loading && rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10}>Loading…</TableCell>
+                    </TableRow>
+                  ) : rows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={10}>
-                        {loading ? 'Loading…' : 'No profiles found.'}
+                        {hasActiveFilters
+                          ? 'No profiles match your filters.'
+                          : 'No profiles found.'}
                       </TableCell>
-                    </TableRow>
-                  ) : filteredRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={10}>No profiles match your filters.</TableCell>
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
@@ -523,7 +529,7 @@ function ProfileManagement() {
               </Table>
             </TableContainer>
             <TablePaginationFooter
-              count={filteredRows.length}
+              count={total}
               page={page}
               rowsPerPage={limit}
               onPageChange={handlePageChange}
@@ -660,8 +666,10 @@ function ProfileManagement() {
           />
           <ProfileDefaultResumeUpload
             editingRecord={editingRecord}
+            pendingFile={pendingResumeFile}
             saving={saving}
             onUploaded={handleDefaultResumeUploaded}
+            onPendingFileChange={setPendingResumeFile}
           />
           <TextField
             fullWidth
@@ -679,6 +687,17 @@ function ProfileManagement() {
             multiline
             minRows={3}
             placeholder="Additional proxy notes (admin only)"
+          />
+          <FormControlLabel
+            sx={{ mt: 1, mb: 0.5, display: 'block' }}
+            control={
+              <Switch
+                checked={form.resume_fromAI}
+                onChange={handleFormChange('resume_fromAI')}
+                color="primary"
+              />
+            }
+            label="Resume from AI"
           />
           <FormControlLabel
             sx={{ mt: 1, mb: 0.5, display: 'block' }}
