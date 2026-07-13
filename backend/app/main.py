@@ -22,6 +22,7 @@ from app.history import (
     build_resume_content_payload,
     build_resume_vector,
     list_resume_generations_page,
+    match_best_resume_for_profile,
     resume_generation_to_response,
     save_resume_generation,
 )
@@ -96,6 +97,7 @@ from app.progression_email_service import (
 from app.models import (
     GenerateResumeRequest,
     GenerateResumeResponse,
+    MatchBestResumeRequest,
     LoginRequest,
     LoginResponse,
     Profile,
@@ -105,6 +107,9 @@ from app.models import (
     SkillCreateRequest,
     SkillResponse,
     SkillUpdateRequest,
+    CompanyCreateRequest,
+    CompanyResponse,
+    CompanyUpdateRequest,
     JobIdentityCreateRequest,
     JobIdentityResponse,
     JobIdentityUpdateRequest,
@@ -144,6 +149,14 @@ from app.skill_service import (
     list_skills_page,
     skill_to_response,
     update_skill,
+)
+from app.company_service import (
+    company_to_response,
+    create_company,
+    delete_company,
+    get_company,
+    list_companies_page,
+    update_company,
 )
 
 FRONTEND_DIR = REPO_ROOT / "frontend"
@@ -240,7 +253,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Generation-Id", "Content-Disposition"],
+    expose_headers=["X-Generation-Id", "X-Match-Score", "X-Profile-Id", "Content-Disposition"],
 )
 
 if FRONTEND_BUILD_DIR.is_dir():
@@ -411,6 +424,72 @@ def delete_skill_endpoint(
     if not record:
         raise HTTPException(status_code=404, detail="Skill not found")
     delete_skill(db, record)
+    return {"ok": True}
+
+
+@app.get("/api/companies")
+def list_companies_endpoint(
+    page: int = 1,
+    page_size: int = 10,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    result = list_companies_page(
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    return {
+        "items": [company_to_response(row) for row in result["items"]],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+    }
+
+
+@app.post("/api/companies", response_model=CompanyResponse)
+def create_company_endpoint(
+    request: CompanyCreateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    try:
+        record = create_company(db, request)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return company_to_response(record)
+
+
+@app.put("/api/companies/{company_id}", response_model=CompanyResponse)
+def update_company_endpoint(
+    company_id: int,
+    request: CompanyUpdateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_company(db, company_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Company not found")
+    updated = update_company(db, record, request)
+    return company_to_response(updated)
+
+
+@app.delete("/api/companies/{company_id}")
+def delete_company_endpoint(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_company(db, company_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Company not found")
+    delete_company(db, record)
     return {"ok": True}
 
 
@@ -1330,6 +1409,53 @@ def create_resume(
     user: User = Depends(get_current_user),
 ):
     return _create_resume_response(request, db, user)
+
+
+@app.post("/api/resumes/match-best")
+def match_best_resume(
+    request: MatchBestResumeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Find resume generations for profile_id, score each with job_vector · resume_vector,
+    and return the highest-scoring resume PDF file.
+    """
+    profile = get_profile(db, request.profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if not user_can_access_profile(user, profile):
+        raise HTTPException(status_code=403, detail="Not allowed to access this profile")
+
+    try:
+        best_row, best_score, _scores = match_best_resume_for_profile(
+            db,
+            profile_id=request.profile_id,
+            job_vector=list(request.job_vector or []),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    filename = Path(best_row.pdf_path).name
+    try:
+        pdf_path = _resolve_generated_pdf(filename)
+    except HTTPException:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Matched resume PDF not found on disk: {filename}",
+        ) from None
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=filename,
+        headers={
+            "X-Generation-Id": str(best_row.id),
+            "X-Match-Score": str(best_score),
+            "X-Profile-Id": str(request.profile_id),
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 def _resolve_generated_pdf(filename: str) -> Path:

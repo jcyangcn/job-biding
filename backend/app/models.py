@@ -96,6 +96,18 @@ class GenerateResumeResponse(BaseModel):
     application_id: int | None = None
 
 
+class MatchBestResumeRequest(BaseModel):
+    profile_id: int
+    job_vector: list[float] = Field(default_factory=list)
+
+
+class MatchBestResumeResponse(BaseModel):
+    generation_id: int
+    filename: str
+    score: float
+    profile_id: int
+
+
 class ResumeGenerationRecord(BaseModel):
     id: int
     job_details: str
@@ -156,6 +168,29 @@ class SkillResponse(BaseModel):
     field: str
     keyword: str
     weight: float | None = 1.0
+    created_at: datetime
+
+
+class CompanyCreateRequest(BaseModel):
+    company: str = Field(min_length=1, max_length=255)
+    url: str = Field(default="", max_length=1000)
+    job_description: str = Field(default="")
+    job_vector: list[float] = Field(default_factory=list)
+
+
+class CompanyUpdateRequest(BaseModel):
+    company: str | None = Field(default=None, min_length=1, max_length=255)
+    url: str | None = Field(default=None, max_length=1000)
+    job_description: str | None = Field(default=None)
+    job_vector: list[float] | None = None
+
+
+class CompanyResponse(BaseModel):
+    id: int
+    company: str
+    url: str
+    job_description: str
+    job_vector: list[float] = Field(default_factory=list)
     created_at: datetime
 
 

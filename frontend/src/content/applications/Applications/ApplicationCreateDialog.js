@@ -24,9 +24,9 @@ import {
 import { format } from 'date-fns';
 import AutoAwesomeTwoToneIcon from '@mui/icons-material/AutoAwesomeTwoTone';
 import CloseIcon from '@mui/icons-material/Close';
+import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
-import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
 import { createJobApplication, listJobApplications, updateJobApplication } from 'src/services/jobApplicationApi';
@@ -35,7 +35,8 @@ import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeCont
 import {
   buildResumeRequest,
   generateResumePdf,
-  listAllResumeGenerations
+  listAllResumeGenerations,
+  matchBestResume
 } from 'src/services/resumeApi';
 import { appliedAtToIso, formatDateTime } from 'src/utils/dateFormat';
 import { isDuplicateCompanyName } from 'src/utils/normalizeCompanyName';
@@ -91,6 +92,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
   const [companyDuplicate, setCompanyDuplicate] = useState(false);
   const [existingApplications, setExistingApplications] = useState([]);
   const [resumeSource, setResumeSource] = useState('generated');
+  const [choosing, setChoosing] = useState(false);
   const [draftApplicationId, setDraftApplicationId] = useState(null);
   const [skillKeywords, setSkillKeywords] = useState([]);
   const [form, setForm] = useState({
@@ -98,11 +100,12 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
   });
 
+  const resumeFromAi = profile?.resume_fromAI !== false;
   const selectedGeneration = resumeGenerations.find(
     (generation) => generation.id === form.resume_generated_id
   );
 
-  const busy = submitting || generating || loading;
+  const busy = submitting || generating || choosing || loading;
   const mountedRef = useRef(true);
   const onSavedRef = useRef(onSaved);
 
@@ -145,6 +148,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
       setCompanyDuplicate(false);
       setAppliedConfirmOpen(false);
       setResumeSource('generated');
+      setChoosing(false);
       setDraftApplicationId(null);
       setSkillKeywords([]);
       setForm({
@@ -198,9 +202,13 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     setForm((current) => ({ ...current, [field]: event.target.value }));
   };
 
-  const handleRefreshJobVector = () => {
-    const nextVector = buildJobVector(form.job_description, skillKeywords);
-    setForm((current) => ({ ...current, job_vector: nextVector }));
+  const handleJobDescriptionChange = (event) => {
+    const value = event.target.value;
+    setForm((current) => ({
+      ...current,
+      job_description: value,
+      job_vector: buildJobVector(value, skillKeywords)
+    }));
   };
 
   const handleCompanyChange = (event) => {
@@ -254,29 +262,32 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
   };
 
   const buildApplicationPayload = useCallback(
-    (resumeGeneratedId = null) => ({
-      profile_id: profile.id,
-      role: form.role.trim(),
-      company: form.company.trim(),
-      link: form.link.trim(),
-      job_description: form.job_description.trim(),
-      job_vector: Array.isArray(form.job_vector) ? form.job_vector : [],
-      resume_generated_id:
-        resumeSource === 'generated' && resumeGeneratedId
-          ? resumeGeneratedId
-          : resumeSource === 'generated' && form.resume_generated_id
-            ? form.resume_generated_id
+    (resumeGeneratedId = null) => {
+      const jobDescription = form.job_description.trim();
+      return {
+        profile_id: profile.id,
+        role: form.role.trim(),
+        company: form.company.trim(),
+        link: form.link.trim(),
+        job_description: jobDescription,
+        job_vector: buildJobVector(jobDescription, skillKeywords),
+        resume_generated_id:
+          resumeSource === 'generated' && resumeGeneratedId
+            ? resumeGeneratedId
+            : resumeSource === 'generated' && form.resume_generated_id
+              ? form.resume_generated_id
+              : null,
+        resume_online_link:
+          resumeSource === 'online' && form.resume_online_link.trim()
+            ? form.resume_online_link.trim()
             : null,
-      resume_online_link:
-        resumeSource === 'online' && form.resume_online_link.trim()
-          ? form.resume_online_link.trim()
-          : null,
-      applied: form.applied,
-      applied_at: form.applied
-        ? appliedAtToIso(form.applied_at || format(new Date(), 'yyyy-MM-dd HH:mm'))
-        : null
-    }),
-    [profile, form, resumeSource]
+        applied: form.applied,
+        applied_at: form.applied
+          ? appliedAtToIso(form.applied_at || format(new Date(), 'yyyy-MM-dd HH:mm'))
+          : null
+      };
+    },
+    [profile, form, resumeSource, skillKeywords]
   );
 
   const ensureApplicationRecord = useCallback(async () => {
@@ -297,6 +308,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
         company: payload.company,
         link: payload.link,
         job_description: payload.job_description,
+        job_vector: payload.job_vector,
         resume_generated_id: payload.resume_generated_id,
         resume_online_link: payload.resume_online_link,
         applied: payload.applied,
@@ -385,11 +397,77 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     }
   };
 
+  const handleChooseResume = async () => {
+    if (!profile) return;
+
+    const jobVector = buildJobVector(form.job_description, skillKeywords);
+    if (!jobVector.length) {
+      notify('No skill keywords available to score this job description.', {
+        variant: 'warning'
+      });
+      return;
+    }
+
+    setChoosing(true);
+    notify('Matching best resume for this job vector…', { variant: 'info' });
+
+    try {
+      const { filename, generationId, score } = await matchBestResume({
+        profileId: profile.id,
+        jobVector
+      });
+
+      if (!mountedRef.current) return;
+
+      setForm((current) => ({
+        ...current,
+        job_vector: jobVector,
+        resume_generated_id: generationId || current.resume_generated_id,
+        resume_online_link: generationId ? '' : current.resume_online_link
+      }));
+      if (generationId) {
+        setResumeSource('generated');
+      }
+
+      try {
+        const generationRows = await listAllResumeGenerations();
+        if (!mountedRef.current) return;
+        setResumeGenerations(generationRows);
+        const selectedId = generationId || '';
+        if (selectedId) {
+          setForm((current) => ({
+            ...current,
+            resume_generated_id: selectedId,
+            resume_online_link: ''
+          }));
+        }
+      } catch {
+        /* keep generation id already set above */
+      }
+
+      notify(
+        `Best match selected${generationId ? ` (#${generationId})` : ''}${
+          Number.isFinite(score) ? ` · score ${score}` : ''
+        }. Downloaded ${filename}.`,
+        { variant: 'success' }
+      );
+    } catch (err) {
+      if (mountedRef.current) {
+        notify(err.message || 'Failed to choose resume', { variant: 'error' });
+      }
+    } finally {
+      if (mountedRef.current) {
+        setChoosing(false);
+      }
+    }
+  };
+
   const handleDialogClose = () => {
     if (submitting) return;
     // Closing must always clear this dialog's generating UI. Background PDF work
     // continues via captured refreshList/notifyFn above; a new Add opens a fresh dialog.
     setGenerating(false);
+    setChoosing(false);
     onClose();
   };
 
@@ -416,6 +494,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
           company: payload.company,
           link: payload.link,
           job_description: payload.job_description,
+          job_vector: payload.job_vector,
           resume_generated_id: payload.resume_generated_id,
           resume_online_link: payload.resume_online_link,
           applied: payload.applied,
@@ -518,48 +597,9 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
                   label="Job description"
                   placeholder="Paste the full job posting here…"
                   value={form.job_description}
-                  onChange={handleFormChange('job_description')}
+                  onChange={handleJobDescriptionChange}
                   disabled={loading}
                 />
-
-                <Box
-                  display="flex"
-                  alignItems="flex-start"
-                  gap={1}
-                  sx={{ flexShrink: 0 }}
-                >
-                  <TextField
-                    fullWidth
-                    label="Job vector"
-                    value={JSON.stringify(form.job_vector || [])}
-                    multiline
-                    minRows={3}
-                    maxRows={6}
-                    InputProps={{
-                      readOnly: true,
-                      sx: {
-                        fontFamily:
-                          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                        fontSize: '0.85rem'
-                      }
-                    }}
-                    helperText={
-                      skillKeywords.length
-                        ? `${skillKeywords.length} keywords · empty JD = all zeros · Refresh after editing JD`
-                        : 'No skill keywords found — vector stays empty'
-                    }
-                    disabled={loading}
-                  />
-                  <Button
-                    variant="outlined"
-                    startIcon={<RefreshTwoToneIcon />}
-                    onClick={handleRefreshJobVector}
-                    disabled={loading || !skillKeywords.length}
-                    sx={{ mt: 1, flexShrink: 0, whiteSpace: 'nowrap' }}
-                  >
-                    Refresh
-                  </Button>
-                </Box>
 
                 <Stack spacing={0.5} sx={{ flexShrink: 0 }}>
                   <Typography
@@ -597,9 +637,16 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
                         }
                       }}
                     >
-                      <ToggleButton value="generated" aria-label="AI generate">
-                        <AutoAwesomeTwoToneIcon sx={{ fontSize: 16 }} />
-                        AI generate
+                      <ToggleButton
+                        value="generated"
+                        aria-label={resumeFromAi ? 'AI generate' : 'Choose resume'}
+                      >
+                        {resumeFromAi ? (
+                          <AutoAwesomeTwoToneIcon sx={{ fontSize: 16 }} />
+                        ) : (
+                          <DescriptionTwoToneIcon sx={{ fontSize: 16 }} />
+                        )}
+                        {resumeFromAi ? 'AI generate' : 'Choose'}
                       </ToggleButton>
                       <ToggleButton value="online" aria-label="Online">
                         <LinkTwoToneIcon sx={{ fontSize: 16 }} />
@@ -616,16 +663,29 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
                     >
                       {resumeSource === 'generated' ? (
                         <>
-                          <Button
-                            size="small"
-                            color="success"
-                            variant="contained"
-                            endIcon={<PictureAsPdfTwoToneIcon />}
-                            disabled={generating || loading}
-                            onClick={handleGenerateResume}
-                          >
-                            {generating ? 'Generating PDF…' : 'Generate Resume PDF'}
-                          </Button>
+                          {resumeFromAi ? (
+                            <Button
+                              size="small"
+                              color="success"
+                              variant="contained"
+                              endIcon={<PictureAsPdfTwoToneIcon />}
+                              disabled={generating || loading}
+                              onClick={handleGenerateResume}
+                            >
+                              {generating ? 'Generating PDF…' : 'Generate Resume PDF'}
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              color="primary"
+                              variant="contained"
+                              endIcon={<DescriptionTwoToneIcon />}
+                              disabled={choosing || loading}
+                              onClick={handleChooseResume}
+                            >
+                              {choosing ? 'Choosing…' : 'Choose Resume'}
+                            </Button>
+                          )}
                           {form.resume_generated_id ? (
                             <Chip
                               size="small"

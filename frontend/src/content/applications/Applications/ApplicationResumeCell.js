@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
+import { useSnackbar } from 'notistack';
 import {
   CircularProgress,
   IconButton,
@@ -13,13 +14,18 @@ import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import Label from 'src/components/Label';
 import ApplicationResumePdfDialog from './ApplicationResumePdfDialog';
-import { getResumeDownloadUrl } from 'src/services/resumeApi';
+import { downloadProfileDefaultResume } from 'src/services/profileApi';
+import { downloadResumePdf } from 'src/services/resumeApi';
+import { parseProfileDefaultResumeRef } from 'src/utils/profileDefaultResumeRef';
 
 function ApplicationResumeCell({ row }) {
+  const { enqueueSnackbar } = useSnackbar();
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const filename = row.resume_pdf_filename;
   const status = row.resume_generation_status;
   const hasGeneratedPdf = Boolean(row.resume_generated_id && filename);
+  const defaultResumeRef = parseProfileDefaultResumeRef(row.resume_online_link);
 
   if (status === 'generating') {
     return (
@@ -50,6 +56,19 @@ function ApplicationResumeCell({ row }) {
   }
 
   if (hasGeneratedPdf) {
+    const handleDownload = async (event) => {
+      event.stopPropagation();
+      setDownloading(true);
+      try {
+        await downloadResumePdf(filename);
+        enqueueSnackbar(`Downloaded ${filename}`, { variant: 'success' });
+      } catch (err) {
+        enqueueSnackbar(err.message || 'Download failed', { variant: 'error' });
+      } finally {
+        setDownloading(false);
+      }
+    };
+
     return (
       <>
         <Stack
@@ -87,19 +106,22 @@ function ApplicationResumeCell({ row }) {
             </Typography>
           </Tooltip>
           <Tooltip title="Download PDF">
-            <IconButton
-              component="a"
-              href={getResumeDownloadUrl(filename)}
-              download={filename}
-              size="small"
-              color="primary"
-              aria-label={`Download ${filename}`}
-              rel="noopener noreferrer"
-              onClick={(event) => event.stopPropagation()}
-              sx={{ flexShrink: 0 }}
-            >
-              <FileDownloadTwoToneIcon sx={{ fontSize: 18 }} />
-            </IconButton>
+            <span>
+              <IconButton
+                size="small"
+                color="primary"
+                aria-label={`Download ${filename}`}
+                disabled={downloading}
+                onClick={handleDownload}
+                sx={{ flexShrink: 0 }}
+              >
+                {downloading ? (
+                  <CircularProgress size={16} thickness={5} />
+                ) : (
+                  <FileDownloadTwoToneIcon sx={{ fontSize: 18 }} />
+                )}
+              </IconButton>
+            </span>
           </Tooltip>
         </Stack>
         <ApplicationResumePdfDialog
@@ -108,6 +130,75 @@ function ApplicationResumeCell({ row }) {
           onClose={() => setViewerOpen(false)}
         />
       </>
+    );
+  }
+
+  if (defaultResumeRef) {
+    const handleDownloadDefault = async (event) => {
+      event.stopPropagation();
+      setDownloading(true);
+      try {
+        await downloadProfileDefaultResume(
+          defaultResumeRef.profileId,
+          defaultResumeRef.filename
+        );
+        enqueueSnackbar(`Downloaded ${defaultResumeRef.filename}`, { variant: 'success' });
+      } catch (err) {
+        enqueueSnackbar(err.message || 'Download failed', { variant: 'error' });
+      } finally {
+        setDownloading(false);
+      }
+    };
+
+    return (
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={0.75}
+        minWidth={0}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Tooltip title="Download default resume">
+          <Typography
+            component="button"
+            type="button"
+            variant="body2"
+            onClick={handleDownloadDefault}
+            disabled={downloading}
+            sx={{
+              all: 'unset',
+              wordBreak: 'break-all',
+              fontWeight: 500,
+              minWidth: 0,
+              textAlign: 'left',
+              cursor: downloading ? 'default' : 'pointer',
+              color: 'primary.main',
+              textDecoration: 'underline',
+              textDecorationColor: 'transparent',
+              opacity: downloading ? 0.7 : 1,
+              '&:hover': {
+                textDecorationColor: downloading ? 'transparent' : 'currentColor'
+              }
+            }}
+          >
+            {downloading ? 'Downloading…' : defaultResumeRef.filename}
+          </Typography>
+        </Tooltip>
+        <Tooltip title="Download PDF">
+          <span>
+            <IconButton
+              size="small"
+              color="primary"
+              aria-label={`Download ${defaultResumeRef.filename}`}
+              disabled={downloading}
+              onClick={handleDownloadDefault}
+              sx={{ flexShrink: 0 }}
+            >
+              <FileDownloadTwoToneIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Stack>
     );
   }
 

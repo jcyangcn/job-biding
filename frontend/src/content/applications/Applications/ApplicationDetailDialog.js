@@ -15,6 +15,7 @@ import {
   formatDetailDate
 } from 'src/components/DetailDialog';
 import { getJobApplication } from 'src/services/jobApplicationApi';
+import { parseProfileDefaultResumeRef } from 'src/utils/profileDefaultResumeRef';
 
 function ApplicationDetailDialog({ open, application, onClose }) {
   const [detail, setDetail] = useState(null);
@@ -74,6 +75,7 @@ function ApplicationDetailDialog({ open, application, onClose }) {
   const hasJobLink = Boolean(view.link?.trim());
   const hasResumeLink = Boolean(view.resume_online_link?.trim());
   const hasGeneratedResume = Boolean(view.resume_generated_id);
+  const defaultResumeRef = parseProfileDefaultResumeRef(view.resume_online_link);
   const jobDescription = detail?.job_description;
 
   return (
@@ -106,6 +108,8 @@ function ApplicationDetailDialog({ open, application, onClose }) {
         <DetailField label="Resume" icon={PictureAsPdfTwoToneIcon}>
           {hasGeneratedResume ? (
             <Typography variant="body1">Generated resume #{view.resume_generated_id}</Typography>
+          ) : defaultResumeRef ? (
+            <Typography variant="body1">{defaultResumeRef.filename}</Typography>
           ) : hasResumeLink ? (
             <Link
               href={view.resume_online_link}

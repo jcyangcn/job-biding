@@ -35,6 +35,7 @@ import ApplicationDetailDialog from './ApplicationDetailDialog';
 import ApplicationEditDialog from './ApplicationEditDialog';
 import ApplicationResumeCell from './ApplicationResumeCell';
 import TableListFilters from 'src/components/TableListFilters';
+import { parseProfileDefaultResumeRef } from 'src/utils/profileDefaultResumeRef';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
@@ -65,6 +66,10 @@ function formatResumeSource(row) {
     return `Generated #${row.resume_generated_id}`;
   }
   if (row.resume_online_link) {
+    const defaultResumeRef = parseProfileDefaultResumeRef(row.resume_online_link);
+    if (defaultResumeRef) {
+      return defaultResumeRef.filename;
+    }
     return 'Online link';
   }
   return '—';

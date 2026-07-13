@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+import { useSnackbar } from 'notistack';
 import {
   Box,
   Button,
@@ -13,12 +14,13 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
-import { getResumeDownloadUrl, getResumeInlineUrl } from 'src/services/resumeApi';
-import { getStoredAccessToken } from 'src/services/authApi';
+import { downloadResumePdf, fetchResumePdfBlob } from 'src/services/resumeApi';
 
 function ApplicationResumePdfDialog({ open, filename, onClose }) {
+  const { enqueueSnackbar } = useSnackbar();
   const [blobUrl, setBlobUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -38,25 +40,10 @@ function ApplicationResumePdfDialog({ open, filename, onClose }) {
       setBlobUrl(null);
 
       try {
-        const token = getStoredAccessToken();
-        const headers = {};
-        if (token) {
-          headers.Authorization = `Bearer ${token}`;
-        }
-
-        const response = await fetch(getResumeInlineUrl(filename), { headers });
-        if (!response.ok) {
-          throw new Error(`Failed to load PDF (${response.status})`);
-        }
-
-        const blob = await response.blob();
+        const { blob } = await fetchResumePdfBlob(filename, { inline: true });
         if (cancelled) return;
 
-        objectUrl = URL.createObjectURL(
-          blob.type === 'application/pdf'
-            ? blob
-            : new Blob([blob], { type: 'application/pdf' })
-        );
+        objectUrl = URL.createObjectURL(blob);
         setBlobUrl(objectUrl);
       } catch (err) {
         if (!cancelled) {
@@ -78,6 +65,19 @@ function ApplicationResumePdfDialog({ open, filename, onClose }) {
       }
     };
   }, [open, filename]);
+
+  const handleDownload = async () => {
+    if (!filename) return;
+    setDownloading(true);
+    try {
+      await downloadResumePdf(filename);
+      enqueueSnackbar(`Downloaded ${filename}`, { variant: 'success' });
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Download failed', { variant: 'error' });
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <Dialog
@@ -166,13 +166,10 @@ function ApplicationResumePdfDialog({ open, filename, onClose }) {
           variant="contained"
           color="primary"
           startIcon={<FileDownloadTwoToneIcon />}
-          component="a"
-          href={getResumeDownloadUrl(filename)}
-          download={filename || 'resume.pdf'}
-          rel="noopener noreferrer"
-          disabled={!filename}
+          onClick={handleDownload}
+          disabled={!filename || downloading}
         >
-          Download
+          {downloading ? 'Downloading…' : 'Download'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -70,6 +70,78 @@ def build_resume_vector(
     return build_job_vector(resume_content_to_match_text(resume_content), keywords)
 
 
+def vector_dot_product(job_vector: list[float], resume_vector: list[float]) -> float:
+    """Dot product: a1*b1 + a2*b2 + ... (missing dimensions treated as 0)."""
+    left = list(job_vector or [])
+    right = list(resume_vector or [])
+    length = max(len(left), len(right))
+    total = 0.0
+    for index in range(length):
+        a = float(left[index]) if index < len(left) else 0.0
+        b = float(right[index]) if index < len(right) else 0.0
+        total += a * b
+    return total
+
+
+def match_best_resume_for_profile(
+    db: Session,
+    *,
+    profile_id: int,
+    job_vector: list[float],
+) -> tuple[ResumeGeneration, float, list[dict]]:
+    """
+    Score all resume generations for a profile against job_vector (dot product)
+    and return the highest-scoring generation.
+    """
+    rows = db.scalars(
+        select(ResumeGeneration)
+        .where(ResumeGeneration.profile_id == profile_id)
+        .order_by(ResumeGeneration.id.asc())
+    ).all()
+
+    if not rows:
+        raise ValueError("No resume generations found for this profile")
+
+    scored: list[dict] = []
+    best_row: ResumeGeneration | None = None
+    best_score = float("-inf")
+
+    print("=" * 72)
+    print(f"[resume-match] profile_id={profile_id}")
+    print(f"[resume-match] job_vector={list(job_vector or [])}")
+    print(f"[resume-match] proper resume list count={len(rows)}")
+
+    for row in rows:
+        resume_vector = list(row.resume_vector or [])
+        score = vector_dot_product(job_vector, resume_vector)
+        entry = {
+            "generation_id": row.id,
+            "score": score,
+            "pdf_path": row.pdf_path,
+            "resume_vector": resume_vector,
+        }
+        scored.append(entry)
+        print(
+            f"[resume-match] generation_id={row.id} "
+            f"score={score} resume_vector={resume_vector} pdf={row.pdf_path}"
+        )
+        if (
+            best_row is None
+            or score > best_score
+            or (score == best_score and row.id > best_row.id)
+        ):
+            best_score = score
+            best_row = row
+
+    print(
+        f"[resume-match] BEST generation_id={best_row.id} "
+        f"score={best_score} pdf={best_row.pdf_path}"
+    )
+    print("=" * 72)
+
+    return best_row, best_score, scored
+
+
 def resume_generation_to_response(db: Session, row: ResumeGeneration) -> dict:
     profile_label = ""
     if row.profile_id is not None:

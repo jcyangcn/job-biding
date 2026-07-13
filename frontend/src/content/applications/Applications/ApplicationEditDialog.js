@@ -40,8 +40,8 @@ import { listAllProfiles } from 'src/services/profileApi';
 import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
 import {
   buildResumeRequest,
+  downloadResumePdf,
   generateResumePdf,
-  getResumeDownloadUrl,
   listAllResumeGenerations
 } from 'src/services/resumeApi';
 import { appliedAtToIso, formatDateTime, formatDateTimeValue } from 'src/utils/dateFormat';
@@ -107,6 +107,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const [resumeSource, setResumeSource] = useState('generated');
   const [resumePdfFilename, setResumePdfFilename] = useState('');
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [downloadingResume, setDownloadingResume] = useState(false);
   const [skillKeywords, setSkillKeywords] = useState([]);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
@@ -294,9 +295,13 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     setForm((current) => ({ ...current, [field]: event.target.value }));
   };
 
-  const handleRefreshJobVector = () => {
-    const nextVector = buildJobVector(form.job_description, skillKeywords);
-    setForm((current) => ({ ...current, job_vector: nextVector }));
+  const handleJobDescriptionChange = (event) => {
+    const value = event.target.value;
+    setForm((current) => ({
+      ...current,
+      job_description: value,
+      job_vector: buildJobVector(value, skillKeywords)
+    }));
   };
 
   const handleCompanyChange = (event) => {
@@ -390,7 +395,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         company: form.company.trim(),
         link: form.link.trim() || application.link,
         job_description: form.job_description.trim(),
-        job_vector: Array.isArray(form.job_vector) ? form.job_vector : [],
+        job_vector: buildJobVector(form.job_description.trim(), skillKeywords),
         resume_generated_id: form.resume_generated_id ? Number(form.resume_generated_id) : null,
         resume_online_link: null,
         applied: form.applied,
@@ -473,7 +478,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         company: form.company.trim(),
         link: form.link.trim(),
         job_description: form.job_description.trim(),
-        job_vector: Array.isArray(form.job_vector) ? form.job_vector : [],
+        job_vector: buildJobVector(form.job_description.trim(), skillKeywords),
         resume_generated_id:
           resumeSource === 'generated' && form.resume_generated_id
             ? Number(form.resume_generated_id)
@@ -589,48 +594,9 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                   label="Job description"
                   placeholder="Paste the full job posting here…"
                   value={form.job_description}
-                  onChange={handleFormChange('job_description')}
+                  onChange={handleJobDescriptionChange}
                   disabled={loading}
                 />
-
-                <Box
-                  display="flex"
-                  alignItems="flex-start"
-                  gap={1}
-                  sx={{ flexShrink: 0 }}
-                >
-                  <TextField
-                    fullWidth
-                    label="Job vector"
-                    value={JSON.stringify(form.job_vector || [])}
-                    multiline
-                    minRows={3}
-                    maxRows={6}
-                    InputProps={{
-                      readOnly: true,
-                      sx: {
-                        fontFamily:
-                          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                        fontSize: '0.85rem'
-                      }
-                    }}
-                    helperText={
-                      skillKeywords.length
-                        ? `${skillKeywords.length} keywords · empty JD = all zeros · Refresh after editing JD`
-                        : 'No skill keywords found — vector stays empty'
-                    }
-                    disabled={loading}
-                  />
-                  <Button
-                    variant="outlined"
-                    startIcon={<RefreshTwoToneIcon />}
-                    onClick={handleRefreshJobVector}
-                    disabled={loading || !skillKeywords.length}
-                    sx={{ mt: 1, flexShrink: 0, whiteSpace: 'nowrap' }}
-                  >
-                    Refresh
-                  </Button>
-                </Box>
 
                 <Stack spacing={0.5} sx={{ flexShrink: 0 }}>
                   <Typography
@@ -720,17 +686,31 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                             />
                             {generatedFilename ? (
                               <Tooltip title="Download PDF">
-                                <IconButton
-                                  component="a"
-                                  href={getResumeDownloadUrl(generatedFilename)}
-                                  download={generatedFilename}
-                                  size="small"
-                                  color="primary"
-                                  aria-label={`Download ${generatedFilename}`}
-                                  rel="noopener noreferrer"
-                                >
-                                  <FileDownloadTwoToneIcon fontSize="small" />
-                                </IconButton>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    aria-label={`Download ${generatedFilename}`}
+                                    disabled={downloadingResume}
+                                    onClick={async () => {
+                                      setDownloadingResume(true);
+                                      try {
+                                        await downloadResumePdf(generatedFilename);
+                                        notify(`Downloaded ${generatedFilename}`, {
+                                          variant: 'success'
+                                        });
+                                      } catch (err) {
+                                        notify(err.message || 'Download failed', {
+                                          variant: 'error'
+                                        });
+                                      } finally {
+                                        setDownloadingResume(false);
+                                      }
+                                    }}
+                                  >
+                                    <FileDownloadTwoToneIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
                               </Tooltip>
                             ) : null}
                             <Tooltip title="Regenerate resume PDF">

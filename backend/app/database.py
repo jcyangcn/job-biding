@@ -962,8 +962,12 @@ def migrate_linkedin_created_at_column() -> None:
 
 
 def migrate_skills_columns() -> None:
+    migration_name = "skills_weight_nullable_text_fields_v1"
     with engine.begin() as conn:
-        table_exists = conn.execute(
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        skills_exists = conn.execute(
             text(
                 """
                 SELECT 1
@@ -972,7 +976,8 @@ def migrate_skills_columns() -> None:
                 """
             )
         ).scalar()
-        if not table_exists:
+        if not skills_exists:
+            _mark_schema_migration_applied(conn, migration_name)
             return
 
         weight_nullable = conn.execute(
@@ -1002,10 +1007,43 @@ def migrate_skills_columns() -> None:
                 ),
                 {"column_name": column_name},
             ).scalar()
-            if data_type and data_type != "text":
+            if data_type and data_type.lower() != "text":
                 conn.execute(
                     text(f"ALTER TABLE skills ALTER COLUMN {column_name} TYPE TEXT")
                 )
+
+        _mark_schema_migration_applied(conn, migration_name)
+
+
+def migrate_companies_table() -> None:
+    migration_name = "companies_table_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS companies (
+                    id SERIAL PRIMARY KEY,
+                    company VARCHAR(255) NOT NULL,
+                    url VARCHAR(1000) NOT NULL DEFAULT '',
+                    job_description TEXT NOT NULL DEFAULT '',
+                    job_vector JSONB NOT NULL DEFAULT '[]',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_companies_company
+                ON companies (company)
+                """
+            )
+        )
+        _mark_schema_migration_applied(conn, migration_name)
 
 
 def migrate_job_application_job_vector() -> None:
@@ -1141,6 +1179,7 @@ def init_db() -> None:
     migrate_linkedin_country_column()
     migrate_linkedin_created_at_column()
     migrate_skills_columns()
+    migrate_companies_table()
     with SessionLocal() as db:
         seed_default_users(db)
         seed_test_identity_profile(db)

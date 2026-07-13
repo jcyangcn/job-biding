@@ -258,3 +258,20 @@ class Skill(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class Company(Base):
+    __tablename__ = "companies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company: Mapped[str] = mapped_column(String(255), nullable=False)
+    url: Mapped[str] = mapped_column(String(1000), nullable=False, default="", server_default=text("''"))
+    job_description: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default=text("''"))
+    job_vector: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

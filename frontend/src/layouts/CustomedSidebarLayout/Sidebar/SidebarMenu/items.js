@@ -42,6 +42,10 @@ const menuItems = [
           {
             name: 'Skill Management',
             link: '/applications/skill-management'
+          },
+          {
+            name: 'Company Management',
+            link: '/applications/company-management'
           }
         ]
       }

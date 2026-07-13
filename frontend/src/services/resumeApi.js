@@ -82,32 +82,62 @@ async function readErrorDetail(res) {
   return detail;
 }
 
-let resumeDownloadFrame = null;
-
-export function triggerResumeDownload(filename) {
-  const url = buildResumeDownloadUrl(filename);
-
-  if (resumeDownloadFrame) {
-    resumeDownloadFrame.remove();
-    resumeDownloadFrame = null;
-  }
-
-  resumeDownloadFrame = document.createElement('iframe');
-  resumeDownloadFrame.style.display = 'none';
-  resumeDownloadFrame.setAttribute('aria-hidden', 'true');
-  resumeDownloadFrame.src = url;
-  document.body.appendChild(resumeDownloadFrame);
-
-  window.setTimeout(() => {
-    if (resumeDownloadFrame) {
-      resumeDownloadFrame.remove();
-      resumeDownloadFrame = null;
+function parseContentDispositionFilename(headerValue) {
+  if (!headerValue) return null;
+  const utfMatch = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) {
+    try {
+      return decodeURIComponent(utfMatch[1]);
+    } catch {
+      return utfMatch[1];
     }
-  }, 60_000);
+  }
+  const plainMatch = headerValue.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] || null;
 }
 
-export function downloadResumePdf(filename) {
-  triggerResumeDownload(filename);
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = sanitizePdfFilename(filename);
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function fetchResumePdfBlob(filename, { inline = false } = {}) {
+  const safeName = sanitizePdfFilename(filename);
+  const url = inline ? getResumeInlineUrl(safeName) : buildResumeDownloadUrl(safeName);
+  const response = await fetch(url, { headers: authHeaders() });
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response));
+  }
+
+  const blob = await response.blob();
+  const pdfBlob =
+    blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
+  const resolvedName =
+    sanitizePdfFilename(
+      parseContentDispositionFilename(response.headers.get('Content-Disposition')) || safeName
+    );
+
+  return { blob: pdfBlob, filename: resolvedName };
+}
+
+export async function downloadResumePdf(filename) {
+  const { blob, filename: resolvedName } = await fetchResumePdfBlob(filename);
+  downloadBlob(blob, resolvedName);
+  return resolvedName;
+}
+
+/** @deprecated Prefer downloadResumePdf — kept for callers expecting fire-and-forget. */
+export function triggerResumeDownload(filename) {
+  downloadResumePdf(filename).catch(() => {
+    /* caller may not await; errors surface when using downloadResumePdf */
+  });
 }
 
 export async function loadDefaultJd() {
@@ -189,7 +219,7 @@ export async function generateResumePdf(body) {
 
   const meta = await res.json();
   const filename = sanitizePdfFilename(meta.filename);
-  triggerResumeDownload(filename);
+  await downloadResumePdf(filename);
 
   const generationId =
     meta.generation_id != null && meta.generation_id !== ''
@@ -200,5 +230,48 @@ export async function generateResumePdf(body) {
     filename,
     generationId,
     download: () => downloadResumePdf(filename)
+  };
+}
+
+export async function matchBestResume({ profileId, jobVector }) {
+  const res = await fetch(`${getApiBase()}/api/resumes/match-best`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      profile_id: Number(profileId),
+      job_vector: Array.isArray(jobVector) ? jobVector : []
+    })
+  });
+
+  if (!res.ok) {
+    throw new Error(await readErrorDetail(res));
+  }
+
+  const generationIdHeader = res.headers.get('X-Generation-Id');
+  const scoreHeader = res.headers.get('X-Match-Score');
+  const profileIdHeader = res.headers.get('X-Profile-Id');
+  const filename =
+    sanitizePdfFilename(
+      parseContentDispositionFilename(res.headers.get('Content-Disposition')) ||
+        'resume.pdf'
+    );
+
+  const blob = await res.blob();
+  const pdfBlob =
+    blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
+  downloadBlob(pdfBlob, filename);
+
+  return {
+    filename,
+    generationId:
+      generationIdHeader != null && generationIdHeader !== ''
+        ? Number(generationIdHeader)
+        : null,
+    score: scoreHeader != null && scoreHeader !== '' ? Number(scoreHeader) : null,
+    profileId:
+      profileIdHeader != null && profileIdHeader !== ''
+        ? Number(profileIdHeader)
+        : Number(profileId),
+    download: () => downloadBlob(pdfBlob, filename)
   };
 }

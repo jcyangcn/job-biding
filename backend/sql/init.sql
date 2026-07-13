@@ -158,3 +158,14 @@ CREATE TABLE IF NOT EXISTS skills (
 
 CREATE INDEX IF NOT EXISTS idx_skills_role ON skills (role);
 CREATE INDEX IF NOT EXISTS idx_skills_field ON skills (field);
+
+CREATE TABLE IF NOT EXISTS companies (
+    id SERIAL PRIMARY KEY,
+    company VARCHAR(255) NOT NULL,
+    url VARCHAR(1000) NOT NULL DEFAULT '',
+    job_description TEXT NOT NULL DEFAULT '',
+    job_vector JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_companies_company ON companies (company);
