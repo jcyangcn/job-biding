@@ -1,7 +1,9 @@
 import PropTypes from 'prop-types';
-import { Grid } from '@mui/material';
+import { Grid, Link } from '@mui/material';
+import BusinessTwoToneIcon from '@mui/icons-material/BusinessTwoTone';
 import CalendarTodayTwoToneIcon from '@mui/icons-material/CalendarTodayTwoTone';
 import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
+import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import PersonTwoToneIcon from '@mui/icons-material/PersonTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
@@ -16,6 +18,14 @@ function profileLabel(generation) {
   if (!generation) return '—';
   if (generation.profile_label) return generation.profile_label;
   if (generation.profile_id != null) return `Profile #${generation.profile_id}`;
+  return '—';
+}
+
+function jobPostLabel(generation) {
+  if (!generation) return '—';
+  const parts = [generation.company, generation.role].filter(Boolean);
+  if (parts.length) return parts.join(' · ');
+  if (generation.post_id != null) return `Post #${generation.post_id}`;
   return '—';
 }
 
@@ -64,16 +74,42 @@ function ResumeGenerationDetailDialog({ open, generation, onClose }) {
   const vectorText = Array.isArray(generation.resume_vector)
     ? generation.resume_vector.join(', ')
     : '';
+  const hasJobUrl = Boolean(generation.url?.trim());
 
   return (
     <DetailDialog open={open} onClose={onClose} title={title} caption={caption}>
       <Grid container spacing={2}>
         <DetailField label="Candidate" value={profileLabel(generation)} icon={PersonTwoToneIcon} />
         <DetailField
+          label="Job post"
+          value={jobPostLabel(generation)}
+          icon={BusinessTwoToneIcon}
+        />
+        <DetailField
+          label="Post ID"
+          value={generation.post_id != null ? String(generation.post_id) : '—'}
+          icon={WorkTwoToneIcon}
+        />
+        <DetailField
           label="Created"
           value={formatDetailDate(generation.created_at) || '—'}
           icon={CalendarTodayTwoToneIcon}
         />
+        <DetailField label="Job URL" icon={LinkTwoToneIcon} xs={12} sm={12}>
+          {hasJobUrl ? (
+            <Link
+              href={generation.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="hover"
+              sx={{ wordBreak: 'break-all', display: 'inline-block', mt: 0.5 }}
+            >
+              {generation.url}
+            </Link>
+          ) : (
+            '—'
+          )}
+        </DetailField>
         <DetailField
           label="PDF"
           value={generation.pdf_path || '—'}
@@ -91,10 +127,10 @@ function ResumeGenerationDetailDialog({ open, generation, onClose }) {
       </Grid>
 
       <DetailTextSection
-        title="Job details"
+        title="Job description"
         icon={DescriptionTwoToneIcon}
-        text={generation.job_details}
-        emptyText="No job details provided."
+        text={generation.job_description}
+        emptyText="No job description provided."
       />
 
       <DetailTextSection

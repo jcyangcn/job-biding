@@ -90,3 +90,65 @@ export function deleteJobApplication(applicationId) {
     return response.json();
   });
 }
+
+function authHeadersWithoutContentType() {
+  const token = getStoredAccessToken();
+  const headers = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export function uploadApplicationScreenshot(applicationId, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return fetch(`${getApiBase()}/api/job-applications/${applicationId}/screenshot`, {
+    method: 'POST',
+    headers: authHeadersWithoutContentType(),
+    body: formData
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
+export function deleteApplicationScreenshot(applicationId) {
+  return fetch(`${getApiBase()}/api/job-applications/${applicationId}/screenshot`, {
+    method: 'DELETE',
+    headers: authHeaders()
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
+export function fetchApplicationScreenshotBlob(applicationId, filename) {
+  return fetch(
+    `${getApiBase()}/api/job-applications/${applicationId}/screenshot/${encodeURIComponent(filename)}`,
+    {
+      headers: authHeadersWithoutContentType()
+    }
+  ).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.blob();
+  });
+}
+
+export async function persistApplicationScreenshotChanges(
+  applicationId,
+  { pendingFile, removeExisting }
+) {
+  if (removeExisting) {
+    await deleteApplicationScreenshot(applicationId);
+  }
+  if (pendingFile) {
+    await uploadApplicationScreenshot(applicationId, pendingFile);
+  }
+}

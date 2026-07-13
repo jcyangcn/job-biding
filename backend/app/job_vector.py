@@ -31,6 +31,18 @@ def build_job_vector(job_description: str, keywords: list[str]) -> list[float]:
     return [mention_score(count_mentions(job_description, keyword)) for keyword in keywords]
 
 
+def build_job_vector_weighted(
+    job_description: str,
+    entries: list[tuple[str, float]],
+) -> list[float]:
+    scores: list[float] = []
+    for keyword, weight in entries:
+        score = mention_score(count_mentions(job_description, keyword))
+        multiplier = float(weight if weight is not None else 1.0)
+        scores.append(score * multiplier)
+    return scores
+
+
 def _entry_to_keyword(entry: Any) -> str:
     if entry is None:
         return ""
@@ -61,6 +73,62 @@ def _extract_items_by_regex(text: str) -> list[str]:
         for value in re.findall(r'\bitem\s*:\s*"([^"]+)"', text, flags=re.IGNORECASE)
         if value.strip()
     ]
+
+
+def parse_keyword_weight_entries(raw: Any, *, default_weight: float = 1.0) -> list[tuple[str, float]]:
+    """Normalize legacy keyword payloads into (keyword, weight) pairs."""
+    if raw is None:
+        return []
+
+    if isinstance(raw, list):
+        entries: list[tuple[str, float]] = []
+        for item in raw:
+            if isinstance(item, dict):
+                keyword = _entry_to_keyword(item)
+                if not keyword:
+                    continue
+                weight_raw = item.get("weight")
+                weight = (
+                    default_weight
+                    if weight_raw is None
+                    else float(weight_raw)
+                )
+                entries.append((keyword, weight))
+            else:
+                keyword = _entry_to_keyword(item)
+                if keyword:
+                    entries.append((keyword, default_weight))
+        return entries
+
+    if isinstance(raw, dict):
+        nested = raw.get("items") or raw.get("keywords")
+        if isinstance(nested, list):
+            return parse_keyword_weight_entries(nested, default_weight=default_weight)
+        keyword = _entry_to_keyword(raw)
+        return [(keyword, default_weight)] if keyword else []
+
+    text = str(raw).strip()
+    if not text:
+        return []
+
+    try:
+        return parse_keyword_weight_entries(json.loads(text), default_weight=default_weight)
+    except json.JSONDecodeError:
+        pass
+
+    try:
+        return parse_keyword_weight_entries(
+            json.loads(_normalize_keyword_json_text(text)),
+            default_weight=default_weight,
+        )
+    except json.JSONDecodeError:
+        pass
+
+    from_regex = _extract_items_by_regex(text)
+    if from_regex:
+        return [(value, default_weight) for value in from_regex]
+
+    return [(text, default_weight)]
 
 
 def parse_keyword_entries(raw: Any) -> list[str]:

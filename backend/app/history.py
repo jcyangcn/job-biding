@@ -3,9 +3,11 @@ from pathlib import Path
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.db_models import JobIdentity, JobProfile, ResumeGeneration
-from app.job_vector import build_job_vector
-from app.models import ResumeContent
+from app.application_service import get_application
+from app.db_models import JobIdentity, JobPost, JobProfile, ResumeGeneration
+from app.job_post_service import create_job_post, get_job_post
+from app.job_vector import build_job_vector_weighted
+from app.models import JobPostCreateRequest, ResumeContent
 from app.pagination import (
     normalize_page_params,
     page_dict,
@@ -13,7 +15,7 @@ from app.pagination import (
     parse_optional_date,
     resolve_sort,
 )
-from app.skill_service import list_skill_keywords
+from app.skill_service import list_skill_vector_entries
 
 
 def build_resume_content_payload(content: ResumeContent) -> dict:
@@ -66,8 +68,8 @@ def build_resume_vector(
     resume_content: dict,
     role: str | None = None,
 ) -> list[float]:
-    keywords = list_skill_keywords(db, role=role)
-    return build_job_vector(resume_content_to_match_text(resume_content), keywords)
+    entries = list_skill_vector_entries(db, role=role)
+    return build_job_vector_weighted(resume_content_to_match_text(resume_content), entries)
 
 
 def vector_dot_product(job_vector: list[float], resume_vector: list[float]) -> float:
@@ -142,6 +144,60 @@ def match_best_resume_for_profile(
     return best_row, best_score, scored
 
 
+def find_or_create_job_post_by_description(
+    db: Session,
+    job_description: str,
+    *,
+    company: str = "Resume generation",
+    role: str = "",
+    url: str = "",
+) -> JobPost:
+    jd = (job_description or "").strip()
+    existing = db.scalar(
+        select(JobPost)
+        .where(JobPost.job_description == jd)
+        .order_by(JobPost.id.asc())
+        .limit(1)
+    )
+    if existing:
+        return existing
+
+    return create_job_post(
+        db,
+        JobPostCreateRequest(
+            company=company,
+            role=role,
+            url=url,
+            job_description=jd,
+        ),
+    )
+
+
+def resolve_resume_generation_post(
+    db: Session,
+    *,
+    job_description: str,
+    post_id: int | None = None,
+    application_id: int | None = None,
+) -> JobPost:
+    if post_id is not None:
+        post = get_job_post(db, post_id)
+        if not post:
+            raise ValueError("Job post not found")
+        return post
+
+    if application_id is not None:
+        application = get_application(db, application_id)
+        if not application:
+            raise ValueError("Application not found")
+        post = get_job_post(db, application.post_id)
+        if not post:
+            raise ValueError("Linked job post not found")
+        return post
+
+    return find_or_create_job_post_by_description(db, job_description)
+
+
 def resume_generation_to_response(db: Session, row: ResumeGeneration) -> dict:
     profile_label = ""
     if row.profile_id is not None:
@@ -154,9 +210,15 @@ def resume_generation_to_response(db: Session, row: ResumeGeneration) -> dict:
             else:
                 profile_label = profile.email or f"Profile #{profile.id}"
 
+    post = row.job_post or db.get(JobPost, row.post_id)
+
     return {
         "id": row.id,
-        "job_details": row.job_details,
+        "post_id": row.post_id,
+        "company": (post.company if post else "") or "",
+        "role": (post.role if post else "") or "",
+        "url": (post.url if post else "") or "",
+        "job_description": (post.job_description if post else "") or "",
         "profile_id": row.profile_id,
         "profile_label": profile_label,
         "resume_content": row.resume_content or {},
@@ -169,7 +231,7 @@ def resume_generation_to_response(db: Session, row: ResumeGeneration) -> dict:
 def save_resume_generation(
     db: Session,
     *,
-    job_details: str,
+    post_id: int,
     profile_id: int | None,
     resume_content: dict,
     resume_vector: list[float],
@@ -183,7 +245,7 @@ def save_resume_generation(
         path_str = pdf_path.as_posix()
 
     row = ResumeGeneration(
-        job_details=job_details,
+        post_id=post_id,
         profile_id=profile_id,
         resume_content=resume_content or {},
         resume_vector=list(resume_vector or []),
@@ -207,14 +269,17 @@ def list_resume_generations_page(
     sort_dir: str | None = None,
 ) -> dict:
     params = normalize_page_params(page, page_size)
-    query = select(ResumeGeneration)
+    query = select(ResumeGeneration).join(JobPost, ResumeGeneration.post_id == JobPost.id)
 
     search_text = (search or "").strip()
     if search_text:
         pattern = f"%{search_text}%"
         query = query.where(
             or_(
-                ResumeGeneration.job_details.ilike(pattern),
+                JobPost.company.ilike(pattern),
+                JobPost.role.ilike(pattern),
+                JobPost.url.ilike(pattern),
+                JobPost.job_description.ilike(pattern),
                 ResumeGeneration.pdf_path.ilike(pattern),
                 cast(ResumeGeneration.resume_content, String).ilike(pattern),
                 cast(ResumeGeneration.id, String).ilike(pattern),
@@ -230,7 +295,11 @@ def list_resume_generations_page(
 
     sort_map = {
         "id": ResumeGeneration.id,
-        "job_details": ResumeGeneration.job_details,
+        "post_id": ResumeGeneration.post_id,
+        "company": JobPost.company,
+        "role": JobPost.role,
+        "url": JobPost.url,
+        "job_description": JobPost.job_description,
         "pdf_path": ResumeGeneration.pdf_path,
         "created_at": ResumeGeneration.created_at,
         "profile_id": ResumeGeneration.profile_id,

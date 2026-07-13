@@ -85,6 +85,7 @@ class GenerateResumeRequest(BaseModel):
     profile_markdown: str | None = None
     profile_id: int | None = None
     application_id: int | None = None
+    post_id: int | None = None
     ai_provider: Literal["openai", "cursor", "auto"] | None = None
 
 
@@ -110,7 +111,11 @@ class MatchBestResumeResponse(BaseModel):
 
 class ResumeGenerationRecord(BaseModel):
     id: int
-    job_details: str
+    post_id: int
+    company: str = ""
+    role: str = ""
+    url: str = ""
+    job_description: str = ""
     profile_id: int | None = None
     profile_label: str = ""
     resume_content: dict = Field(default_factory=dict)
@@ -149,17 +154,28 @@ class UserResponse(BaseModel):
 
 
 class SkillCreateRequest(BaseModel):
-    role: str = Field(default="", max_length=255)
-    field: str = Field(default="")
-    keyword: str = Field(default="")
-    weight: float | None = Field(default=1.0, ge=0)
+    role: str = Field(min_length=1, max_length=255)
+    field: str = Field(min_length=1, max_length=255)
+    keyword: str = Field(min_length=1, max_length=255)
+    weight: float = Field(default=1.0, ge=0)
 
 
 class SkillUpdateRequest(BaseModel):
-    role: str | None = Field(default=None, max_length=255)
-    field: str | None = Field(default=None)
-    keyword: str | None = Field(default=None)
+    role: str | None = Field(default=None, min_length=1, max_length=255)
+    field: str | None = Field(default=None, min_length=1, max_length=255)
+    keyword: str | None = Field(default=None, min_length=1, max_length=255)
     weight: float | None = Field(default=None, ge=0)
+
+
+class SkillBulkItem(BaseModel):
+    field: str = Field(min_length=1, max_length=255)
+    keyword: str = Field(min_length=1, max_length=255)
+    weight: float = Field(default=1.0, ge=0)
+
+
+class SkillBulkReplaceRequest(BaseModel):
+    role: str = Field(min_length=1, max_length=255)
+    items: list[SkillBulkItem] = Field(min_length=1)
 
 
 class SkillResponse(BaseModel):
@@ -167,27 +183,28 @@ class SkillResponse(BaseModel):
     role: str
     field: str
     keyword: str
-    weight: float | None = 1.0
-    created_at: datetime
+    weight: float = 1.0
 
 
-class CompanyCreateRequest(BaseModel):
+class JobPostCreateRequest(BaseModel):
     company: str = Field(min_length=1, max_length=255)
+    role: str = Field(min_length=1, max_length=255)
     url: str = Field(default="", max_length=1000)
     job_description: str = Field(default="")
-    job_vector: list[float] = Field(default_factory=list)
 
 
-class CompanyUpdateRequest(BaseModel):
+class JobPostUpdateRequest(BaseModel):
     company: str | None = Field(default=None, min_length=1, max_length=255)
+    role: str | None = Field(default=None, max_length=255)
     url: str | None = Field(default=None, max_length=1000)
     job_description: str | None = Field(default=None)
     job_vector: list[float] | None = None
 
 
-class CompanyResponse(BaseModel):
+class JobPostResponse(BaseModel):
     id: int
     company: str
+    role: str
     url: str
     job_description: str
     job_vector: list[float] = Field(default_factory=list)
@@ -364,6 +381,7 @@ class JobApplicationCreateRequest(BaseModel):
     resume_online_link: str | None = Field(default=None, max_length=1000)
     applied: bool = False
     applied_at: datetime | None = None
+    success_link: str | None = Field(default=None, max_length=1000)
 
 
 class JobApplicationUpdateRequest(BaseModel):
@@ -376,11 +394,31 @@ class JobApplicationUpdateRequest(BaseModel):
     resume_online_link: str | None = Field(default=None, max_length=1000)
     applied: bool | None = None
     applied_at: datetime | None = None
+    success_link: str | None = Field(default=None, max_length=1000)
+
+
+class BatchAssignPostsRequest(BaseModel):
+    profile_id: int
+    post_ids: list[int] = Field(min_length=1)
+
+
+class BatchAssignPostsItem(BaseModel):
+    post_id: int
+    application_id: int | None = None
+    company: str = ""
+    role: str = ""
+    reason: str = ""
+
+
+class BatchAssignPostsResponse(BaseModel):
+    created: list[BatchAssignPostsItem]
+    skipped: list[BatchAssignPostsItem]
 
 
 class JobApplicationResponse(BaseModel):
     id: int
     profile_id: int
+    post_id: int
     profile_label: str
     bidder_username: str = ""
     bidder_name: str = ""
@@ -395,6 +433,8 @@ class JobApplicationResponse(BaseModel):
     resume_generation_status: str | None = None
     applied: bool
     applied_at: datetime | None = None
+    success_link: str | None = None
+    applied_screenshot: CitizenImageInfo | None = None
     created_at: datetime
 
 

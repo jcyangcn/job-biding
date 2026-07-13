@@ -7,14 +7,10 @@ import {
   Button,
   Chip,
   Dialog,
-  DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
-  FormControlLabel,
   IconButton,
   Stack,
-  Switch,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -25,16 +21,20 @@ import {
 import { format } from 'date-fns';
 import AutoAwesomeTwoToneIcon from '@mui/icons-material/AutoAwesomeTwoTone';
 import CloseIcon from '@mui/icons-material/Close';
-import CheckCircleTwoToneIcon from '@mui/icons-material/CheckCircleTwoTone';
 import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
-import HighlightOffTwoToneIcon from '@mui/icons-material/HighlightOffTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
+import ApplicationAppliedSection from './ApplicationAppliedSection';
 import ApplicationResumePdfDialog from './ApplicationResumePdfDialog';
-import { listJobApplications, updateJobApplication, getJobApplication } from 'src/services/jobApplicationApi';
+import {
+  getJobApplication,
+  listJobApplications,
+  persistApplicationScreenshotChanges,
+  updateJobApplication
+} from 'src/services/jobApplicationApi';
 import { listAllIdentities } from 'src/services/identityApi';
 import { listAllProfiles } from 'src/services/profileApi';
 import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
@@ -68,7 +68,8 @@ const EMPTY_FORM = {
   resume_generated_id: '',
   resume_online_link: '',
   applied: false,
-  applied_at: ''
+  applied_at: '',
+  success_link: ''
 };
 
 function ApplicationEditDialog({ open, application, onClose, onSaved }) {
@@ -101,8 +102,10 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [appliedConfirmOpen, setAppliedConfirmOpen] = useState(false);
   const [companyDuplicate, setCompanyDuplicate] = useState(false);
+  const [pendingScreenshotFile, setPendingScreenshotFile] = useState(null);
+  const [existingScreenshot, setExistingScreenshot] = useState(null);
+  const [removeExistingScreenshot, setRemoveExistingScreenshot] = useState(false);
   const [existingApplications, setExistingApplications] = useState([]);
   const [resumeSource, setResumeSource] = useState('generated');
   const [resumePdfFilename, setResumePdfFilename] = useState('');
@@ -168,7 +171,9 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       setSubmitting(false);
       setLoading(true);
       setCompanyDuplicate(false);
-      setAppliedConfirmOpen(false);
+      setPendingScreenshotFile(null);
+      setExistingScreenshot(null);
+      setRemoveExistingScreenshot(false);
 
       const nextSource = application.resume_generated_id
         ? 'generated'
@@ -188,7 +193,8 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         resume_online_link: application.resume_online_link || '',
         applied: Boolean(application.applied),
         applied_at:
-          formatDateTimeValue(application.applied_at) || format(new Date(), 'yyyy-MM-dd HH:mm')
+          formatDateTimeValue(application.applied_at) || format(new Date(), 'yyyy-MM-dd HH:mm'),
+        success_link: application.success_link || ''
       });
 
       try {
@@ -226,8 +232,12 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
           applied: Boolean(fullApplication.applied),
           applied_at:
             formatDateTimeValue(fullApplication.applied_at) ||
-            format(new Date(), 'yyyy-MM-dd HH:mm')
+            format(new Date(), 'yyyy-MM-dd HH:mm'),
+          success_link: fullApplication.success_link || ''
         });
+        setExistingScreenshot(fullApplication.applied_screenshot || null);
+        setRemoveExistingScreenshot(false);
+        setPendingScreenshotFile(null);
         setResumePdfFilename(
           fullApplication.resume_pdf_filename || application.resume_pdf_filename || ''
         );
@@ -318,43 +328,8 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     }
   };
 
-  const handleAppliedChange = (event) => {
-    const checked = event.target.checked;
-    if (checked) {
-      if (form.applied) return;
-      setAppliedConfirmOpen(true);
-      return;
-    }
-
-    setForm((current) => ({
-      ...current,
-      applied: false
-    }));
-  };
-
-  const handleAppliedSectionClick = () => {
-    if (loading) return;
-    if (form.applied) {
-      setForm((current) => ({
-        ...current,
-        applied: false
-      }));
-      return;
-    }
-    setAppliedConfirmOpen(true);
-  };
-
-  const handleConfirmApplied = () => {
-    setForm((current) => ({
-      ...current,
-      applied: true,
-      applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
-    }));
-    setAppliedConfirmOpen(false);
-  };
-
-  const handleCancelApplied = () => {
-    setAppliedConfirmOpen(false);
+  const handleAppliedSectionChange = (updates) => {
+    setForm((current) => ({ ...current, ...updates }));
   };
 
   const handleResumeSourceChange = (_event, value) => {
@@ -398,6 +373,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         job_vector: buildJobVector(form.job_description.trim(), skillKeywords),
         resume_generated_id: form.resume_generated_id ? Number(form.resume_generated_id) : null,
         resume_online_link: null,
+        success_link: form.success_link.trim() ? form.success_link.trim() : null,
         applied: form.applied,
         applied_at: form.applied ? appliedAtToIso(form.applied_at) : null
       });
@@ -487,9 +463,18 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
           resumeSource === 'online' && form.resume_online_link.trim()
             ? form.resume_online_link.trim()
             : null,
+        success_link: form.success_link.trim() ? form.success_link.trim() : null,
         applied: form.applied,
         applied_at: appliedAtValue
       });
+
+      if (pendingScreenshotFile || removeExistingScreenshot) {
+        await persistApplicationScreenshotChanges(application.id, {
+          pendingFile: pendingScreenshotFile,
+          removeExisting: removeExistingScreenshot
+        });
+      }
+
       notify('Application updated', { variant: 'success' });
       onSaved();
       onClose();
@@ -801,149 +786,43 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
 
                 <Box sx={{ flex: 1, minHeight: 0 }} />
 
-                <Stack spacing={1.25} sx={{ flexShrink: 0 }}>
-                  <Box
-                    role="button"
-                    tabIndex={loading ? -1 : 0}
-                    aria-pressed={form.applied}
-                    onClick={handleAppliedSectionClick}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        handleAppliedSectionClick();
-                      }
-                    }}
-                    sx={{
-                      flexShrink: 0,
-                      width: '100%',
-                      minHeight: 56,
-                      px: 1.75,
-                      py: 1.1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      borderRadius: theme.general.borderRadiusSm || theme.general.borderRadius,
-                      bgcolor: form.applied
-                        ? alpha(theme.palette.success.main, 0.12)
-                        : alpha(theme.palette.error.main, 0.1),
-                      border: `2px solid ${
-                        form.applied ? theme.palette.success.main : theme.palette.error.main
-                      }`,
-                      cursor: loading ? 'default' : 'pointer',
-                      userSelect: 'none',
-                      transition: theme.transitions.create(['background-color', 'border-color']),
-                      '&:hover': loading
-                        ? undefined
-                        : {
-                            bgcolor: form.applied
-                              ? alpha(theme.palette.success.main, 0.18)
-                              : alpha(theme.palette.error.main, 0.16)
-                          }
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      alignItems="center"
-                      justifyContent="space-between"
-                      spacing={1.5}
-                      width="100%"
-                    >
-                      <Stack direction="row" alignItems="center" spacing={1.25} minWidth={0}>
-                        {form.applied ? (
-                          <CheckCircleTwoToneIcon
-                            sx={{ fontSize: 28, color: 'success.main', flexShrink: 0 }}
-                          />
-                        ) : (
-                          <HighlightOffTwoToneIcon
-                            sx={{ fontSize: 28, color: 'error.main', flexShrink: 0 }}
-                          />
-                        )}
-                        <Box minWidth={0}>
-                          <Typography
-                            variant="h6"
-                            fontWeight={800}
-                            color={form.applied ? 'success.main' : 'error.main'}
-                            lineHeight={1.2}
-                          >
-                            {form.applied ? 'Applied' : 'Not applied'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {form.applied
-                              ? 'This application has been submitted to the company.'
-                              : 'Click to mark as applied after submitting to the company.'}
-                          </Typography>
-                        </Box>
-                      </Stack>
+                <ApplicationAppliedSection
+                  applied={form.applied}
+                  successLink={form.success_link}
+                  appliedAt={form.applied_at}
+                  onChange={handleAppliedSectionChange}
+                  pendingScreenshotFile={pendingScreenshotFile}
+                  onPendingScreenshotChange={setPendingScreenshotFile}
+                  existingScreenshot={existingScreenshot}
+                  removeExistingScreenshot={removeExistingScreenshot}
+                  onRemoveExistingScreenshot={() => setRemoveExistingScreenshot(true)}
+                  applicationId={application?.id}
+                  disabled={loading || submitting}
+                />
 
-                      <FormControlLabel
-                        onClick={(event) => event.stopPropagation()}
-                        control={
-                          <Switch
-                            checked={form.applied}
-                            onChange={handleAppliedChange}
-                            color={form.applied ? 'success' : 'error'}
-                            disabled={loading}
-                          />
-                        }
-                        label={
-                          <Typography variant="body2" fontWeight={700}>
-                            {form.applied ? 'On' : 'Off'}
-                          </Typography>
-                        }
-                        sx={{
-                          m: 0,
-                          flexShrink: 0,
-                          pl: 1,
-                          pr: 1.25,
-                          py: 0.5,
-                          borderRadius: 1,
-                          bgcolor: alpha(
-                            form.applied
-                              ? theme.palette.success.main
-                              : theme.palette.error.main,
-                            0.08
-                          )
-                        }}
-                      />
-                    </Stack>
-                  </Box>
-
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    alignItems="center"
-                    justifyContent="flex-end"
-                    sx={{ flexShrink: 0 }}
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  justifyContent="flex-end"
+                  sx={{ flexShrink: 0 }}
+                >
+                  <Button
+                    variant="contained"
+                    startIcon={<SaveTwoToneIcon />}
+                    onClick={handleSubmit}
+                    disabled={busy}
                   >
-                    <Button
-                      variant="contained"
-                      startIcon={<SaveTwoToneIcon />}
-                      onClick={handleSubmit}
-                      disabled={busy}
-                    >
-                      {submitting ? 'Saving…' : 'Save'}
-                    </Button>
-                    <Button onClick={handleDialogClose} disabled={submitting}>
-                      Cancel
-                    </Button>
-                  </Stack>
+                    {submitting ? 'Saving…' : 'Save'}
+                  </Button>
+                  <Button onClick={handleDialogClose} disabled={submitting}>
+                    Cancel
+                  </Button>
                 </Stack>
               </Stack>
             </Box>
           </Box>
         </DialogContent>
-      </Dialog>
-
-      <Dialog open={appliedConfirmOpen} onClose={handleCancelApplied} maxWidth="xs" fullWidth>
-        <DialogTitle>Confirm applied</DialogTitle>
-        <DialogContent>
-          <DialogContentText>Are you sure applied correctly?</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelApplied}>Cancel</Button>
-          <Button onClick={handleConfirmApplied} variant="contained" autoFocus>
-            Yes, applied
-          </Button>
-        </DialogActions>
       </Dialog>
 
       <ApplicationResumePdfDialog

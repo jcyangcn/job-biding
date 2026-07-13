@@ -1,20 +1,29 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, defer
+from sqlalchemy.orm import Session, defer, joinedload
 
-from app.db_models import JobApplication, JobIdentity, JobProfile, ResumeGeneration, User
-from app.models import JobApplicationCreateRequest, JobApplicationUpdateRequest
-from app.job_vector import build_job_vector
+from app.config import APPLICATION_SCREENSHOT_DIR, REPO_ROOT
+from app.db_models import JobApplication, JobIdentity, JobPost, JobProfile, ResumeGeneration, User
+from app.models import (
+    CitizenImageInfo,
+    JobApplicationCreateRequest,
+    JobApplicationUpdateRequest,
+)
+from app.job_vector import build_job_vector_weighted
+from app.job_post_service import get_job_post
 from app.profile_service import (
     _format_identity_label,
     get_profile,
     profile_access_filter,
     user_can_access_profile,
 )
-from app.skill_service import list_skill_keywords
+from app.skill_service import list_skill_vector_entries
 from app.user_roles import UserRole
+
+_APPLICATION_SCREENSHOT_STORAGE_PREFIX = "/storage/uploads/application screenshot/"
 
 
 def _resolve_application_creator(db: Session, record: JobApplication) -> User | None:
@@ -23,6 +32,51 @@ def _resolve_application_creator(db: Session, record: JobApplication) -> User | 
     if user_id is None:
         return None
     return db.get(User, user_id)
+
+
+def _load_job_post(db: Session, record: JobApplication) -> JobPost:
+    post = record.job_post
+    if post is None:
+        post = db.get(JobPost, record.post_id)
+    if post is None:
+        raise ValueError("Job post not found")
+    return post
+
+
+def _application_load_options(*, include_job_description: bool):
+    loader = joinedload(JobApplication.job_post)
+    if not include_job_description:
+        loader = loader.options(defer(JobPost.job_description))
+    return loader
+
+
+def _parse_application_screenshot(raw: dict | None) -> CitizenImageInfo | None:
+    if not raw:
+        return None
+    image = CitizenImageInfo.model_validate(raw)
+    if image.path:
+        return image
+    if image.filename:
+        return image.model_copy(
+            update={"path": f"{_APPLICATION_SCREENSHOT_STORAGE_PREFIX}{image.filename}"}
+        )
+    return image
+
+
+def _resolve_application_screenshot_path(image: CitizenImageInfo) -> Path:
+    if image.path:
+        relative = image.path.lstrip("/\\")
+        if relative.startswith("storage/"):
+            relative = relative[len("storage/") :]
+        candidate = (REPO_ROOT / "storage" / relative).resolve()
+        if candidate.is_file():
+            return candidate
+    return (APPLICATION_SCREENSHOT_DIR / Path(image.filename).name).resolve()
+
+
+def _build_application_screenshot_filename(application_id: int, original_name: str) -> str:
+    ext = Path(original_name or "image.png").suffix or ".png"
+    return f"app-{application_id}-{uuid4().hex[:10]}{ext}"
 
 
 def application_to_response(
@@ -47,23 +101,29 @@ def application_to_response(
     bidder_username = creator.username if creator else ""
     bidder_name = creator.full_name if creator else ""
 
+    post = _load_job_post(db, record)
+    screenshot = _parse_application_screenshot(record.applied_screenshot)
+
     return {
         "id": record.id,
         "profile_id": record.profile_id,
+        "post_id": record.post_id,
         "profile_label": profile_label,
         "bidder_username": bidder_username,
         "bidder_name": bidder_name,
-        "role": record.role,
-        "company": record.company,
-        "link": record.link,
-        "job_description": record.job_description if include_job_description else "",
-        "job_vector": list(record.job_vector or []),
+        "role": post.role or "",
+        "company": post.company or "",
+        "link": post.url or "",
+        "job_description": post.job_description if include_job_description else "",
+        "job_vector": list(post.job_vector or []),
         "resume_generated_id": record.resume_generated_id,
         "resume_pdf_filename": resume_pdf_filename,
         "resume_online_link": record.resume_online_link,
         "resume_generation_status": record.resume_generation_status,
         "applied": record.applied,
         "applied_at": record.applied_at,
+        "success_link": record.success_link,
+        "applied_screenshot": screenshot.model_dump(mode="json") if screenshot else None,
         "created_at": record.created_at,
     }
 
@@ -111,6 +171,21 @@ def _resolve_applied_fields(applied: bool, applied_at: datetime | None) -> datet
     return None
 
 
+def _resolve_applied_state(
+    *,
+    applied: bool,
+    applied_at: datetime | None,
+    success_link: str | None,
+    has_screenshot: bool,
+) -> tuple[bool, datetime | None]:
+    has_link = bool(success_link and success_link.strip())
+    if has_link or has_screenshot:
+        return True, applied_at or datetime.now(timezone.utc)
+    if applied:
+        return True, _resolve_applied_fields(True, applied_at)
+    return False, None
+
+
 def _resolve_job_vector(
     db: Session,
     *,
@@ -118,10 +193,47 @@ def _resolve_job_vector(
     role: str | None,
     provided: list[float] | None,
 ) -> list[float]:
-    keywords = list_skill_keywords(db, role=role)
-    if provided is not None and len(provided) == len(keywords):
+    entries = list_skill_vector_entries(db, role=role)
+    if provided is not None and len(provided) == len(entries):
         return [float(value) for value in provided]
-    return build_job_vector(job_description, keywords)
+    return build_job_vector_weighted(job_description, entries)
+
+
+def _sync_job_post(
+    db: Session,
+    post: JobPost | None,
+    *,
+    role: str,
+    company: str,
+    link: str,
+    job_description: str,
+    skill_role: str,
+    provided_vector: list[float] | None,
+) -> JobPost:
+    job_vector = _resolve_job_vector(
+        db,
+        job_description=job_description,
+        role=skill_role,
+        provided=provided_vector,
+    )
+    if post is None:
+        post = JobPost(
+            company=company.strip(),
+            role=role.strip(),
+            url=link.strip(),
+            job_description=job_description.strip(),
+            job_vector=job_vector,
+        )
+        db.add(post)
+        db.flush()
+        return post
+
+    post.company = company.strip()
+    post.role = role.strip()
+    post.url = link.strip()
+    post.job_description = job_description.strip()
+    post.job_vector = job_vector
+    return post
 
 
 def create_application(
@@ -144,26 +256,35 @@ def create_application(
 
     job_description = data.job_description.strip()
     skill_role = (data.role or "").strip() or (profile.roles or "").strip()
-    job_vector = _resolve_job_vector(
+    post = _sync_job_post(
         db,
+        None,
+        role=data.role,
+        company=data.company,
+        link=data.link,
         job_description=job_description,
-        role=skill_role,
-        provided=data.job_vector,
+        skill_role=skill_role,
+        provided_vector=data.job_vector,
+    )
+
+    success_link = data.success_link.strip() if data.success_link else None
+    applied, applied_at = _resolve_applied_state(
+        applied=data.applied,
+        applied_at=data.applied_at,
+        success_link=success_link,
+        has_screenshot=False,
     )
 
     record = JobApplication(
         profile_id=data.profile_id,
-        role=data.role.strip(),
-        company=data.company.strip(),
-        link=data.link.strip(),
-        job_description=job_description,
-        job_vector=job_vector,
+        post_id=post.id,
         resume_generated_id=data.resume_generated_id,
         resume_online_link=(
             data.resume_online_link.strip() if data.resume_online_link else None
         ),
-        applied=data.applied,
-        applied_at=_resolve_applied_fields(data.applied, data.applied_at),
+        success_link=success_link,
+        applied=applied,
+        applied_at=applied_at,
         bidder_user_id=user.id,
         created_by_user_id=user.id,
     )
@@ -184,9 +305,11 @@ def list_applications_for_profile(
     if not user_can_access_profile(user, profile):
         raise PermissionError("Access denied")
 
-    query = select(JobApplication).where(JobApplication.profile_id == profile_id)
-    if not include_job_description:
-        query = query.options(defer(JobApplication.job_description))
+    query = (
+        select(JobApplication)
+        .where(JobApplication.profile_id == profile_id)
+        .options(_application_load_options(include_job_description=include_job_description))
+    )
     return list(db.scalars(query.order_by(JobApplication.id.desc())).all())
 
 
@@ -200,11 +323,11 @@ def list_applications_admin(
     if user.role != UserRole.admin:
         raise PermissionError("Access denied")
 
-    query = select(JobApplication)
+    query = select(JobApplication).options(
+        _application_load_options(include_job_description=include_job_description)
+    )
     if profile_id is not None:
         query = query.where(JobApplication.profile_id == profile_id)
-    if not include_job_description:
-        query = query.options(defer(JobApplication.job_description))
     return list(db.scalars(query.order_by(JobApplication.id.desc())).all())
 
 
@@ -215,9 +338,8 @@ def list_applications_for_user(
         select(JobApplication)
         .join(JobProfile, JobApplication.profile_id == JobProfile.id)
         .where(profile_access_filter(user.id))
+        .options(_application_load_options(include_job_description=include_job_description))
     )
-    if not include_job_description:
-        query = query.options(defer(JobApplication.job_description))
     return list(db.scalars(query.order_by(JobApplication.id.desc())).all())
 
 
@@ -244,28 +366,37 @@ def update_application(
         if not generation:
             raise ValueError("Resume generation not found")
 
-    record.role = data.role.strip()
-    record.company = data.company.strip()
-    record.link = data.link.strip()
-    record.job_description = data.job_description.strip()
+    post = _load_job_post(db, record)
     skill_role = (data.role or "").strip()
-    record.job_vector = _resolve_job_vector(
+    _sync_job_post(
         db,
-        job_description=record.job_description,
-        role=skill_role,
-        provided=data.job_vector,
+        post,
+        role=data.role,
+        company=data.company,
+        link=data.link,
+        job_description=data.job_description.strip(),
+        skill_role=skill_role,
+        provided_vector=data.job_vector,
     )
+
     record.resume_generated_id = data.resume_generated_id
     record.resume_online_link = (
         data.resume_online_link.strip() if data.resume_online_link else None
     )
-    if data.applied is not None:
-        record.applied = data.applied
-        if data.applied:
-            applied_at = data.applied_at if data.applied_at is not None else record.applied_at
-            record.applied_at = _resolve_applied_fields(True, applied_at)
-        else:
-            record.applied_at = None
+    record.success_link = data.success_link.strip() if data.success_link else None
+
+    has_screenshot = _parse_application_screenshot(record.applied_screenshot) is not None
+    applied = data.applied if data.applied is not None else record.applied
+    applied_at = data.applied_at if data.applied_at is not None else record.applied_at
+    applied, applied_at = _resolve_applied_state(
+        applied=applied,
+        applied_at=applied_at,
+        success_link=record.success_link,
+        has_screenshot=has_screenshot,
+    )
+    record.applied = applied
+    record.applied_at = applied_at
+
     db.commit()
     db.refresh(record)
     return record
@@ -318,8 +449,215 @@ def attach_generated_resume_to_application(
     record.resume_online_link = None
     record.resume_generation_status = "generated"
     if job_description is not None:
-        record.job_description = job_description.strip()
+        post = _load_job_post(db, record)
+        post.job_description = job_description.strip()
 
     db.commit()
     db.refresh(record)
     return record
+
+
+def set_application_screenshot(
+    db: Session,
+    record: JobApplication,
+    *,
+    original_name: str,
+    content: bytes,
+) -> JobApplication:
+    if not content:
+        raise ValueError("Empty file")
+    if len(content) > 10 * 1024 * 1024:
+        raise ValueError("Maximum file size is 10MB")
+
+    APPLICATION_SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    stored_name = _build_application_screenshot_filename(record.id, original_name)
+    target = APPLICATION_SCREENSHOT_DIR / stored_name
+    target.write_bytes(content)
+
+    record.applied_screenshot = CitizenImageInfo(
+        filename=stored_name,
+        original_name=original_name or stored_name,
+        uploaded_at=datetime.now(timezone.utc),
+        path=f"{_APPLICATION_SCREENSHOT_STORAGE_PREFIX}{stored_name}",
+    ).model_dump(mode="json")
+
+    applied, applied_at = _resolve_applied_state(
+        applied=record.applied,
+        applied_at=record.applied_at,
+        success_link=record.success_link,
+        has_screenshot=True,
+    )
+    record.applied = applied
+    record.applied_at = applied_at
+
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def remove_application_screenshot(db: Session, record: JobApplication) -> JobApplication:
+    image = _parse_application_screenshot(record.applied_screenshot)
+    if image:
+        path = _resolve_application_screenshot_path(image)
+        if path.is_file():
+            path.unlink(missing_ok=True)
+
+    record.applied_screenshot = None
+    applied, applied_at = _resolve_applied_state(
+        applied=False,
+        applied_at=None,
+        success_link=record.success_link,
+        has_screenshot=False,
+    )
+    record.applied = applied
+    record.applied_at = applied_at
+
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def resolve_application_screenshot_file(record: JobApplication) -> Path:
+    image = _parse_application_screenshot(record.applied_screenshot)
+    if not image:
+        raise ValueError("Screenshot not found")
+    path = _resolve_application_screenshot_path(image)
+    if not path.is_file():
+        raise ValueError("Screenshot file not found")
+    return path
+
+
+def _latest_resume_generation_for_post(
+    db: Session, *, profile_id: int, post_id: int
+) -> ResumeGeneration | None:
+    return db.scalar(
+        select(ResumeGeneration)
+        .where(
+            ResumeGeneration.profile_id == profile_id,
+            ResumeGeneration.post_id == post_id,
+        )
+        .order_by(ResumeGeneration.id.desc())
+        .limit(1)
+    )
+
+
+def _normalize_company_name(value: str | None) -> str:
+    return (value or "").strip().casefold()
+
+
+def _existing_company_names_for_profile(db: Session, profile_id: int) -> set[str]:
+    rows = db.scalars(
+        select(JobPost.company)
+        .join(JobApplication, JobApplication.post_id == JobPost.id)
+        .where(JobApplication.profile_id == profile_id)
+    ).all()
+    return {_normalize_company_name(company) for company in rows if _normalize_company_name(company)}
+
+
+def assign_posts_to_profile(
+    db: Session,
+    *,
+    profile_id: int,
+    post_ids: list[int],
+    user: User,
+) -> dict:
+    profile = get_profile(db, profile_id)
+    if not profile:
+        raise ValueError("Profile not found")
+    if not profile.is_active:
+        raise ValueError("Profile is not active")
+    if not user_can_access_profile(user, profile):
+        raise PermissionError("Access denied")
+
+    created: list[dict] = []
+    skipped: list[dict] = []
+    seen_post_ids: set[int] = set()
+    seen_company_names = _existing_company_names_for_profile(db, profile_id)
+
+    for post_id in post_ids:
+        if post_id in seen_post_ids:
+            skipped.append(
+                {
+                    "post_id": post_id,
+                    "application_id": None,
+                    "company": "",
+                    "role": "",
+                    "reason": "Duplicate post in request",
+                }
+            )
+            continue
+        seen_post_ids.add(post_id)
+
+        post = get_job_post(db, post_id)
+        if not post:
+            skipped.append(
+                {
+                    "post_id": post_id,
+                    "application_id": None,
+                    "company": "",
+                    "role": "",
+                    "reason": "Post not found",
+                }
+            )
+            continue
+
+        company_key = _normalize_company_name(post.company)
+        if company_key and company_key in seen_company_names:
+            skipped.append(
+                {
+                    "post_id": post.id,
+                    "application_id": None,
+                    "company": post.company or "",
+                    "role": post.role or "",
+                    "reason": "Application with this company already exists",
+                }
+            )
+            continue
+
+        existing = db.scalar(
+            select(JobApplication).where(
+                JobApplication.profile_id == profile_id,
+                JobApplication.post_id == post.id,
+            )
+        )
+        if existing:
+            skipped.append(
+                {
+                    "post_id": post.id,
+                    "application_id": existing.id,
+                    "company": post.company or "",
+                    "role": post.role or "",
+                    "reason": "Application already exists",
+                }
+            )
+            continue
+
+        generation = _latest_resume_generation_for_post(
+            db, profile_id=profile_id, post_id=post.id
+        )
+
+        record = JobApplication(
+            profile_id=profile_id,
+            post_id=post.id,
+            resume_generated_id=generation.id if generation else None,
+            applied=False,
+            applied_at=None,
+            bidder_user_id=user.id,
+            created_by_user_id=user.id,
+        )
+        db.add(record)
+        db.flush()
+        if company_key:
+            seen_company_names.add(company_key)
+        created.append(
+            {
+                "post_id": post.id,
+                "application_id": record.id,
+                "company": post.company or "",
+                "role": post.role or "",
+                "reason": "",
+            }
+        )
+
+    db.commit()
+    return {"created": created, "skipped": skipped}

@@ -97,7 +97,7 @@ put <hr/>
 
 ### Execution Requirement
 
-Generate resumes as PDF files in `storage/downloads/`.
+Generate resumes as PDF files in `storage/downloads/generated_resumes/`.
 
 Filename format: `{resume_profile_display_name}_{application_id_3_digits}{4_random_alphanumeric}.pdf`
 

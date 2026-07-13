@@ -34,6 +34,21 @@ function profileLabel(row) {
   return '—';
 }
 
+function jobPostLabel(row) {
+  if (!row) return '—';
+  const parts = [row.company, row.role].filter(Boolean);
+  if (parts.length) return parts.join(' · ');
+  if (row.post_id != null) return `Post #${row.post_id}`;
+  return '—';
+}
+
+function jobDescriptionPreview(row, maxLength = 120) {
+  const text = (row?.job_description || '').trim();
+  if (!text) return '—';
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}…`;
+}
+
 function ResumeHistory() {
   useSetPageHeader(
     'Generation History',
@@ -94,7 +109,7 @@ function ResumeHistory() {
           <TableListFilters
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search candidate, job details, PDF…"
+            searchPlaceholder="Search candidate, company, role, job description, PDF…"
             showDateRange={showDateRange}
             dateFrom={dateFrom}
             dateTo={dateTo}
@@ -141,14 +156,21 @@ function ResumeHistory() {
                     />
                     <SortableTableCell
                       label="Candidate"
-                      sortKey="job_details"
+                      sortKey="profile_id"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Job post"
+                      sortKey="company"
                       sortField={sortField}
                       sortDirection={sortDirection}
                       onSort={handleSort}
                     />
                     <SortableTableCell
                       label="Job preview"
-                      sortKey="job_details"
+                      sortKey="job_description"
                       sortField={sortField}
                       sortDirection={sortDirection}
                       onSort={handleSort}
@@ -172,11 +194,11 @@ function ResumeHistory() {
                 <TableBody>
                   {loading && rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5}>Loading…</TableCell>
+                      <TableCell colSpan={6}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5}>
+                      <TableCell colSpan={6}>
                         {hasActiveFilters ? 'No generations match your filters.' : 'No generations yet.'}
                       </TableCell>
                     </TableRow>
@@ -190,10 +212,14 @@ function ResumeHistory() {
                       >
                         <TableCell>{row.id}</TableCell>
                         <TableCell>{profileLabel(row)}</TableCell>
+                        <TableCell sx={{ maxWidth: 220 }}>
+                          <Typography noWrap title={jobPostLabel(row)}>
+                            {jobPostLabel(row)}
+                          </Typography>
+                        </TableCell>
                         <TableCell sx={{ maxWidth: 320 }}>
-                          <Typography noWrap title={row.job_details || ''}>
-                            {(row.job_details || '').slice(0, 120)}
-                            {(row.job_details || '').length > 120 ? '…' : ''}
+                          <Typography noWrap title={row.job_description || ''}>
+                            {jobDescriptionPreview(row)}
                           </Typography>
                         </TableCell>
                         <TableCell sx={{ maxWidth: 200 }}>

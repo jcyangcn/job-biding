@@ -23,6 +23,7 @@ from app.history import (
     build_resume_vector,
     list_resume_generations_page,
     match_best_resume_for_profile,
+    resolve_resume_generation_post,
     resume_generation_to_response,
     save_resume_generation,
 )
@@ -54,7 +55,9 @@ from app.linkedin_service import (
     delete_linkedin_account,
     get_linkedin_account,
     linkedin_account_to_response,
+    linkedin_accounts_summary,
     list_linkedin_accounts,
+    list_linkedin_accounts_page,
     remove_linkedin_image,
     resolve_linkedin_image_file,
     set_linkedin_image,
@@ -62,15 +65,20 @@ from app.linkedin_service import (
 )
 from app.application_service import (
     application_to_response,
+    assign_posts_to_profile,
     attach_generated_resume_to_application,
     create_application,
     delete_application,
+    get_application,
     get_application_for_user,
     list_applications_admin,
     list_applications_for_profile,
     list_applications_for_user,
     next_application_number_for_profile,
+    remove_application_screenshot,
+    resolve_application_screenshot_file,
     set_application_resume_generation_status,
+    set_application_screenshot,
     update_application,
 )
 from app.profile_service import (
@@ -104,18 +112,21 @@ from app.models import (
     UserCreateRequest,
     UserResponse,
     UserUpdateRequest,
+    SkillBulkReplaceRequest,
     SkillCreateRequest,
     SkillResponse,
     SkillUpdateRequest,
-    CompanyCreateRequest,
-    CompanyResponse,
-    CompanyUpdateRequest,
+    JobPostCreateRequest,
+    JobPostResponse,
+    JobPostUpdateRequest,
     JobIdentityCreateRequest,
     JobIdentityResponse,
     JobIdentityUpdateRequest,
     JobProfileCreateRequest,
     JobProfileResponse,
     JobProfileUpdateRequest,
+    BatchAssignPostsRequest,
+    BatchAssignPostsResponse,
     JobApplicationCreateRequest,
     JobApplicationResponse,
     JobApplicationUpdateRequest,
@@ -147,16 +158,17 @@ from app.skill_service import (
     get_skill,
     list_skill_keywords,
     list_skills_page,
+    replace_skills_for_role,
     skill_to_response,
     update_skill,
 )
-from app.company_service import (
-    company_to_response,
-    create_company,
-    delete_company,
-    get_company,
-    list_companies_page,
-    update_company,
+from app.job_post_service import (
+    create_job_post,
+    delete_job_post,
+    get_job_post,
+    job_post_to_response,
+    list_job_posts_page,
+    update_job_post,
 )
 
 FRONTEND_DIR = REPO_ROOT / "frontend"
@@ -278,6 +290,11 @@ def health(db: Session = Depends(get_db)):
         "ai_provider": settings.ai_provider,
         "database": "ok" if db_ok else "error",
     }
+
+
+@app.get("/api/health")
+def api_health(db: Session = Depends(get_db)):
+    return health(db)
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)
@@ -427,8 +444,18 @@ def delete_skill_endpoint(
     return {"ok": True}
 
 
-@app.get("/api/companies")
-def list_companies_endpoint(
+@app.post("/api/skills/bulk-replace")
+def bulk_replace_skills_endpoint(
+    request: SkillBulkReplaceRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    count = replace_skills_for_role(db, request)
+    return {"ok": True, "count": count}
+
+
+@app.get("/api/job-posts")
+def list_job_posts_endpoint(
     page: int = 1,
     page_size: int = 10,
     search: str | None = None,
@@ -437,7 +464,7 @@ def list_companies_endpoint(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    result = list_companies_page(
+    result = list_job_posts_page(
         db,
         page=page,
         page_size=page_size,
@@ -446,50 +473,73 @@ def list_companies_endpoint(
         sort_dir=sort_dir,
     )
     return {
-        "items": [company_to_response(row) for row in result["items"]],
+        "items": [job_post_to_response(row) for row in result["items"]],
         "total": result["total"],
         "page": result["page"],
         "page_size": result["page_size"],
     }
 
 
-@app.post("/api/companies", response_model=CompanyResponse)
-def create_company_endpoint(
-    request: CompanyCreateRequest,
+@app.post("/api/job-posts", response_model=JobPostResponse)
+def create_job_post_endpoint(
+    request: JobPostCreateRequest,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
     try:
-        record = create_company(db, request)
+        record = create_job_post(db, request)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return company_to_response(record)
+    return job_post_to_response(record)
 
 
-@app.put("/api/companies/{company_id}", response_model=CompanyResponse)
-def update_company_endpoint(
-    company_id: int,
-    request: CompanyUpdateRequest,
+@app.post("/api/job-posts/batch-assign-applications", response_model=BatchAssignPostsResponse)
+def batch_assign_posts_to_profile_endpoint(
+    request: BatchAssignPostsRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        result = assign_posts_to_profile(
+            db,
+            profile_id=request.profile_id,
+            post_ids=request.post_ids,
+            user=user,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
+
+
+@app.put("/api/job-posts/{post_id}", response_model=JobPostResponse)
+def update_job_post_endpoint(
+    post_id: int,
+    request: JobPostUpdateRequest,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    record = get_company(db, company_id)
+    record = get_job_post(db, post_id)
     if not record:
-        raise HTTPException(status_code=404, detail="Company not found")
-    updated = update_company(db, record, request)
-    return company_to_response(updated)
+        raise HTTPException(status_code=404, detail="Job post not found")
+    updated = update_job_post(db, record, request)
+    return job_post_to_response(updated)
 
 
-@app.delete("/api/companies/{company_id}")
-def delete_company_endpoint(
-    company_id: int,
+@app.delete("/api/job-posts/{post_id}")
+def delete_job_post_endpoint(
+    post_id: int,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    record = get_company(db, company_id)
+    record = get_job_post(db, post_id)
     if not record:
-        raise HTTPException(status_code=404, detail="Company not found")
-    delete_company(db, record)
+        raise HTTPException(status_code=404, detail="Job post not found")
+    try:
+        delete_job_post(db, record)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True}
 
 
@@ -751,6 +801,80 @@ def delete_job_application_endpoint(
     return {"ok": True}
 
 
+@app.post("/api/job-applications/{application_id}/screenshot", response_model=JobApplicationResponse)
+async def upload_job_application_screenshot_endpoint(
+    application_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        record = get_application_for_user(db, application_id, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    content = await file.read()
+    try:
+        set_application_screenshot(
+            db,
+            record,
+            original_name=file.filename or "screenshot.png",
+            content=content,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    refreshed = get_application(db, application_id)
+    return application_to_response(db, refreshed)
+
+
+@app.get("/api/job-applications/{application_id}/screenshot/{filename}")
+def download_job_application_screenshot_endpoint(
+    application_id: int,
+    filename: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        record = get_application_for_user(db, application_id, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    image = record.applied_screenshot or {}
+    safe_name = Path(filename).name
+    if image.get("filename") != safe_name:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+
+    try:
+        image_path = resolve_application_screenshot_file(record)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return FileResponse(image_path, filename=safe_name)
+
+
+@app.delete("/api/job-applications/{application_id}/screenshot", response_model=JobApplicationResponse)
+def delete_job_application_screenshot_endpoint(
+    application_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        record = get_application_for_user(db, application_id, user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    remove_application_screenshot(db, record)
+    refreshed = get_application(db, application_id)
+    return application_to_response(db, refreshed)
+
+
 @app.get("/api/job-progression-emails", response_model=list[JobProgressionEmailResponse])
 def list_job_progression_emails_endpoint(
     profile_id: int | None = Query(default=None),
@@ -886,12 +1010,54 @@ def delete_citizen_endpoint(
     return {"ok": True}
 
 
-@app.get("/api/linkedin-accounts", response_model=list[LinkedInAccountResponse])
+@app.get("/api/linkedin-accounts")
 def list_linkedin_accounts_endpoint(
+    page: int = 1,
+    page_size: int = 10,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    status: str | None = None,
+    need_action: str | None = None,
+    need_action_active: str | None = None,
+    renting_expired: str | None = None,
+    created_expiring: str | None = None,
+    email_not_secured: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return [linkedin_account_to_response(row) for row in list_linkedin_accounts(db)]
+    result = list_linkedin_accounts_page(
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        status=status,
+        need_action=need_action,
+        need_action_active=need_action_active,
+        renting_expired=renting_expired,
+        created_expiring=created_expiring,
+        email_not_secured=email_not_secured,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    return {
+        "items": [linkedin_account_to_response(row) for row in result["items"]],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+    }
+
+
+@app.get("/api/linkedin-accounts/summary")
+def linkedin_accounts_summary_endpoint(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    return linkedin_accounts_summary(db)
 
 
 @app.post("/api/linkedin-accounts", response_model=LinkedInAccountResponse)
@@ -1354,9 +1520,15 @@ def _create_resume_response(
     resume_vector = build_resume_vector(db, resume_content=resume_content, role=role)
 
     try:
+        post = resolve_resume_generation_post(
+            db,
+            job_description=request.job_description,
+            post_id=request.post_id,
+            application_id=request.application_id,
+        )
         record = save_resume_generation(
             db,
-            job_details=request.job_description,
+            post_id=post.id,
             profile_id=request.profile_id,
             resume_content=resume_content,
             resume_vector=resume_vector,

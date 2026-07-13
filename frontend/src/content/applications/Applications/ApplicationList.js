@@ -9,6 +9,7 @@ import ApplicationsTableView from './ApplicationsTableView';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { listJobApplications } from 'src/services/jobApplicationApi';
 import { listAllProfiles } from 'src/services/profileApi';
+import { findAccessibleProfile } from 'src/utils/findAccessibleProfile';
 import { mergeApplicationResumeStatus } from 'src/utils/mergeApplicationResumeStatus';
 
 function ApplicationList() {
@@ -39,33 +40,44 @@ function ApplicationList() {
 
   const loadData = useCallback(async (options = {}) => {
     const { silent = false } = options;
+    const numericId = Number(profileId);
+
+    if (!Number.isFinite(numericId)) {
+      enqueueSnackbar('Invalid profile', { variant: 'warning' });
+      navigate('/applications/job-applications', { replace: true });
+      return;
+    }
+
     if (!silent) {
       setLoading(true);
     }
-    try {
-      const numericId = Number(profileId);
 
+    try {
       if (silent) {
         const applicationRows = await listJobApplications(numericId);
         setRows((prev) => mergeApplicationResumeStatus(prev, applicationRows));
         return;
       }
 
-      const [profileRows, applicationRows] = await Promise.all([
-        listAllProfiles(),
-        listJobApplications(numericId)
-      ]);
-      const profiles = Array.isArray(profileRows) ? profileRows : [];
-      const match = profiles.find((row) => row.id === numericId && row.is_active);
+      const profileRows = await listAllProfiles();
+      const match = findAccessibleProfile(profileRows, numericId);
       if (!match) {
         enqueueSnackbar('Profile not found or access denied', { variant: 'warning' });
         navigate('/applications/job-applications', { replace: true });
         return;
       }
+
       setProfile(match);
-      setRows(applicationRows);
+
+      try {
+        const applicationRows = await listJobApplications(numericId);
+        setRows(Array.isArray(applicationRows) ? applicationRows : []);
+      } catch (err) {
+        setRows([]);
+        enqueueSnackbar(err.message || 'Failed to load applications', { variant: 'error' });
+      }
     } catch (err) {
-      const message = err.message || 'Failed to load applications';
+      const message = err.message || 'Failed to load profile';
       enqueueSnackbar(message, { variant: 'error' });
       if (/access denied|403/i.test(message)) {
         navigate('/applications/job-applications', { replace: true });

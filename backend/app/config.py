@@ -8,7 +8,7 @@ REPO_ROOT = BACKEND_ROOT.parent
 INSTRUCTION_DIR = REPO_ROOT / "instruction"
 
 STORAGE_DIR = REPO_ROOT / "storage"
-DEFAULT_DOWNLOADS_DIR = STORAGE_DIR / "downloads"
+DEFAULT_GENERATED_RESUMES_DIR = STORAGE_DIR / "downloads" / "generated_resumes"
 DEFAULT_UPLOADS_DIR = STORAGE_DIR / "uploads"
 
 
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     database_url: str
     jwt_secret: str = "change-me-in-production"
     jwt_expire_hours: int = 48
-    generated_resumes_dir: str = ""
+    generated_resumes_dir: str = Field(default="", validation_alias="GENERATED_RESUMES_DIR")
     uploads_dir_config: str = Field(default="", validation_alias="UPLOADS_DIR")
     cors_origins: str = ""
     uvicorn_reload: bool = False
@@ -56,7 +56,9 @@ class Settings(BaseSettings):
 
     @property
     def generated_dir(self) -> Path:
-        return self._resolve_storage_path(self.generated_resumes_dir, DEFAULT_DOWNLOADS_DIR)
+        return self._resolve_storage_path(
+            self.generated_resumes_dir, DEFAULT_GENERATED_RESUMES_DIR
+        )
 
     @property
     def uploads_dir(self) -> Path:
@@ -90,6 +92,7 @@ UPLOADS_DIR = settings.uploads_dir
 LINKEDIN_IMAGE_DIR = UPLOADS_DIR / "linkedin image"
 CITIZEN_IMAGE_DIR = UPLOADS_DIR / "citizen image"
 CITIZEN_REVIEW_DIR = UPLOADS_DIR / "citizen review files"
+APPLICATION_SCREENSHOT_DIR = UPLOADS_DIR / "application screenshot"
 
 
 def ensure_storage_dirs() -> None:
@@ -100,5 +103,6 @@ def ensure_storage_dirs() -> None:
         LINKEDIN_IMAGE_DIR,
         CITIZEN_IMAGE_DIR,
         CITIZEN_REVIEW_DIR,
+        APPLICATION_SCREENSHOT_DIR,
     ):
         path.mkdir(parents=True, exist_ok=True)

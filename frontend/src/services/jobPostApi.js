@@ -2,12 +2,32 @@ import { getApiBase } from 'src/config/api';
 import { getStoredAccessToken } from 'src/services/authApi';
 import { buildListQuery, toListQueryParams } from 'src/utils/listQuery';
 
+function formatValidationDetail(detail) {
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    return detail
+      .map((entry) => {
+        if (typeof entry === 'string') return entry;
+        if (entry && typeof entry === 'object') {
+          const loc = Array.isArray(entry.loc) ? entry.loc.join('.') : '';
+          const msg = entry.msg || JSON.stringify(entry);
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return String(entry);
+      })
+      .join('; ');
+  }
+  return JSON.stringify(detail);
+}
+
 async function parseError(response) {
   let detail = `Request failed (${response.status})`;
   try {
     const body = await response.json();
     if (body.detail) {
-      detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+      detail = formatValidationDetail(body.detail);
     }
   } catch {
     /* ignore */
@@ -52,32 +72,42 @@ async function request(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-export function listCompanies(options = {}) {
+export function listJobPosts(options = {}) {
   const params = toListQueryParams(options);
-  return request(`/api/companies${buildListQuery(params)}`).then(asListEnvelope);
+  return request(`/api/job-posts${buildListQuery(params)}`).then(asListEnvelope);
 }
 
-export async function listAllCompanies(options = {}) {
-  const result = await listCompanies({ page: 1, pageSize: 200, ...options });
+export async function listAllJobPosts(options = {}) {
+  const result = await listJobPosts({ page: 1, pageSize: 200, ...options });
   return result.items || [];
 }
 
-export function createCompany(payload) {
-  return request('/api/companies', {
+export function createJobPost(payload) {
+  return request('/api/job-posts', {
     method: 'POST',
     body: JSON.stringify(payload)
   });
 }
 
-export function updateCompany(companyId, payload) {
-  return request(`/api/companies/${companyId}`, {
+export function updateJobPost(postId, payload) {
+  return request(`/api/job-posts/${postId}`, {
     method: 'PUT',
     body: JSON.stringify(payload)
   });
 }
 
-export function deleteCompany(companyId) {
-  return request(`/api/companies/${companyId}`, {
+export function deleteJobPost(postId) {
+  return request(`/api/job-posts/${postId}`, {
     method: 'DELETE'
+  });
+}
+
+export function batchAssignPostsToProfile(profileId, postIds) {
+  return request('/api/job-posts/batch-assign-applications', {
+    method: 'POST',
+    body: JSON.stringify({
+      profile_id: Number(profileId),
+      post_ids: postIds.map((id) => Number(id))
+    })
   });
 }

@@ -1,5 +1,5 @@
 """
-Batch-generate resume_generations for one job profile against every company JD.
+Batch-generate resume_generations for one job profile against every job post JD.
 
 Usage (from backend/):
   python scripts/batch_generate_company_resumes.py
@@ -24,7 +24,7 @@ from app.ai_generator import generate_resume_content
 from app.application_service import next_application_number_for_profile
 from app.config import GENERATED_DIR, REPO_ROOT, settings
 from app.database import SessionLocal, init_db
-from app.db_models import Company, JobIdentity, JobProfile
+from app.db_models import JobIdentity, JobPost, JobProfile
 from app.history import (
     build_resume_content_payload,
     build_resume_vector,
@@ -158,16 +158,17 @@ def generate_one(
     *,
     profile: Profile,
     profile_id: int,
-    company: Company,
+    job_post: JobPost,
     provider: str,
 ) -> dict:
-    job_description = (company.job_description or "").strip()
+    job_description = (job_post.job_description or "").strip()
     if len(job_description) < 50:
         raise ValueError(
-            f"Company #{company.id} ({company.company}) JD is too short ({len(job_description)} chars)"
+            f"Post #{job_post.id} ({job_post.company}) JD is too short ({len(job_description)} chars)"
         )
 
-    print(f"\n=== Generating for company #{company.id} {company.company!r} ===")
+    label = f"{job_post.company} · {job_post.role}".strip(" ·")
+    print(f"\n=== Generating for post #{job_post.id} {label!r} ===")
     print(f"JD length: {len(job_description)} | provider: {provider}")
 
     content = generate_resume_content(profile, job_description, provider=provider)
@@ -181,7 +182,7 @@ def generate_one(
 
     record = save_resume_generation(
         db,
-        job_details=job_description,
+        post_id=job_post.id,
         profile_id=profile_id,
         resume_content=resume_content,
         resume_vector=resume_vector,
@@ -194,8 +195,9 @@ def generate_one(
         f"vector_len={len(resume_vector)} summary_chars={len(content.summary)}"
     )
     return {
-        "company_id": company.id,
-        "company": company.company,
+        "post_id": job_post.id,
+        "company": job_post.company,
+        "role": job_post.role,
         "generation_id": record.id,
         "filename": output_path.name,
         "vector_len": len(resume_vector),
@@ -225,38 +227,39 @@ def main() -> int:
 
         identity = db.get(JobIdentity, job_profile.identity_id)
         profile = build_profile_from_job_profile(job_profile, identity)
-        companies = db.scalars(select(Company).order_by(Company.id.asc())).all()
+        job_posts = db.scalars(select(JobPost).order_by(JobPost.id.asc())).all()
 
         print(
             f"Profile #{job_profile.id} {profile.name!r} ({profile.title!r}) "
-            f"-> {len(companies)} companies"
+            f"-> {len(job_posts)} job posts"
         )
-        if not companies:
-            print("No companies found. Add companies first.")
+        if not job_posts:
+            print("No job posts found. Add posts first.")
             return 1
 
         results = []
         errors = []
-        for company in companies:
+        for job_post in job_posts:
             try:
                 results.append(
                     generate_one(
                         db,
                         profile=profile,
                         profile_id=job_profile.id,
-                        company=company,
+                        job_post=job_post,
                         provider=provider,
                     )
                 )
             except Exception as exc:
-                message = f"FAILED company #{company.id} {company.company!r}: {exc}"
+                message = f"FAILED post #{job_post.id} {job_post.company!r}: {exc}"
                 print(message)
                 errors.append(message)
 
         print("\n========== SUMMARY ==========")
         for row in results:
             print(
-                f"  company={row['company']!r} generation_id={row['generation_id']} "
+                f"  company={row['company']!r} role={row['role']!r} "
+                f"generation_id={row['generation_id']} "
                 f"file={row['filename']} vector_len={row['vector_len']}"
             )
         if errors:

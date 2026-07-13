@@ -2,12 +2,32 @@ import { getApiBase } from 'src/config/api';
 import { getStoredAccessToken } from 'src/services/authApi';
 import { buildListQuery, toListQueryParams } from 'src/utils/listQuery';
 
+function formatValidationDetail(detail) {
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    return detail
+      .map((entry) => {
+        if (typeof entry === 'string') return entry;
+        if (entry && typeof entry === 'object') {
+          const loc = Array.isArray(entry.loc) ? entry.loc.join('.') : '';
+          const msg = entry.msg || JSON.stringify(entry);
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return String(entry);
+      })
+      .join('; ');
+  }
+  return JSON.stringify(detail);
+}
+
 async function parseError(response) {
   let detail = `Request failed (${response.status})`;
   try {
     const body = await response.json();
     if (body.detail) {
-      detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+      detail = formatValidationDetail(body.detail);
     }
   } catch {
     /* ignore */
@@ -88,5 +108,12 @@ export function updateSkill(skillId, payload) {
 export function deleteSkill(skillId) {
   return request(`/api/skills/${skillId}`, {
     method: 'DELETE'
+  });
+}
+
+export function bulkReplaceSkills(payload) {
+  return request('/api/skills/bulk-replace', {
+    method: 'POST',
+    body: JSON.stringify(payload)
   });
 }

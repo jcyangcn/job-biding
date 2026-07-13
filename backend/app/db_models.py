@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.user_roles import UserRole
@@ -32,7 +32,9 @@ class ResumeGeneration(Base):
     __tablename__ = "resume_generations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    job_details: Mapped[str] = mapped_column(Text, nullable=False)
+    post_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("job_posts.id", ondelete="RESTRICT"), nullable=False
+    )
     profile_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("job_profile.id", ondelete="SET NULL"), nullable=True
     )
@@ -48,6 +50,8 @@ class ResumeGeneration(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+    job_post: Mapped["JobPost"] = relationship("JobPost", lazy="select")
 
 
 class JobIdentity(Base):
@@ -146,11 +150,9 @@ class JobApplication(Base):
     profile_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("job_profile.id", ondelete="RESTRICT"), nullable=False
     )
-    role: Mapped[str] = mapped_column(String(255), nullable=False)
-    company: Mapped[str] = mapped_column(String(255), nullable=False)
-    link: Mapped[str] = mapped_column(String(1000), nullable=False)
-    job_description: Mapped[str] = mapped_column(Text, nullable=False)
-    job_vector: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default=text("'[]'"))
+    post_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("job_posts.id", ondelete="RESTRICT"), nullable=False
+    )
     resume_generated_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("resume_generations.id", ondelete="SET NULL"), nullable=True
     )
@@ -158,6 +160,8 @@ class JobApplication(Base):
     resume_generation_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     applied: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    success_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    applied_screenshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     bidder_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -169,6 +173,8 @@ class JobApplication(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+    job_post: Mapped["JobPost"] = relationship("JobPost", lazy="select")
 
 
 class Citizen(Base):
@@ -245,26 +251,22 @@ class LinkedInAccount(Base):
     )
 
 
-class Skill(Base):
-    __tablename__ = "skills"
+class JobSkill(Base):
+    __tablename__ = "job_skills"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     role: Mapped[str] = mapped_column(String(255), nullable=False)
-    field: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default=text("''"))
-    keyword: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default=text("''"))
-    weight: Mapped[float | None] = mapped_column(Float, nullable=True, server_default=text("1"))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
+    field: Mapped[str] = mapped_column(String(255), nullable=False)
+    keyword: Mapped[str] = mapped_column(String(255), nullable=False)
+    weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default=text("1"))
 
 
-class Company(Base):
-    __tablename__ = "companies"
+class JobPost(Base):
+    __tablename__ = "job_posts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     company: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(255), nullable=False, default="", server_default=text("''"))
     url: Mapped[str] = mapped_column(String(1000), nullable=False, default="", server_default=text("''"))
     job_description: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default=text("''"))
     job_vector: Mapped[list] = mapped_column(

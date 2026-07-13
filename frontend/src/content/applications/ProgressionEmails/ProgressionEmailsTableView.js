@@ -44,7 +44,7 @@ import {
   PROGRESSION_EMAIL_TYPES
 } from 'src/data/progressionEmailOptions';
 import { formatIdentityLabel } from 'src/data/countryCodes';
-import { createProgressionEmail, deleteProgressionEmail, listProgressionEmails } from 'src/services/progressionEmailApi';
+import { createProgressionEmail, deleteProgressionEmail, listAllProgressionEmails, listProgressionEmails } from 'src/services/progressionEmailApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
 import {
@@ -56,23 +56,8 @@ import {
   buildProgressionEmailExportRows
 } from 'src/utils/progressionEmailCsvExport';
 
-const EXPORT_PAGE_SIZE = 200;
-
-async function fetchAllProgressionEmailItems(profileId, options = {}, page = 1, acc = []) {
-  const result = await listProgressionEmails(profileId, {
-    ...options,
-    page,
-    pageSize: EXPORT_PAGE_SIZE
-  });
-  const batch = result.items || [];
-  const items = acc.concat(batch);
-  const total = Number(result.total) || 0;
-
-  if (!batch.length || batch.length < EXPORT_PAGE_SIZE || items.length >= total) {
-    return items;
-  }
-
-  return fetchAllProgressionEmailItems(profileId, options, page + 1, items);
+async function fetchAllProgressionEmailItems(profileId, options = {}) {
+  return listAllProgressionEmails(profileId, options);
 }
 
 function ProgressionEmailsTableView({

@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS job_profile (
 
 CREATE TABLE IF NOT EXISTS resume_generations (
     id SERIAL PRIMARY KEY,
-    job_details TEXT NOT NULL,
+    post_id INTEGER NOT NULL REFERENCES job_posts(id) ON DELETE RESTRICT,
     profile_id INTEGER REFERENCES job_profile(id) ON DELETE SET NULL,
     resume_content JSONB NOT NULL DEFAULT '{}',
     resume_vector JSONB NOT NULL DEFAULT '[]',
@@ -63,26 +63,41 @@ CREATE TABLE IF NOT EXISTS resume_generations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_resume_generations_post_id
+    ON resume_generations (post_id);
+
 CREATE INDEX IF NOT EXISTS idx_resume_generations_created_at
     ON resume_generations (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS job_posts (
+    id SERIAL PRIMARY KEY,
+    company VARCHAR(255) NOT NULL,
+    role VARCHAR(255) NOT NULL DEFAULT '',
+    url VARCHAR(1000) NOT NULL DEFAULT '',
+    job_description TEXT NOT NULL DEFAULT '',
+    job_vector JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_posts_company ON job_posts (company);
 
 CREATE TABLE IF NOT EXISTS job_application (
     id SERIAL PRIMARY KEY,
     profile_id INTEGER NOT NULL REFERENCES job_profile(id) ON DELETE RESTRICT,
-    role VARCHAR(255) NOT NULL,
-    company VARCHAR(255) NOT NULL,
-    link VARCHAR(1000) NOT NULL,
-    job_description TEXT NOT NULL DEFAULT '',
-    job_vector JSONB NOT NULL DEFAULT '[]',
+    post_id INTEGER NOT NULL REFERENCES job_posts(id) ON DELETE RESTRICT,
     resume_generated_id INTEGER REFERENCES resume_generations(id) ON DELETE SET NULL,
     resume_online_link VARCHAR(1000),
     resume_generation_status VARCHAR(20),
     applied BOOLEAN NOT NULL DEFAULT FALSE,
     applied_at TIMESTAMPTZ,
+    success_link VARCHAR(1000),
+    applied_screenshot JSONB,
     bidder_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_job_application_post_id ON job_application (post_id);
 
 CREATE TABLE IF NOT EXISTS job_progression_email (
     id SERIAL PRIMARY KEY,
@@ -147,25 +162,15 @@ CREATE TABLE IF NOT EXISTS linkedin_account (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS skills (
+CREATE TABLE IF NOT EXISTS job_skills (
     id SERIAL PRIMARY KEY,
     role VARCHAR(255) NOT NULL,
-    field TEXT NOT NULL DEFAULT '',
-    keyword TEXT NOT NULL DEFAULT '',
-    weight DOUBLE PRECISION DEFAULT 1,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    field VARCHAR(255) NOT NULL,
+    keyword VARCHAR(255) NOT NULL,
+    weight DOUBLE PRECISION NOT NULL DEFAULT 1
 );
 
-CREATE INDEX IF NOT EXISTS idx_skills_role ON skills (role);
-CREATE INDEX IF NOT EXISTS idx_skills_field ON skills (field);
-
-CREATE TABLE IF NOT EXISTS companies (
-    id SERIAL PRIMARY KEY,
-    company VARCHAR(255) NOT NULL,
-    url VARCHAR(1000) NOT NULL DEFAULT '',
-    job_description TEXT NOT NULL DEFAULT '',
-    job_vector JSONB NOT NULL DEFAULT '[]',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_companies_company ON companies (company);
+CREATE INDEX IF NOT EXISTS idx_job_skills_role ON job_skills (role);
+CREATE INDEX IF NOT EXISTS idx_job_skills_field ON job_skills (field);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_job_skills_role_field_keyword
+    ON job_skills (role, field, keyword);

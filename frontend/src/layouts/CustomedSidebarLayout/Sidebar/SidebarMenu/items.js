@@ -44,8 +44,8 @@ const menuItems = [
             link: '/applications/skill-management'
           },
           {
-            name: 'Company Management',
-            link: '/applications/company-management'
+            name: 'Post Management',
+            link: '/applications/post-management'
           }
         ]
       }

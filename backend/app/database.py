@@ -150,6 +150,18 @@ def migrate_job_application_columns() -> None:
         if not table_exists:
             return
 
+        post_id_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'post_id'
+                """
+            )
+        ).scalar()
+
         job_description_exists = conn.execute(
             text(
                 """
@@ -161,7 +173,7 @@ def migrate_job_application_columns() -> None:
                 """
             )
         ).scalar()
-        if not job_description_exists:
+        if not job_description_exists and not post_id_exists:
             conn.execute(
                 text(
                     """
@@ -1015,35 +1027,308 @@ def migrate_skills_columns() -> None:
         _mark_schema_migration_applied(conn, migration_name)
 
 
-def migrate_companies_table() -> None:
-    migration_name = "companies_table_v1"
+def migrate_job_skills_table() -> None:
+    """Create job_skills (one row per keyword) and migrate legacy skills rows."""
+    migration_name = "job_skills_table_v1"
     with engine.begin() as conn:
         if _schema_migration_applied(conn, migration_name):
             return
 
-        conn.execute(
+        job_skills_exists = conn.execute(
             text(
                 """
-                CREATE TABLE IF NOT EXISTS companies (
-                    id SERIAL PRIMARY KEY,
-                    company VARCHAR(255) NOT NULL,
-                    url VARCHAR(1000) NOT NULL DEFAULT '',
-                    job_description TEXT NOT NULL DEFAULT '',
-                    job_vector JSONB NOT NULL DEFAULT '[]',
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_skills'
                 """
             )
+        ).scalar()
+        if not job_skills_exists:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE job_skills (
+                        id SERIAL PRIMARY KEY,
+                        role VARCHAR(255) NOT NULL,
+                        field VARCHAR(255) NOT NULL,
+                        keyword VARCHAR(255) NOT NULL,
+                        weight DOUBLE PRECISION NOT NULL DEFAULT 1
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_job_skills_role
+                    ON job_skills (role)
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_job_skills_field
+                    ON job_skills (field)
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_job_skills_role_field_keyword
+                    ON job_skills (role, field, keyword)
+                    """
+                )
+            )
+
+    from app.db_models import JobSkill
+    from app.job_vector import parse_keyword_weight_entries
+
+    with engine.connect() as conn:
+        skills_exists = bool(
+            conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'skills'
+                    """
+                )
+            ).scalar()
         )
+
+    if skills_exists:
+        with SessionLocal() as db:
+            legacy_rows = db.execute(
+                text("SELECT id, role, field, keyword, weight FROM skills ORDER BY id ASC")
+            ).all()
+            existing_keys = {
+                (
+                    (row.role or "").strip().lower(),
+                    (row.field or "").strip().lower(),
+                    (row.keyword or "").strip().lower(),
+                )
+                for row in db.execute(
+                    text("SELECT role, field, keyword FROM job_skills")
+                ).all()
+            }
+
+            for legacy in legacy_rows:
+                role = (legacy.role or "").strip()
+                field = (legacy.field or "").strip() or "General"
+                default_weight = float(legacy.weight if legacy.weight is not None else 1.0)
+                entries = parse_keyword_weight_entries(
+                    legacy.keyword,
+                    default_weight=default_weight,
+                )
+                if not entries and (legacy.keyword or "").strip():
+                    entries = [(str(legacy.keyword).strip(), default_weight)]
+
+                for keyword, weight in entries:
+                    keyword_text = (keyword or "").strip()
+                    if not keyword_text:
+                        continue
+                    key = (role.lower(), field.lower(), keyword_text.lower())
+                    if key in existing_keys:
+                        continue
+                    db.add(
+                        JobSkill(
+                            role=role,
+                            field=field,
+                            keyword=keyword_text,
+                            weight=float(weight if weight is not None else 1.0),
+                        )
+                    )
+                    existing_keys.add(key)
+
+            db.commit()
+
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS skills CASCADE"))
+
+    with engine.begin() as conn:
+        _mark_schema_migration_applied(conn, migration_name)
+
+
+def migrate_job_posts_table() -> None:
+    migration_name = "job_posts_table_v2"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        companies_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'companies'
+                """
+            )
+        ).scalar()
+        job_posts_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_posts'
+                """
+            )
+        ).scalar()
+
+        if companies_exists and not job_posts_exists:
+            conn.execute(text("ALTER TABLE companies RENAME TO job_posts"))
+            conn.execute(
+                text(
+                    "ALTER INDEX IF EXISTS idx_companies_company "
+                    "RENAME TO idx_job_posts_company"
+                )
+            )
+            job_posts_exists = True
+
+        if not job_posts_exists:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE job_posts (
+                        id SERIAL PRIMARY KEY,
+                        company VARCHAR(255) NOT NULL,
+                        role VARCHAR(255) NOT NULL DEFAULT '',
+                        url VARCHAR(1000) NOT NULL DEFAULT '',
+                        job_description TEXT NOT NULL DEFAULT '',
+                        job_vector JSONB NOT NULL DEFAULT '[]',
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_job_posts_company
+                    ON job_posts (company)
+                    """
+                )
+            )
+
+        role_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_posts'
+                  AND column_name = 'role'
+                """
+            )
+        ).scalar()
+        if not role_exists:
+            conn.execute(
+                text(
+                    "ALTER TABLE job_posts ADD COLUMN role VARCHAR(255) NOT NULL DEFAULT ''"
+                )
+            )
+
         conn.execute(
             text(
                 """
-                CREATE INDEX IF NOT EXISTS idx_companies_company
-                ON companies (company)
+                CREATE INDEX IF NOT EXISTS idx_job_posts_company
+                ON job_posts (company)
                 """
             )
         )
         _mark_schema_migration_applied(conn, migration_name)
+
+
+def migrate_job_posts_merge_legacy_companies() -> None:
+    """Copy rows from legacy companies table into job_posts, then drop companies."""
+    migration_name = "job_posts_merge_companies_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        companies_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'companies'
+                """
+            )
+        ).scalar()
+        if not companies_exists:
+            _mark_schema_migration_applied(conn, migration_name)
+            return
+
+        job_posts_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_posts'
+                """
+            )
+        ).scalar()
+        if job_posts_exists:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO job_posts (company, role, url, job_description, job_vector, created_at)
+                    SELECT
+                        company,
+                        '' AS role,
+                        url,
+                        job_description,
+                        job_vector,
+                        created_at
+                    FROM companies c
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM job_posts jp
+                        WHERE jp.company = c.company
+                          AND jp.url = c.url
+                          AND jp.job_description = c.job_description
+                    )
+                    """
+                )
+            )
+
+        conn.execute(text("DROP TABLE IF EXISTS companies CASCADE"))
+        _mark_schema_migration_applied(conn, migration_name)
+
+
+def backfill_job_post_vectors() -> None:
+    """Recompute stored job_vector values using each post's role and description."""
+    migration_name = "job_posts_recompute_vectors_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        job_posts_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_posts'
+                """
+            )
+        ).scalar()
+        if not job_posts_exists:
+            _mark_schema_migration_applied(conn, migration_name)
+            return
+
+    from app.job_post_service import recompute_all_job_post_vectors
+
+    with SessionLocal() as db:
+        recompute_all_job_post_vectors(db)
+
+    with engine.begin() as conn:
+        _mark_schema_migration_applied(conn, migration_name)
+
+
+def migrate_companies_table() -> None:
+    """Legacy migration — superseded by migrate_job_posts_table."""
+    migrate_job_posts_table()
 
 
 def migrate_job_application_job_vector() -> None:
@@ -1058,6 +1343,20 @@ def migrate_job_application_job_vector() -> None:
             )
         ).scalar()
         if not table_exists:
+            return
+
+        post_id_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'post_id'
+                """
+            )
+        ).scalar()
+        if post_id_exists:
             return
 
         exists = conn.execute(
@@ -1080,6 +1379,380 @@ def migrate_job_application_job_vector() -> None:
                     """
                 )
             )
+
+
+def migrate_job_application_post_id() -> None:
+    """Move job details from job_application into job_posts; keep only post_id on applications."""
+    migration_name = "job_application_post_id_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_application'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            _mark_schema_migration_applied(conn, migration_name)
+            return
+
+        job_posts_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_posts'
+                """
+            )
+        ).scalar()
+        if not job_posts_exists:
+            _mark_schema_migration_applied(conn, migration_name)
+            return
+
+        def column_exists(column_name: str) -> bool:
+            return bool(
+                conn.execute(
+                    text(
+                        """
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'job_application'
+                          AND column_name = :column_name
+                        """
+                    ),
+                    {"column_name": column_name},
+                ).scalar()
+            )
+
+        if not column_exists("post_id"):
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN post_id INTEGER REFERENCES job_posts(id) ON DELETE RESTRICT
+                    """
+                )
+            )
+
+        legacy_columns = column_exists("role") and column_exists("company")
+        if legacy_columns:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT id, role, company, link, job_description, job_vector, created_at
+                    FROM job_application
+                    WHERE post_id IS NULL
+                    """
+                )
+            ).fetchall()
+            for row in rows:
+                post_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO job_posts (
+                            company, role, url, job_description, job_vector, created_at
+                        )
+                        VALUES (
+                            :company, :role, :url, :job_description,
+                            COALESCE(:job_vector, '[]'::jsonb), :created_at
+                        )
+                        RETURNING id
+                        """
+                    ),
+                    {
+                        "company": row.company or "",
+                        "role": row.role or "",
+                        "url": row.link or "",
+                        "job_description": row.job_description or "",
+                        "job_vector": row.job_vector,
+                        "created_at": row.created_at,
+                    },
+                ).scalar_one()
+                conn.execute(
+                    text(
+                        """
+                        UPDATE job_application
+                        SET post_id = :post_id
+                        WHERE id = :application_id
+                        """
+                    ),
+                    {"post_id": post_id, "application_id": row.id},
+                )
+
+        if column_exists("post_id"):
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ALTER COLUMN post_id SET NOT NULL
+                    """
+                )
+            )
+
+        for column_name in ("role", "company", "link", "job_description", "job_vector"):
+            if column_exists(column_name):
+                conn.execute(
+                    text(f"ALTER TABLE job_application DROP COLUMN {column_name}")
+                )
+
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_job_application_post_id
+                ON job_application (post_id)
+                """
+            )
+        )
+
+        _mark_schema_migration_applied(conn, migration_name)
+
+
+def migrate_job_application_drop_legacy_job_fields() -> None:
+    """Remove job detail columns from job_application when post_id is in use."""
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_application'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            return
+
+        def column_exists(column_name: str) -> bool:
+            return bool(
+                conn.execute(
+                    text(
+                        """
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'job_application'
+                          AND column_name = :column_name
+                        """
+                    ),
+                    {"column_name": column_name},
+                ).scalar()
+            )
+
+        if not column_exists("post_id"):
+            return
+
+        for column_name in ("role", "company", "link", "job_description", "job_vector"):
+            if column_exists(column_name):
+                conn.execute(
+                    text(f"ALTER TABLE job_application DROP COLUMN {column_name}")
+                )
+
+
+def migrate_job_application_applied_evidence_fields() -> None:
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_application'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            return
+
+        def column_exists(column_name: str) -> bool:
+            return bool(
+                conn.execute(
+                    text(
+                        """
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'job_application'
+                          AND column_name = :column_name
+                        """
+                    ),
+                    {"column_name": column_name},
+                ).scalar()
+            )
+
+        if not column_exists("success_link"):
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN success_link VARCHAR(1000)
+                    """
+                )
+            )
+
+        if not column_exists("applied_screenshot"):
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN applied_screenshot JSONB
+                    """
+                )
+            )
+
+
+def migrate_resume_generations_post_id() -> None:
+    """Replace job_details on resume_generations with post_id referencing job_posts."""
+    migration_name = "resume_generations_post_id_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+
+        table_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'resume_generations'
+                """
+            )
+        ).scalar()
+        if not table_exists:
+            _mark_schema_migration_applied(conn, migration_name)
+            return
+
+        posts_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_posts'
+                """
+            )
+        ).scalar()
+        if not posts_exists:
+            _mark_schema_migration_applied(conn, migration_name)
+            return
+
+        def column_exists(column_name: str) -> bool:
+            return bool(
+                conn.execute(
+                    text(
+                        """
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'resume_generations'
+                          AND column_name = :column_name
+                        """
+                    ),
+                    {"column_name": column_name},
+                ).scalar()
+            )
+
+        if not column_exists("post_id"):
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE resume_generations
+                    ADD COLUMN post_id INTEGER REFERENCES job_posts(id) ON DELETE RESTRICT
+                    """
+                )
+            )
+
+        if column_exists("job_details") and column_exists("post_id"):
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT id, job_details
+                    FROM resume_generations
+                    WHERE post_id IS NULL
+                    ORDER BY id ASC
+                    """
+                )
+            ).mappings().all()
+
+            for row in rows:
+                generation_id = row["id"]
+                job_details = (row["job_details"] or "").strip()
+
+                linked_post_id = conn.execute(
+                    text(
+                        """
+                        SELECT ja.post_id
+                        FROM job_application AS ja
+                        WHERE ja.resume_generated_id = :generation_id
+                          AND ja.post_id IS NOT NULL
+                        ORDER BY ja.id ASC
+                        LIMIT 1
+                        """
+                    ),
+                    {"generation_id": generation_id},
+                ).scalar()
+
+                if linked_post_id is None and job_details:
+                    linked_post_id = conn.execute(
+                        text(
+                            """
+                            SELECT id
+                            FROM job_posts
+                            WHERE job_description = :job_details
+                            ORDER BY id ASC
+                            LIMIT 1
+                            """
+                        ),
+                        {"job_details": job_details},
+                    ).scalar()
+
+                if linked_post_id is None:
+                    linked_post_id = conn.execute(
+                        text(
+                            """
+                            INSERT INTO job_posts (company, role, url, job_description, job_vector)
+                            VALUES ('Legacy import', '', '', :job_details, '[]'::jsonb)
+                            RETURNING id
+                            """
+                        ),
+                        {"job_details": job_details},
+                    ).scalar()
+
+                conn.execute(
+                    text(
+                        """
+                        UPDATE resume_generations
+                        SET post_id = :post_id
+                        WHERE id = :generation_id
+                        """
+                    ),
+                    {"post_id": linked_post_id, "generation_id": generation_id},
+                )
+
+        if column_exists("post_id"):
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE resume_generations
+                    ALTER COLUMN post_id SET NOT NULL
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_resume_generations_post_id
+                    ON resume_generations (post_id)
+                    """
+                )
+            )
+
+        if column_exists("job_details"):
+            conn.execute(text("ALTER TABLE resume_generations DROP COLUMN job_details"))
+
+        _mark_schema_migration_applied(conn, migration_name)
 
 
 def migrate_resume_generations_structure() -> None:
@@ -1179,7 +1852,14 @@ def init_db() -> None:
     migrate_linkedin_country_column()
     migrate_linkedin_created_at_column()
     migrate_skills_columns()
-    migrate_companies_table()
+    migrate_job_skills_table()
+    migrate_job_posts_table()
+    migrate_job_posts_merge_legacy_companies()
+    backfill_job_post_vectors()
+    migrate_job_application_post_id()
+    migrate_job_application_drop_legacy_job_fields()
+    migrate_job_application_applied_evidence_fields()
+    migrate_resume_generations_post_id()
     with SessionLocal() as db:
         seed_default_users(db)
         seed_test_identity_profile(db)

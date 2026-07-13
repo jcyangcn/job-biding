@@ -7,14 +7,10 @@ import {
   Button,
   Chip,
   Dialog,
-  DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
-  FormControlLabel,
   IconButton,
   Stack,
-  Switch,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -29,7 +25,13 @@ import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
-import { createJobApplication, listJobApplications, updateJobApplication } from 'src/services/jobApplicationApi';
+import ApplicationAppliedSection from './ApplicationAppliedSection';
+import {
+  createJobApplication,
+  listJobApplications,
+  persistApplicationScreenshotChanges,
+  updateJobApplication
+} from 'src/services/jobApplicationApi';
 import { listAllIdentities } from 'src/services/identityApi';
 import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
 import {
@@ -39,6 +41,7 @@ import {
   matchBestResume
 } from 'src/services/resumeApi';
 import { appliedAtToIso, formatDateTime } from 'src/utils/dateFormat';
+import { resolveAppliedFromEvidence } from 'src/utils/applicationAppliedHelpers';
 import { isDuplicateCompanyName } from 'src/utils/normalizeCompanyName';
 import { buildJobVector } from 'src/utils/jobVector';
 import { listSkillKeywords } from 'src/services/skillApi';
@@ -56,7 +59,8 @@ const EMPTY_FORM = {
   resume_generated_id: '',
   resume_online_link: '',
   applied: false,
-  applied_at: ''
+  applied_at: '',
+  success_link: ''
 };
 
 function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
@@ -88,8 +92,8 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [appliedConfirmOpen, setAppliedConfirmOpen] = useState(false);
   const [companyDuplicate, setCompanyDuplicate] = useState(false);
+  const [pendingScreenshotFile, setPendingScreenshotFile] = useState(null);
   const [existingApplications, setExistingApplications] = useState([]);
   const [resumeSource, setResumeSource] = useState('generated');
   const [choosing, setChoosing] = useState(false);
@@ -146,7 +150,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
       setSubmitting(false);
       setLoading(true);
       setCompanyDuplicate(false);
-      setAppliedConfirmOpen(false);
+      setPendingScreenshotFile(null);
       setResumeSource('generated');
       setChoosing(false);
       setDraftApplicationId(null);
@@ -225,30 +229,8 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     }
   };
 
-  const handleAppliedChange = (event) => {
-    const checked = event.target.checked;
-    if (checked) {
-      setAppliedConfirmOpen(true);
-      return;
-    }
-
-    setForm((current) => ({
-      ...current,
-      applied: false
-    }));
-  };
-
-  const handleConfirmApplied = () => {
-    setForm((current) => ({
-      ...current,
-      applied: true,
-      applied_at: format(new Date(), 'yyyy-MM-dd HH:mm')
-    }));
-    setAppliedConfirmOpen(false);
-  };
-
-  const handleCancelApplied = () => {
-    setAppliedConfirmOpen(false);
+  const handleAppliedSectionChange = (updates) => {
+    setForm((current) => ({ ...current, ...updates }));
   };
 
   const handleResumeSourceChange = (_event, value) => {
@@ -264,6 +246,16 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
   const buildApplicationPayload = useCallback(
     (resumeGeneratedId = null) => {
       const jobDescription = form.job_description.trim();
+      const hasEvidence =
+        Boolean(pendingScreenshotFile) || Boolean(form.success_link?.trim());
+      const appliedState = hasEvidence
+        ? resolveAppliedFromEvidence({
+            successLink: form.success_link,
+            hasScreenshot: Boolean(pendingScreenshotFile),
+            appliedAt: form.applied_at
+          })
+        : { applied: form.applied, applied_at: form.applied_at };
+
       return {
         profile_id: profile.id,
         role: form.role.trim(),
@@ -281,13 +273,16 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
           resumeSource === 'online' && form.resume_online_link.trim()
             ? form.resume_online_link.trim()
             : null,
-        applied: form.applied,
-        applied_at: form.applied
-          ? appliedAtToIso(form.applied_at || format(new Date(), 'yyyy-MM-dd HH:mm'))
+        success_link: form.success_link.trim() ? form.success_link.trim() : null,
+        applied: appliedState.applied,
+        applied_at: appliedState.applied
+          ? appliedAtToIso(
+              appliedState.applied_at || format(new Date(), 'yyyy-MM-dd HH:mm')
+            )
           : null
       };
     },
-    [profile, form, resumeSource, skillKeywords]
+    [profile, form, resumeSource, skillKeywords, pendingScreenshotFile]
   );
 
   const ensureApplicationRecord = useCallback(async () => {
@@ -311,9 +306,16 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
         job_vector: payload.job_vector,
         resume_generated_id: payload.resume_generated_id,
         resume_online_link: payload.resume_online_link,
+        success_link: payload.success_link,
         applied: payload.applied,
         applied_at: payload.applied_at
       });
+      if (pendingScreenshotFile) {
+        await persistApplicationScreenshotChanges(updated.id, {
+          pendingFile: pendingScreenshotFile,
+          removeExisting: false
+        });
+      }
       return updated.id;
     }
 
@@ -321,9 +323,15 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     if (mountedRef.current) {
       setDraftApplicationId(created.id);
     }
+    if (pendingScreenshotFile) {
+      await persistApplicationScreenshotChanges(created.id, {
+        pendingFile: pendingScreenshotFile,
+        removeExisting: false
+      });
+    }
     onSavedRef.current?.({ silent: true });
     return created.id;
-  }, [profile, form.link, form.job_description, buildApplicationPayload, draftApplicationId]);
+  }, [profile, form.link, form.job_description, buildApplicationPayload, draftApplicationId, pendingScreenshotFile]);
 
   const handleGenerateResume = async () => {
     if (!profile) return;
@@ -488,6 +496,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     setSubmitting(true);
     try {
       const payload = buildApplicationPayload();
+      let applicationId = draftApplicationId;
       if (draftApplicationId) {
         await updateJobApplication(draftApplicationId, {
           role: payload.role,
@@ -497,12 +506,22 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
           job_vector: payload.job_vector,
           resume_generated_id: payload.resume_generated_id,
           resume_online_link: payload.resume_online_link,
+          success_link: payload.success_link,
           applied: payload.applied,
           applied_at: payload.applied_at
         });
       } else {
-        await createJobApplication(payload);
+        const created = await createJobApplication(payload);
+        applicationId = created.id;
       }
+
+      if (applicationId && pendingScreenshotFile) {
+        await persistApplicationScreenshotChanges(applicationId, {
+          pendingFile: pendingScreenshotFile,
+          removeExisting: false
+        });
+      }
+
       notify('Application saved', { variant: 'success' });
       onSaved();
       onClose();
@@ -761,89 +780,40 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
 
                 <Box sx={{ flex: 1, minHeight: 0 }} />
 
-                <Stack spacing={1.25} sx={{ flexShrink: 0 }}>
-                  <Box
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="flex-end"
-                    gap={2}
-                    flexWrap="wrap"
-                    sx={{ flexShrink: 0 }}
-                  >
-                    <Box
-                      display="flex"
-                      alignItems="center"
-                      gap={1.5}
-                      flexWrap="wrap"
-                      sx={{
-                        minHeight: 56,
-                        px: 1.75,
-                        py: 1.1,
-                        borderRadius: theme.general.borderRadius,
-                        bgcolor: form.applied
-                          ? alpha(theme.palette.success.main, 0.14)
-                          : alpha(theme.palette.error.main, 0.14),
-                        border: `2px solid ${
-                          form.applied ? theme.palette.success.main : theme.palette.error.main
-                        }`
-                      }}
-                    >
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={form.applied}
-                            onChange={handleAppliedChange}
-                            color={form.applied ? 'success' : 'error'}
-                            disabled={loading}
-                          />
-                        }
-                        label={
-                          <Typography variant="h6" fontWeight={800}>
-                            Applied
-                          </Typography>
-                        }
-                        sx={{ m: 0 }}
-                      />
-                    </Box>
-                  </Box>
+                <ApplicationAppliedSection
+                  applied={form.applied}
+                  successLink={form.success_link}
+                  appliedAt={form.applied_at}
+                  onChange={handleAppliedSectionChange}
+                  pendingScreenshotFile={pendingScreenshotFile}
+                  onPendingScreenshotChange={setPendingScreenshotFile}
+                  applicationId={draftApplicationId}
+                  disabled={loading || submitting}
+                />
 
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    alignItems="center"
-                    justifyContent="flex-end"
-                    sx={{ flexShrink: 0 }}
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  justifyContent="flex-end"
+                  sx={{ flexShrink: 0 }}
+                >
+                  <Button
+                    variant="contained"
+                    startIcon={<SaveTwoToneIcon />}
+                    onClick={handleSubmit}
+                    disabled={busy}
                   >
-                    <Button
-                      variant="contained"
-                      startIcon={<SaveTwoToneIcon />}
-                      onClick={handleSubmit}
-                      disabled={busy}
-                    >
-                      {submitting ? 'Saving…' : 'Save'}
-                    </Button>
-                    <Button onClick={handleDialogClose} disabled={submitting}>
-                      Cancel
-                    </Button>
-                  </Stack>
+                    {submitting ? 'Saving…' : 'Save'}
+                  </Button>
+                  <Button onClick={handleDialogClose} disabled={submitting}>
+                    Cancel
+                  </Button>
                 </Stack>
               </Stack>
             </Box>
           </Box>
         </DialogContent>
-      </Dialog>
-
-      <Dialog open={appliedConfirmOpen} onClose={handleCancelApplied} maxWidth="xs" fullWidth>
-        <DialogTitle>Confirm applied</DialogTitle>
-        <DialogContent>
-          <DialogContentText>Are you sure applied correctly?</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelApplied}>Cancel</Button>
-          <Button onClick={handleConfirmApplied} variant="contained" autoFocus>
-            Yes, applied
-          </Button>
-        </DialogActions>
       </Dialog>
     </>
   );

@@ -3,7 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db_models import Skill
+from app.db_models import JobSkill
 
 # field -> keywords
 SKILL_CATALOG: dict[str, list[str]] = {
@@ -150,14 +150,19 @@ SKILL_CATALOG: dict[str, list[str]] = {
 }
 
 
-def seed_skills(db: Session) -> int:
+def seed_skills(db: Session, *, role: str = "Full stack engineer") -> int:
     """Insert missing skill keywords. Returns number of rows inserted."""
     existing = {
-        ((field_val or "").strip(), (keyword_val or "").strip())
-        for field_val, keyword_val in db.execute(select(Skill.field, Skill.keyword)).all()
+        (
+            (row.role or "").strip().lower(),
+            (row.field or "").strip().lower(),
+            (row.keyword or "").strip().lower(),
+        )
+        for row in db.scalars(select(JobSkill)).all()
     }
 
     inserted = 0
+    role_name = role.strip()
     for field, keywords in SKILL_CATALOG.items():
         field_name = field.strip()
         seen_in_field: set[str] = set()
@@ -169,15 +174,15 @@ def seed_skills(db: Session) -> int:
             if lowered in seen_in_field:
                 continue
             seen_in_field.add(lowered)
-            key = (field_name, keyword_name)
+            key = (role_name.lower(), field_name.lower(), lowered)
             if key in existing:
                 continue
             db.add(
-                Skill(
-                    role="",
+                JobSkill(
+                    role=role_name,
                     field=field_name,
                     keyword=keyword_name,
-                    weight=None,
+                    weight=1.0,
                 )
             )
             existing.add(key)

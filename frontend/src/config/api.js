@@ -18,17 +18,24 @@ export function getApiBase() {
   const builtIn = normalizeBase(process.env.REACT_APP_API_URL);
   if (builtIn) return builtIn;
 
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+  if (typeof window !== 'undefined') {
     const { hostname, port, protocol } = window.location;
-    // FastAPI (or reverse proxy) serves UI + /api on the same host/port.
-    if (!port || BACKEND_PORTS.has(port)) {
-      return '';
-    }
-    // Static preview servers (e.g. `serve -s build` on :3000) need the API host.
-    if (STATIC_DEV_PORTS.has(port)) {
+
+    if (process.env.NODE_ENV === 'development' && STATIC_DEV_PORTS.has(port)) {
       return `${protocol}//${hostname}:${DEFAULT_BACKEND_PORT}`;
     }
-    return '';
+
+    if (process.env.NODE_ENV === 'production') {
+      // FastAPI (or reverse proxy) serves UI + /api on the same host/port.
+      if (!port || BACKEND_PORTS.has(port)) {
+        return '';
+      }
+      // Static preview servers (e.g. `serve -s build` on :3000) need the API host.
+      if (STATIC_DEV_PORTS.has(port)) {
+        return `${protocol}//${hostname}:${DEFAULT_BACKEND_PORT}`;
+      }
+      return '';
+    }
   }
 
   return '';

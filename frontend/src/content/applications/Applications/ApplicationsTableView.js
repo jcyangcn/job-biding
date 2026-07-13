@@ -8,6 +8,7 @@ import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
 import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
 import {
   Box,
@@ -28,12 +29,14 @@ import {
   TableHead,
   TableRow,
   Tooltip,
-  Typography
+  Typography,
+  useTheme
 } from '@mui/material';
 import ApplicationCreateDialog from './ApplicationCreateDialog';
 import ApplicationDetailDialog from './ApplicationDetailDialog';
 import ApplicationEditDialog from './ApplicationEditDialog';
 import ApplicationResumeCell from './ApplicationResumeCell';
+import ApplicationScreenshotThumb from './ApplicationScreenshotThumb';
 import TableListFilters from 'src/components/TableListFilters';
 import { parseProfileDefaultResumeRef } from 'src/utils/profileDefaultResumeRef';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
@@ -94,26 +97,30 @@ function formatLinkPreview(link, maxLength = 42) {
 const COLUMN_WIDTHS = {
   no: '4%',
   profile: '9%',
-  bidder: '10%',
-  role: '18%',
-  company: '12%',
-  link: '14%',
-  resume: '16%',
-  applied: '12%',
-  actions: '14%'
+  bidder: '8%',
+  role: '14%',
+  company: '10%',
+  link: '11%',
+  resume: '12%',
+  applied: '9%',
+  screenshot: '10%',
+  successLink: '10%',
+  actions: '13%'
 };
 
 /** When Profile is shown, slightly shrink neighboring columns. */
 const COLUMN_WIDTHS_WITH_PROFILE = {
   no: '4%',
-  profile: '8%',
-  bidder: '8%',
-  role: '14%',
-  company: '10%',
-  link: '12%',
-  resume: '14%',
-  applied: '12%',
-  actions: '18%'
+  profile: '7%',
+  bidder: '7%',
+  role: '12%',
+  company: '9%',
+  link: '10%',
+  resume: '11%',
+  applied: '9%',
+  screenshot: '9%',
+  successLink: '9%',
+  actions: '13%'
 };
 
 function colSx(width) {
@@ -139,6 +146,7 @@ const BASE_SEARCH_FIELDS = [
   'role',
   'company',
   'link',
+  'success_link',
   (row) => formatResumeSource(row)
 ];
 
@@ -162,6 +170,7 @@ function ApplicationsTableView({
   tableCardHeight,
   renderLayout
 }) {
+  const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const fileInputRef = useRef(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -388,7 +397,7 @@ function ApplicationsTableView({
     }
   };
 
-  const columnCount = showProfileColumn ? 9 : 8;
+  const columnCount = showProfileColumn ? 11 : 10;
   const fixedTableCard = Boolean(tableCardHeight);
   const widths = showProfileColumn ? COLUMN_WIDTHS_WITH_PROFILE : COLUMN_WIDTHS;
 
@@ -396,7 +405,7 @@ function ApplicationsTableView({
     <TableListFilters
       search={search}
       onSearchChange={setSearch}
-      searchPlaceholder="Search role, company, link, description…"
+      searchPlaceholder="Search role, company, link, success link…"
       showDateRange={showDateRange}
       dateFrom={dateFrom}
       dateTo={dateTo}
@@ -549,6 +558,15 @@ function ApplicationsTableView({
                     onSort={handleSort}
                     sx={colSx(widths.applied)}
                   />
+                  <TableCell sx={colSx(widths.screenshot)}>Screenshot</TableCell>
+                  <SortableTableCell
+                    label="Success link"
+                    sortKey="success_link"
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                    sx={colSx(widths.successLink)}
+                  />
                   <TableCell align="right" sx={colSx(widths.actions)} />
                 </TableRow>
               </TableHead>
@@ -567,12 +585,7 @@ function ApplicationsTableView({
                   </TableRow>
                 ) : (
                   paginatedRows.map((row, index) => (
-                    <TableRow
-                      key={row.id}
-                      hover
-                      sx={{ cursor: 'pointer' }}
-                      onClick={() => openEditDialog(row)}
-                    >
+                    <TableRow key={row.id} hover>
                       <TableCell sx={colSx(widths.no)}>{rowOffset + index + 1}</TableCell>
                       {showProfileColumn ? (
                         <TableCell sx={colSx(widths.profile)}>
@@ -639,6 +652,51 @@ function ApplicationsTableView({
                               </Typography>
                             </Stack>
                           </Tooltip>
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ ...colSx(widths.screenshot), py: 0.5 }}>
+                        {row.applied_screenshot ? (
+                          <Box
+                            sx={{
+                              width: 128,
+                              height: 72,
+                              borderRadius: 1,
+                              overflow: 'hidden',
+                              border: `1px solid ${theme.palette.divider}`
+                            }}
+                          >
+                            <ApplicationScreenshotThumb
+                              applicationId={row.id}
+                              image={row.applied_screenshot}
+                              fill
+                              fillMode="cover"
+                              alt={row.role || 'Application screenshot'}
+                            />
+                          </Box>
+                        ) : (
+                          <Box
+                            sx={{
+                              width: 128,
+                              height: 72,
+                              borderRadius: 1,
+                              border: `1px dashed ${theme.palette.divider}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'text.disabled'
+                            }}
+                          >
+                            <ImageOutlinedIcon sx={{ fontSize: 28 }} />
+                          </Box>
+                        )}
+                      </TableCell>
+                      <TableCell sx={colSx(widths.successLink)}>
+                        {row.success_link ? (
+                          <Typography variant="body2" noWrap title={row.success_link}>
+                            {row.success_link}
+                          </Typography>
+                        ) : (
+                          '—'
                         )}
                       </TableCell>
                       <TableCell align="right" sx={colSx(widths.actions)} onClick={stopPropagation}>

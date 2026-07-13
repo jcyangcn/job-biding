@@ -172,7 +172,8 @@ export function buildResumeRequest({
   profileMarkdown,
   profileJson,
   profileId,
-  applicationId
+  applicationId,
+  postId
 }) {
   const trimmedJobDescription = jobDescription.trim();
   if (trimmedJobDescription.length < 50) {
@@ -187,6 +188,10 @@ export function buildResumeRequest({
 
   if (applicationId != null && applicationId !== '') {
     body.application_id = Number(applicationId);
+  }
+
+  if (postId != null && postId !== '') {
+    body.post_id = Number(postId);
   }
 
   if (profileMode === 'markdown') {
@@ -206,7 +211,7 @@ export function buildResumeRequest({
   return body;
 }
 
-export async function generateResumePdf(body) {
+async function postResumeRequest(body) {
   const res = await fetch(`${getApiBase()}/api/resumes`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -217,7 +222,26 @@ export async function generateResumePdf(body) {
     throw new Error(await readErrorDetail(res));
   }
 
-  const meta = await res.json();
+  return res.json();
+}
+
+export async function generateResumeForPost(body) {
+  const meta = await postResumeRequest(body);
+  const generationId =
+    meta.generation_id != null && meta.generation_id !== ''
+      ? Number(meta.generation_id)
+      : null;
+
+  return {
+    filename: sanitizePdfFilename(meta.filename),
+    generationId,
+    summaryChars: meta.summary_chars,
+    provider: meta.provider
+  };
+}
+
+export async function generateResumePdf(body) {
+  const meta = await postResumeRequest(body);
   const filename = sanitizePdfFilename(meta.filename);
   await downloadResumePdf(filename);
 

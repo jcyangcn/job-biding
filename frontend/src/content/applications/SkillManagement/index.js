@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
 import {
@@ -6,175 +6,119 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
+  Collapse,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  Divider,
   IconButton,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Stack,
   TextField,
   Tooltip,
   Typography
 } from '@mui/material';
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
-import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
-import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import CloseTwoToneIcon from '@mui/icons-material/CloseTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
+import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
+import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
+import FixedHeightMultilineField from 'src/components/FixedHeightMultilineField';
 import { PROJECT_NAME } from 'src/config/app';
-import SkillDetailDialog from './SkillDetailDialog';
-import TableListFilters from 'src/components/TableListFilters';
-import TablePaginationFooter from 'src/components/TablePaginationFooter';
-import SortableTableCell from 'src/components/SortableTableCell';
-import { useDetailDialog } from 'src/components/DetailDialog';
-import useServerTable from 'src/hooks/useServerTable';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
-import { formatDateTime } from 'src/utils/dateFormat';
 import {
+  bulkReplaceSkills,
   createSkill,
   deleteSkill,
-  listSkills,
-  updateSkill
+  listAllSkills
 } from 'src/services/skillApi';
+import {
+  groupSkillsByRole,
+  parseSkillBulkText
+} from 'src/utils/skillKeywords';
 
-const emptyForm = {
-  role: 'Full stack engineer',
-  field: '',
-  keyword: '',
-  weight: '1'
-};
+const DEFAULT_ROLE = 'Full stack engineer';
 
-function formatJsonField(value) {
-  const text = value == null ? '' : String(value);
-  if (!text.trim()) {
-    return '';
-  }
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
-  }
-}
+const PASTE_PLACEHOLDER = `Languages & Core Technologies (25)
+JavaScript, TypeScript, Python, Java, React, Node.js, ...
 
-function previewJsonCell(value, maxLength = 80) {
-  const text = value == null ? '' : String(value).replace(/\s+/g, ' ').trim();
-  if (!text) {
-    return '—';
-  }
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength)}…`;
+Databases (12)
+PostgreSQL, MySQL, MongoDB, Redis, ...`;
+
+function fieldKey(role, field) {
+  return `${role}\u0000${field}`;
 }
 
 function SkillManagement() {
   const { enqueueSnackbar } = useSnackbar();
-  useSetPageHeader('Skill Management', 'Manage role/field keywords and weights');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editingSkill, setEditingSkill] = useState(null);
-  const [deletingSkill, setDeletingSkill] = useState(null);
-  const [form, setForm] = useState(emptyForm);
+  useSetPageHeader('Skill Management', 'Paste skill lists by role and field');
+  const [roleGroups, setRoleGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const { open: detailOpen, selected: selectedSkill, openDetail, closeDetail, stopPropagation } =
-    useDetailDialog();
+  const [formOpen, setFormOpen] = useState(false);
+  const [roleName, setRoleName] = useState(DEFAULT_ROLE);
+  const [bulkText, setBulkText] = useState('');
+  const [addingFieldKey, setAddingFieldKey] = useState(null);
+  const [draftKeyword, setDraftKeyword] = useState('');
+  const [draftWeight, setDraftWeight] = useState('1');
 
-  const fetchSkills = useCallback((opts) => listSkills(opts), []);
+  const loadSkills = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await listAllSkills({ pageSize: 500 });
+      setRoleGroups(groupSkillsByRole(rows));
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to load skills', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [enqueueSnackbar]);
 
-  const {
-    total,
-    loading,
-    page,
-    limit,
-    search,
-    setSearch,
-    clearFilters,
-    hasActiveFilters,
-    showDateRange,
-    sortField,
-    sortDirection,
-    handleSort,
-    handlePageChange,
-    handleLimitChange,
-    rowsPerPageOptions,
-    refresh,
-    paginatedRows
-  } = useServerTable({
-    fetcher: fetchSkills,
-    defaultSort: { field: 'id', direction: 'desc' }
-  });
+  useEffect(() => {
+    loadSkills();
+  }, [loadSkills]);
 
-  const dialogTitle = useMemo(
-    () => (editingSkill ? 'Edit skill' : 'Add skill'),
-    [editingSkill]
-  );
-
-  const openCreateDialog = () => {
-    setEditingSkill(null);
-    setForm(emptyForm);
-    setDialogOpen(true);
+  const handleOpenForm = () => {
+    setRoleName(DEFAULT_ROLE);
+    setBulkText('');
+    setFormOpen(true);
   };
 
-  const openEditDialog = (skill) => {
-    closeDetail();
-    setEditingSkill(skill);
-    setForm({
-      role: skill.role || '',
-      field: formatJsonField(skill.field),
-      keyword: formatJsonField(skill.keyword),
-      weight: skill.weight == null || skill.weight === '' ? '1' : String(skill.weight)
-    });
-    setDialogOpen(true);
-  };
-
-  const closeDialog = () => {
+  const handleCancelForm = () => {
     if (!saving) {
-      setDialogOpen(false);
-      setEditingSkill(null);
-      setForm(emptyForm);
+      setFormOpen(false);
     }
   };
 
-  const handleFormChange = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }));
-  };
-
-  const handleSave = async () => {
-    const weightText = String(form.weight ?? '').trim();
-    let weightValue = 1.0;
-    if (weightText !== '') {
-      weightValue = Number(weightText);
-      if (Number.isNaN(weightValue) || weightValue < 0) {
-        enqueueSnackbar('Weight must be a number ≥ 0', { variant: 'warning' });
-        return;
-      }
+  const handleBulkSave = async () => {
+    const role = roleName.trim();
+    if (!role) {
+      enqueueSnackbar('Role is required', { variant: 'warning' });
+      return;
     }
 
-    const payload = {
-      role: form.role.trim(),
-      field: form.field.trim(),
-      keyword: form.keyword.trim(),
-      weight: weightValue
-    };
+    const parsedFields = parseSkillBulkText(bulkText);
+    if (!parsedFields.length) {
+      enqueueSnackbar('No skill data found. Paste category headers and comma-separated skills.', {
+        variant: 'warning'
+      });
+      return;
+    }
 
     setSaving(true);
     try {
-      if (editingSkill) {
-        await updateSkill(editingSkill.id, payload);
-        enqueueSnackbar('Skill updated', { variant: 'success' });
-      } else {
-        await createSkill(payload);
-        enqueueSnackbar('Skill created', { variant: 'success' });
-      }
-      setDialogOpen(false);
-      setEditingSkill(null);
-      setForm(emptyForm);
-      refresh();
+      const items = parsedFields.flatMap((fieldGroup) =>
+        fieldGroup.items.map((entry) => ({
+          field: fieldGroup.field,
+          keyword: entry.item,
+          weight: entry.weight == null || entry.weight === '' ? 1 : Number(entry.weight)
+        }))
+      );
+
+      await bulkReplaceSkills({ role, items });
+
+      enqueueSnackbar('Skills saved', { variant: 'success' });
+      setFormOpen(false);
+      setBulkText('');
+      await loadSkills();
     } catch (err) {
       enqueueSnackbar(err.message || 'Save failed', { variant: 'error' });
     } finally {
@@ -182,20 +126,65 @@ function SkillManagement() {
     }
   };
 
-  const confirmDelete = (skill) => {
-    setDeletingSkill(skill);
-    setDeleteOpen(true);
+  const openAddSkillForm = (role, field) => {
+    setAddingFieldKey(fieldKey(role, field));
+    setDraftKeyword('');
+    setDraftWeight('1');
   };
 
-  const handleDelete = async () => {
-    if (!deletingSkill) return;
+  const closeAddSkillForm = () => {
+    setAddingFieldKey(null);
+    setDraftKeyword('');
+    setDraftWeight('1');
+  };
+
+  const handleCancelAddSkill = () => {
+    if (!saving) {
+      closeAddSkillForm();
+    }
+  };
+
+  const handleAddSkill = async (role, field) => {
+    const keyword = draftKeyword.trim();
+    if (!keyword) {
+      enqueueSnackbar('Skill name is required', { variant: 'warning' });
+      return;
+    }
+
+    const weightValue = draftWeight === '' ? 1 : Number(draftWeight);
+    if (Number.isNaN(weightValue) || weightValue < 0) {
+      enqueueSnackbar('Weight must be a number ≥ 0', { variant: 'warning' });
+      return;
+    }
+
     setSaving(true);
     try {
-      await deleteSkill(deletingSkill.id);
-      enqueueSnackbar('Skill deleted', { variant: 'success' });
-      setDeleteOpen(false);
-      setDeletingSkill(null);
-      refresh();
+      await createSkill({
+        role,
+        field,
+        keyword,
+        weight: weightValue
+      });
+      enqueueSnackbar('Skill added', { variant: 'success' });
+      closeAddSkillForm();
+      await loadSkills();
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Add failed', { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSkill = async (skillId) => {
+    if (!skillId) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await deleteSkill(skillId);
+      enqueueSnackbar('Skill removed', { variant: 'success' });
+      await loadSkills();
     } catch (err) {
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
     } finally {
@@ -208,243 +197,191 @@ function SkillManagement() {
       <Helmet>
         <title>Skill Management - {PROJECT_NAME}</title>
       </Helmet>
-      <Container maxWidth="lg" sx={{ pt: 3 }}>
-        <Box sx={{ mb: 2 }}>
-          <TableListFilters
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search role, field, keyword…"
-            showDateRange={showDateRange}
-            onClear={clearFilters}
-            hasActiveFilters={hasActiveFilters}
-            filteredCount={total}
-            totalCount={total}
-            actions={
-              <>
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshTwoToneIcon />}
-                  onClick={() => refresh()}
-                  disabled={loading || saving}
-                >
-                  Refresh
+      <Container maxWidth="lg" sx={{ pt: 3, pb: 4 }}>
+        <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mb: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshTwoToneIcon />}
+            onClick={loadSkills}
+            disabled={loading || saving}
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddTwoToneIcon />}
+            onClick={handleOpenForm}
+            disabled={loading || saving}
+          >
+            Add Data
+          </Button>
+        </Stack>
+
+        <Collapse in={formOpen}>
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Paste skill data
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Use a category line like <b>Languages &amp; Core Technologies (25)</b>, then a
+                comma-separated skill list on the next line. Repeat for each field.
+              </Typography>
+              <TextField
+                fullWidth
+                label="Role"
+                value={roleName}
+                onChange={(event) => setRoleName(event.target.value)}
+                margin="normal"
+                required
+              />
+              <Box mt={2}>
+                <FixedHeightMultilineField
+                  height={360}
+                  label="Skill lists"
+                  placeholder={PASTE_PLACEHOLDER}
+                  value={bulkText}
+                  onChange={(event) => setBulkText(event.target.value)}
+                  monospace
+                />
+              </Box>
+              <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 2 }}>
+                <Button onClick={handleCancelForm} disabled={saving}>
+                  Cancel
                 </Button>
                 <Button
                   variant="contained"
-                  startIcon={<AddTwoToneIcon />}
-                  onClick={openCreateDialog}
+                  startIcon={<SaveTwoToneIcon />}
+                  onClick={handleBulkSave}
                   disabled={saving}
                 >
-                  Add skill
+                  {saving ? 'Saving…' : 'Save'}
                 </Button>
-              </>
-            }
-          />
-        </Box>
-        <Card>
-          <CardContent>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <SortableTableCell
-                      label="ID"
-                      sortKey="id"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Role"
-                      sortKey="role"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Field"
-                      sortKey="field"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Keyword"
-                      sortKey="keyword"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Weight"
-                      sortKey="weight"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Created"
-                      sortKey="created_at"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={7}>
-                        <Typography variant="body2" color="text.secondary">
-                          Loading…
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : paginatedRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7}>
-                        <Typography variant="body2" color="text.secondary">
-                          {hasActiveFilters
-                            ? 'No skills match your filters.'
-                            : 'No skills found.'}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedRows.map((row) => (
-                      <TableRow
-                        hover
-                        key={row.id}
-                        onClick={() => openDetail(row)}
-                        sx={{ cursor: 'pointer' }}
-                      >
-                        <TableCell>{row.id}</TableCell>
-                        <TableCell>{row.role || '—'}</TableCell>
-                        <TableCell title={row.field || ''}>{previewJsonCell(row.field)}</TableCell>
-                        <TableCell title={row.keyword || ''}>{previewJsonCell(row.keyword)}</TableCell>
-                        <TableCell>{row.weight == null ? '—' : row.weight}</TableCell>
-                        <TableCell>{formatDateTime(row.created_at)}</TableCell>
-                        <TableCell align="right" onClick={stopPropagation}>
-                          <Tooltip title="Edit" arrow>
-                            <IconButton
-                              color="primary"
-                              onClick={() => openEditDialog(row)}
-                              disabled={saving}
-                            >
-                              <EditTwoToneIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete" arrow>
-                            <IconButton
-                              color="error"
-                              onClick={() => confirmDelete(row)}
-                              disabled={saving}
-                            >
-                              <DeleteTwoToneIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TablePaginationFooter
-              count={total}
-              page={page}
-              rowsPerPage={limit}
-              rowsPerPageOptions={rowsPerPageOptions}
-              onPageChange={handlePageChange}
-              onRowsPerPageChange={handleLimitChange}
-            />
-          </CardContent>
-        </Card>
-      </Container>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Collapse>
 
-      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="md">
-        <DialogTitle>{dialogTitle}</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Role"
-            value={form.role}
-            onChange={handleFormChange('role')}
-            autoFocus
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Field (JSON)"
-            value={form.field}
-            onChange={handleFormChange('field')}
-            multiline
-            minRows={8}
-            placeholder={'{\n  "category": "Languages & Core Technologies",\n  "items": ["React", "Node.js"]\n}'}
-            InputProps={{
-              sx: {
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '0.85rem'
-              }
-            }}
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Keyword (JSON)"
-            value={form.keyword}
-            onChange={handleFormChange('keyword')}
-            multiline
-            minRows={8}
-            placeholder={'[\n  "React",\n  "Vue.js",\n  "Angular"\n]'}
-            InputProps={{
-              sx: {
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '0.85rem'
-              }
-            }}
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Weight"
-            type="number"
-            inputProps={{ min: 0, step: 0.1 }}
-            value={form.weight}
-            onChange={handleFormChange('weight')}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeDialog} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} variant="contained" disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={deleteOpen} onClose={() => !saving && setDeleteOpen(false)}>
-        <DialogTitle>Delete skill</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Delete keyword <b>{deletingSkill?.keyword}</b> for role{' '}
-            <b>{deletingSkill?.role}</b>? This cannot be undone.
+        {loading ? (
+          <Typography variant="body2" color="text.secondary">
+            Loading skills…
           </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleDelete} color="error" variant="contained" disabled={saving}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+        ) : roleGroups.length === 0 ? (
+          <Card>
+            <CardContent>
+              <Typography variant="body2" color="text.secondary">
+                No skills yet. Click <b>Add Data</b> to paste your skill lists.
+              </Typography>
+            </CardContent>
+          </Card>
+        ) : (
+          roleGroups.map((roleGroup) => (
+            <Card key={roleGroup.role} sx={{ mb: 3 }}>
+              <CardContent>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <WorkTwoToneIcon color="primary" />
+                  <Typography variant="h5" component="h2">
+                    {roleGroup.role}
+                  </Typography>
+                </Stack>
 
-      <SkillDetailDialog open={detailOpen} skill={selectedSkill} onClose={closeDetail} />
+                {roleGroup.fields.map((fieldGroup, fieldIndex) => {
+                  const addKey = fieldKey(roleGroup.role, fieldGroup.field);
+                  const isAdding = addingFieldKey === addKey;
+
+                  return (
+                    <Box
+                      key={`${roleGroup.role}-${fieldGroup.field}`}
+                      sx={{ mb: fieldIndex < roleGroup.fields.length - 1 ? 3 : 0 }}
+                    >
+                      {fieldIndex > 0 ? <Divider sx={{ mb: 2 }} /> : null}
+                      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 1 }}>
+                        <Typography variant="subtitle1" fontWeight={600}>
+                          {fieldGroup.field}{' '}
+                          <Typography component="span" variant="body2" color="text.secondary">
+                            ({fieldGroup.items.length})
+                          </Typography>
+                        </Typography>
+                        <Tooltip title="Add skill" arrow>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => openAddSkillForm(roleGroup.role, fieldGroup.field)}
+                            disabled={saving || isAdding}
+                          >
+                            <AddTwoToneIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+
+                      <Collapse in={isAdding}>
+                        <Stack
+                          direction={{ xs: 'column', sm: 'row' }}
+                          spacing={1}
+                          alignItems={{ xs: 'stretch', sm: 'center' }}
+                          sx={{ mb: 1.5 }}
+                        >
+                          <TextField
+                            size="small"
+                            label="Skill"
+                            value={draftKeyword}
+                            onChange={(event) => setDraftKeyword(event.target.value)}
+                            autoFocus
+                            fullWidth
+                          />
+                          <TextField
+                            size="small"
+                            label="Weight"
+                            type="number"
+                            value={draftWeight}
+                            onChange={(event) => setDraftWeight(event.target.value)}
+                            inputProps={{ min: 0, step: 0.1 }}
+                            sx={{ width: { xs: '100%', sm: 110 } }}
+                          />
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() => handleAddSkill(roleGroup.role, fieldGroup.field)}
+                            disabled={saving}
+                          >
+                            Add
+                          </Button>
+                          <Button size="small" onClick={handleCancelAddSkill} disabled={saving}>
+                            Cancel
+                          </Button>
+                        </Stack>
+                      </Collapse>
+
+                      {fieldGroup.items.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          No skills in this field.
+                        </Typography>
+                      ) : (
+                        <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                          {fieldGroup.items.map((entry) => (
+                            <Chip
+                              key={entry.id || `${fieldGroup.field}-${entry.item}`}
+                              label={`${entry.item} (${entry.weight ?? 1})`}
+                              size="small"
+                              variant="outlined"
+                              onDelete={
+                                entry.id && !saving
+                                  ? () => handleDeleteSkill(entry.id)
+                                  : undefined
+                              }
+                              deleteIcon={<CloseTwoToneIcon fontSize="small" />}
+                            />
+                          ))}
+                        </Stack>
+                      )}
+                    </Box>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </Container>
     </>
   );
 }

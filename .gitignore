@@ -1,6 +1,6 @@
 # Generated files (keep folder structure via .gitkeep)
-storage/downloads/*
-!storage/downloads/.gitkeep
+storage/downloads/generated_resumes/*
+!storage/downloads/generated_resumes/.gitkeep
 storage/uploads/*
 !storage/uploads/.gitkeep
 

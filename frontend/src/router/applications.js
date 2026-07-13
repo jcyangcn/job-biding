@@ -64,8 +64,8 @@ const LinkedInManagement = Loader(
 const SkillManagement = Loader(
   lazy(() => import('src/content/applications/SkillManagement'))
 );
-const CompanyManagement = Loader(
-  lazy(() => import('src/content/applications/CompanyManagement'))
+const PostManagement = Loader(
+  lazy(() => import('src/content/applications/PostManagement'))
 );
 const Applications = Loader(
   lazy(() => import('src/content/applications/Applications'))
@@ -185,10 +185,10 @@ const applicationsRoutes = [
     )
   },
   {
-    path: 'company-management',
+    path: 'post-management',
     element: (
       <RequireAdmin>
-        <CompanyManagement />
+        <PostManagement />
       </RequireAdmin>
     )
   },
