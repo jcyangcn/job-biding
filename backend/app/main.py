@@ -1807,7 +1807,9 @@ def _resolve_job_description(request: GenerateResumeRequest, db: Session) -> str
     if not job_description and request.application_id is not None:
         application = db.get(JobApplication, request.application_id)
         if application:
-            job_description = (application.job_description or "").strip()
+            post = get_job_post(db, application.post_id)
+            if post:
+                job_description = (post.job_description or "").strip()
     return job_description
 
 
