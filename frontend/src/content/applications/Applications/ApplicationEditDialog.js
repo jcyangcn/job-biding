@@ -180,7 +180,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       setChoosing(false);
       setSubmitting(false);
       setLoading(true);
-      setCompanyDuplicate(false);
       setPendingScreenshotFile(null);
       setExistingScreenshot(null);
       setRemoveExistingScreenshot(false);
