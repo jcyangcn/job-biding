@@ -1,5 +1,6 @@
 import AdminPanelSettingsTwoToneIcon from '@mui/icons-material/AdminPanelSettingsTwoTone';
 import AssignmentIndTwoToneIcon from '@mui/icons-material/AssignmentIndTwoTone';
+import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
 
 const menuItems = [
   {
@@ -16,6 +17,27 @@ const menuItems = [
             link: '/applications/user-management'
           },
           {
+            name: 'Fullz Management',
+            link: '/applications/citizen-management'
+          },
+          {
+            name: 'LinkedIn Management',
+            link: '/applications/linkedin-management'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    heading: 'Job Management',
+    adminOnly: true,
+    items: [
+      {
+        name: 'Job Management',
+        icon: WorkTwoToneIcon,
+        link: '/applications',
+        items: [
+          {
             name: 'Identity Management',
             link: '/applications/identity-management'
           },
@@ -30,14 +52,6 @@ const menuItems = [
           {
             name: 'Email Management',
             link: '/applications/email-management'
-          },
-          {
-            name: 'Citizen Management',
-            link: '/applications/citizen-management'
-          },
-          {
-            name: 'LinkedIn Management',
-            link: '/applications/linkedin-management'
           },
           {
             name: 'Skill Management',
