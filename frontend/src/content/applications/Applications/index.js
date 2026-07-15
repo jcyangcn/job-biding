@@ -15,6 +15,7 @@ import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import ApplicationProfileRow from './ApplicationProfileRow';
 import IdentityQADialog from './IdentityQADialog';
 import { listAllIdentities } from 'src/services/identityApi';
+import { listJobApplications } from 'src/services/jobApplicationApi';
 import { listAllProfiles } from 'src/services/profileApi';
 
 function Applications() {
@@ -26,6 +27,7 @@ function Applications() {
   );
   const [profiles, setProfiles] = useState([]);
   const [identities, setIdentities] = useState([]);
+  const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [qaOpen, setQaOpen] = useState(false);
   const [qaIdentity, setQaIdentity] = useState(null);
@@ -40,15 +42,37 @@ function Applications() {
     [identities]
   );
 
+  const applicationStatsByProfile = useMemo(() => {
+    const stats = {};
+    applications.forEach((application) => {
+      if (!stats[application.profile_id]) {
+        stats[application.profile_id] = {
+          total: 0,
+          applied: 0,
+          notApplied: 0
+        };
+      }
+      stats[application.profile_id].total += 1;
+      if (application.applied) {
+        stats[application.profile_id].applied += 1;
+      } else {
+        stats[application.profile_id].notApplied += 1;
+      }
+    });
+    return stats;
+  }, [applications]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [profileRows, identityRows] = await Promise.all([
+      const [profileRows, identityRows, applicationRows] = await Promise.all([
         listAllProfiles(),
-        listAllIdentities()
+        listAllIdentities(),
+        listJobApplications()
       ]);
       setProfiles(profileRows);
       setIdentities(identityRows);
+      setApplications(Array.isArray(applicationRows) ? applicationRows : []);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load profiles', {
         variant: 'error'
@@ -115,6 +139,7 @@ function Applications() {
                 key={profile.id}
                 profile={profile}
                 identity={identityById[profile.identity_id]}
+                stats={applicationStatsByProfile[profile.id]}
                 onQaClick={() => handleOpenQa(profile)}
                 onViewClick={() => handleViewProfile(profile)}
               />
