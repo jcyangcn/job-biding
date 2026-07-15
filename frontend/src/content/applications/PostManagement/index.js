@@ -48,16 +48,13 @@ import useServerTable from 'src/hooks/useServerTable';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { formatDateTime } from 'src/utils/dateFormat';
 import { buildJobVector } from 'src/utils/jobVector';
-import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
-import { listAllIdentities } from 'src/services/identityApi';
 import { listAllProfiles } from 'src/services/profileApi';
-import { buildResumeRequest, generateResumeForPost } from 'src/services/resumeApi';
+import { generateResumeForPost } from 'src/services/resumeApi';
 import { listSkillKeywords } from 'src/services/skillApi';
 import {
   createJobPost,
   batchAssignPostsToProfile,
   deleteJobPost,
-  listAllJobPosts,
   listJobPosts,
   updateJobPost
 } from 'src/services/jobPostApi';
@@ -79,6 +76,29 @@ function previewText(value, maxLength = 80) {
     return text;
   }
   return `${text.slice(0, maxLength)}…`;
+}
+
+// Fetch every job post across all pages. The list API caps page size (200),
+// so a single call misses posts when there are more than that — which made
+// batch selection/generation silently skip posts outside the first page.
+async function fetchAllJobPostsComplete() {
+  const pageSize = 200;
+  let page = 1;
+  const all = [];
+  for (;;) {
+    const result = await listJobPosts({ page, pageSize });
+    const items = Array.isArray(result?.items) ? result.items : [];
+    all.push(...items);
+    const total = Number(result?.total) || 0;
+    if (items.length < pageSize || all.length >= total) {
+      break;
+    }
+    page += 1;
+    if (page > 100) {
+      break;
+    }
+  }
+  return all;
 }
 
 function PostManagement() {
@@ -183,7 +203,7 @@ function PostManagement() {
 
   const handleSelectAllPosts = async () => {
     try {
-      const posts = await listAllJobPosts();
+      const posts = await fetchAllJobPostsComplete();
       setSelectedPostIds(posts.map((post) => Number(post.id)));
       enqueueSnackbar(`Selected ${posts.length} post(s)`, { variant: 'info' });
     } catch (err) {
@@ -400,24 +420,18 @@ function PostManagement() {
     setGenerateProgress({ current: 0, total: 0, label: 'Loading posts…' });
 
     try {
-      const [posts, identities] = await Promise.all([listAllJobPosts(), listAllIdentities()]);
+      const posts = await fetchAllJobPostsComplete();
       const selectedIdSet = new Set(selectedPostIds.map(Number));
-      const selectedPosts = posts.filter((post) => selectedIdSet.has(Number(post.id)));
-      const eligiblePosts = selectedPosts.filter(
-        (post) => String(post.job_description || '').trim().length >= 50
-      );
-      const skippedShort = selectedPosts.length - eligiblePosts.length;
+      // A resume is generated for every selected post, even when the job
+      // description is short/empty (the AI falls back to the profile).
+      const eligiblePosts = posts.filter((post) => selectedIdSet.has(Number(post.id)));
 
       if (!eligiblePosts.length) {
-        enqueueSnackbar('No selected posts with a long enough job description to generate resumes', {
+        enqueueSnackbar('Selected posts could not be found. Refresh the list and try again.', {
           variant: 'warning'
         });
         return;
       }
-
-      const identity =
-        identities.find((row) => Number(row.id) === Number(selectedProfile.identity_id)) || null;
-      const { markdown } = buildProfileContentFromJobProfile(selectedProfile, identity);
 
       enqueueSnackbar(
         `Generating ${eligiblePosts.length} resume(s). Each one usually takes 1–3 minutes.`,
@@ -439,15 +453,10 @@ function PostManagement() {
         });
 
         try {
-          const body = buildResumeRequest({
-            jobDescription: post.job_description,
-            profileMode: 'markdown',
-            profileMarkdown: markdown,
-            profileJson: '',
-            profileId: selectedProfile.id,
-            postId: post.id
+          const result = await generateResumeForPost({
+            profile_id: selectedProfile.id,
+            post_id: post.id
           });
-          const result = await generateResumeForPost(body);
           successCount += 1;
           enqueueSnackbar(
             `Resume saved for ${label}${result.generationId ? ` (#${result.generationId})` : ''}`,
@@ -470,9 +479,7 @@ function PostManagement() {
           { variant: successCount ? 'warning' : 'error' }
         );
       } else {
-        const suffix =
-          skippedShort > 0 ? ` (${skippedShort} post(s) skipped — job description too short)` : '';
-        enqueueSnackbar(`Generated and saved ${successCount} resume(s)${suffix}`, {
+        enqueueSnackbar(`Generated and saved ${successCount} resume(s)`, {
           variant: 'success'
         });
       }

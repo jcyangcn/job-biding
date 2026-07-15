@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     cursor_api_key: str = ""
     cursor_model: str = "composer-2.5"
+    # The Cursor Cloud Agents "create agent" call regularly takes ~60s to
+    # return, so the HTTP timeout must be comfortably above that.
+    cursor_request_timeout: float = 180.0
     host: str = "0.0.0.0"
     port: int = 8000
     database_url: str

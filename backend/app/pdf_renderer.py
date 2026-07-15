@@ -194,10 +194,14 @@ def _random_suffix(length: int = 4) -> str:
     return "".join(secrets.choice(_RANDOM_CHARS) for _ in range(length))
 
 
-def build_resume_path(display_name: str, application_id: int, output_dir: Path) -> Path:
-    """Build `{display_name}_{application_id:03d}{4 random alnum}.pdf`."""
+def build_resume_path(display_name: str, sequence_number: int, output_dir: Path) -> Path:
+    """Build `{display_name}_{sequence_number:03d}{4 random alnum}.pdf`.
+
+    ``sequence_number`` is the profile's per-resume sequence (existing resume
+    count + 1), zero-padded to 3 digits.
+    """
     safe = _sanitize_filename_part(display_name)
-    app_part = f"{application_id:03d}"
+    app_part = f"{sequence_number:03d}"
     while True:
         filename = f"{safe}_{app_part}{_random_suffix()}.pdf"
         path = output_dir / filename

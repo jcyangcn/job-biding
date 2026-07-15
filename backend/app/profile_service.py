@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 import re
 import secrets
@@ -8,7 +9,14 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.config import UPLOADS_DIR
 from app.country_codes import format_identity_label
 from app.db_models import JobIdentity, JobProfile, User
-from app.models import JobProfileCreateRequest, JobProfileUpdateRequest, ResumeDetail
+from app.models import (
+    JobProfileCreateRequest,
+    JobProfileUpdateRequest,
+    Profile,
+    ProfileEducation,
+    ProfileJob,
+    ResumeDetail,
+)
 from app.pagination import (
     normalize_page_params,
     page_dict,
@@ -107,8 +115,120 @@ def profile_to_response(db: Session, record: JobProfile, *, include_admin_fields
         "reference_tag": record.reference_tag,
         "is_active": record.is_active,
         "resume_detail": _parse_resume_detail(record.resume_detail).model_dump(mode="json"),
+        "resume_count": record.resume_count or 0,
         "created_at": record.created_at,
     }
+
+
+def _format_month_year(value: date | None) -> str:
+    return value.strftime("%b, %Y") if value else ""
+
+
+def _format_experience_period(start: date | None, end: date | None) -> str:
+    start_str = _format_month_year(start)
+    end_str = _format_month_year(end)
+    if not start_str and not end_str:
+        return ""
+    if start_str and end_str:
+        return f"{start_str} - {end_str}"
+    return start_str or end_str
+
+
+def _format_education_period(start: date | None, end: date | None) -> str:
+    start_str = str(start.year) if start else ""
+    end_str = str(end.year) if end else ""
+    if not start_str and not end_str:
+        return ""
+    if start_str and end_str:
+        return f"{start_str}-{end_str}"
+    return start_str or end_str
+
+
+_EXPERIENCE_MODES = {"Remote", "Onsite", "Hybrid"}
+
+
+def build_profile_from_job_profile(db: Session, profile_id: int) -> Profile | None:
+    """Build the resume-generation ``Profile`` from a stored job profile.
+
+    Mirrors the frontend ``buildProfileJsonFromJobProfile`` so the backend can
+    resolve the profile from ``profile_id`` alone — no ``profile_markdown`` needs
+    to be sent by the client.
+    """
+    record = db.get(JobProfile, profile_id)
+    if record is None:
+        return None
+    identity = db.get(JobIdentity, record.identity_id)
+    detail = _parse_resume_detail(record.resume_detail)
+
+    experience: list[ProfileJob] = []
+    for item in detail.work_experience:
+        if not any(
+            [item.company_name, item.role, item.location, item.start_date, item.end_date]
+        ):
+            continue
+        mode = item.method if item.method in _EXPERIENCE_MODES else "Remote"
+        experience.append(
+            ProfileJob(
+                company=item.company_name or "",
+                city=item.location or "",
+                role=item.role or "",
+                mode=mode,
+                period=_format_experience_period(item.start_date, item.end_date),
+            )
+        )
+
+    education_row = None
+    for item in detail.education:
+        if any([item.university_name, item.degree, item.start_date, item.end_date]):
+            education_row = item
+            break
+    if education_row is None and detail.education:
+        education_row = detail.education[0]
+
+    if education_row is not None:
+        education = ProfileEducation(
+            school=education_row.university_name or "",
+            degree=education_row.degree or "",
+            period=_format_education_period(
+                education_row.start_date, education_row.end_date
+            ),
+        )
+    else:
+        education = ProfileEducation(school="", degree="", period="")
+
+    certifications = [item for item in detail.certifications if item]
+
+    projects: list[str] = []
+    for item in detail.projects:
+        if not (item.project_name or item.stack):
+            continue
+        if item.project_name and item.stack:
+            projects.append(f"{item.project_name} ({item.stack})")
+        else:
+            projects.append(item.project_name or item.stack)
+
+    location = ", ".join(
+        part
+        for part in [
+            identity.city_state if identity else None,
+            identity.country if identity else None,
+        ]
+        if part
+    )
+
+    return Profile(
+        name=(identity.name if identity else "") or "",
+        title=record.roles or "",
+        email=record.email or "",
+        phone=record.phone or "",
+        location=location,
+        linkedin=(identity.linkedin if identity else "") or "",
+        portfolio=(identity.github if identity else "") or "",
+        experience=experience,
+        education=education,
+        certifications=certifications,
+        projects=projects,
+    )
 
 
 def user_can_access_profile(user: User, profile: JobProfile) -> bool:
@@ -299,6 +419,7 @@ def list_profiles_page(
         "reference_tag": JobProfile.reference_tag,
         "created_at": JobProfile.created_at,
         "is_active": JobProfile.is_active,
+        "resume_count": JobProfile.resume_count,
         "identity": JobIdentity.name,
         "identity_name": JobIdentity.name,
         "caller_name": caller.full_name,

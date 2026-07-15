@@ -459,6 +459,14 @@ function ProfileManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
+                      label="Resumes"
+                      sortKey="resume_count"
+                      align="right"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
                       label="Active"
                       sortKey="is_active"
                       sortField={sortField}
@@ -471,11 +479,11 @@ function ProfileManagement() {
                 <TableBody>
                   {loading && rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10}>Loading…</TableCell>
+                      <TableCell colSpan={11}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10}>
+                      <TableCell colSpan={11}>
                         {hasActiveFilters
                           ? 'No profiles match your filters.'
                           : 'No profiles found.'}
@@ -497,6 +505,7 @@ function ProfileManagement() {
                         <TableCell>{row.reference_tag || '—'}</TableCell>
                         <TableCell>{row.email}</TableCell>
                         <TableCell>{row.phone}</TableCell>
+                        <TableCell align="right">{row.resume_count ?? 0}</TableCell>
                         <TableCell>
                           <Label color={row.is_active ? 'success' : 'error'}>
                             {row.is_active ? 'Active' : 'Inactive'}

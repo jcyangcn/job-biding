@@ -80,7 +80,8 @@ class ResumeContent(BaseModel):
 
 
 class GenerateResumeRequest(BaseModel):
-    job_description: str = Field(min_length=50)
+    # Optional: when omitted, the backend resolves it from post_id/application_id.
+    job_description: str | None = Field(default=None)
     profile: Profile | None = None
     profile_markdown: str | None = None
     profile_id: int | None = None
@@ -374,6 +375,7 @@ class JobProfileResponse(BaseModel):
     reference_tag: str | None = None
     is_active: bool
     resume_detail: ResumeDetail
+    resume_count: int = 0
     created_at: datetime
 
     model_config = ConfigDict(populate_by_name=True)

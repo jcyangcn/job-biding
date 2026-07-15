@@ -37,8 +37,27 @@ def _generate_with_cursor(prompt: str) -> str:
     if settings.cursor_model:
         payload["model"] = {"id": settings.cursor_model}
 
-    with httpx.Client(timeout=60) as client:
-        create = client.post(f"{base}/agents", json=payload, auth=(api_key, ""))
+    # Creating a Cursor Cloud Agent regularly takes ~60s to return, so use a
+    # generous read timeout (configurable) and retry once on a network timeout.
+    timeout = httpx.Timeout(settings.cursor_request_timeout, connect=20.0)
+
+    with httpx.Client(timeout=timeout) as client:
+        create = None
+        last_timeout_error: httpx.TimeoutException | None = None
+        for attempt in range(2):
+            try:
+                create = client.post(
+                    f"{base}/agents", json=payload, auth=(api_key, "")
+                )
+                break
+            except httpx.TimeoutException as exc:
+                last_timeout_error = exc
+        if create is None:
+            raise RuntimeError(
+                "Cursor API timed out while creating the agent after "
+                f"{settings.cursor_request_timeout:.0f}s. Try again, or raise "
+                "CURSOR_REQUEST_TIMEOUT in the backend .env."
+            ) from last_timeout_error
         if create.status_code >= 400:
             detail = create.text
             if "storage" in detail.lower() and "disabled" in detail.lower():

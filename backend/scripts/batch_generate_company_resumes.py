@@ -21,13 +21,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai_generator import generate_resume_content
-from app.application_service import next_application_number_for_profile
 from app.config import GENERATED_DIR, REPO_ROOT, settings
 from app.database import SessionLocal, init_db
 from app.db_models import JobIdentity, JobPost, JobProfile
 from app.history import (
     build_resume_content_payload,
     build_resume_vector,
+    bump_profile_resume_count,
     save_resume_generation,
 )
 from app.models import Profile, ProfileEducation, ProfileJob, ResumeDetail
@@ -172,7 +172,7 @@ def generate_one(
     print(f"JD length: {len(job_description)} | provider: {provider}")
 
     content = generate_resume_content(profile, job_description, provider=provider)
-    app_number = next_application_number_for_profile(db, profile_id)
+    app_number = bump_profile_resume_count(db, profile_id)
     output_path = build_resume_path(profile.name, app_number, GENERATED_DIR)
     render_resume_pdf(profile, content, output_path)
 

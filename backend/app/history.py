@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, cast, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.application_service import get_application
@@ -255,6 +255,23 @@ def save_resume_generation(
     db.commit()
     db.refresh(row)
     return row
+
+
+def bump_profile_resume_count(db: Session, profile_id: int) -> int:
+    """Atomically increment the profile's monotonic resume counter and return it.
+
+    The counter only ever increases — deleting resumes never decrements it — so
+    the returned number is unique per profile and safe for resume filenames.
+    A profile whose counter is at 5 returns 6, giving ``<name>_006<random>.pdf``.
+    """
+    new_count = db.execute(
+        update(JobProfile)
+        .where(JobProfile.id == profile_id)
+        .values(resume_count=JobProfile.resume_count + 1)
+        .returning(JobProfile.resume_count)
+    ).scalar_one()
+    db.commit()
+    return new_count
 
 
 def list_resume_generations_page(

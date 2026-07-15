@@ -509,6 +509,7 @@ def migrate_job_profile_columns() -> None:
         "default_resume_original_name": "VARCHAR(500)",
         "proxy_detail": "TEXT NOT NULL DEFAULT ''",
         "resume_from_ai": "BOOLEAN NOT NULL DEFAULT TRUE",
+        "resume_count": "INTEGER NOT NULL DEFAULT 0",
     }
     with engine.begin() as conn:
         table_exists = conn.execute(
@@ -1860,6 +1861,50 @@ def migrate_clear_bidder_on_unapplied_applications() -> None:
         _mark_schema_migration_applied(conn, migration_name)
 
 
+def migrate_backfill_profile_resume_count() -> None:
+    """Seed ``job_profile.resume_count`` from existing resume generations.
+
+    The counter is monotonic (never decremented on deletion) and used for resume
+    filename numbering, so it must start at the number of resumes already
+    generated for each profile.
+    """
+    migration_name = "backfill_profile_resume_count_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+        tables = (
+            conn.execute(
+                text(
+                    """
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                      AND table_name IN ('job_profile', 'resume_generations')
+                    """
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if {"job_profile", "resume_generations"} <= set(tables):
+            conn.execute(
+                text(
+                    """
+                    UPDATE job_profile p
+                    SET resume_count = COALESCE(sub.cnt, 0)
+                    FROM (
+                        SELECT profile_id, COUNT(*) AS cnt
+                        FROM resume_generations
+                        WHERE profile_id IS NOT NULL
+                        GROUP BY profile_id
+                    ) sub
+                    WHERE p.id = sub.profile_id
+                    """
+                )
+            )
+        _mark_schema_migration_applied(conn, migration_name)
+
+
 def init_db() -> None:
     from app import db_models  # noqa: F401
     from app.auth import seed_default_users
@@ -1893,6 +1938,7 @@ def init_db() -> None:
     migrate_job_application_applied_evidence_fields()
     migrate_resume_generations_post_id()
     migrate_clear_bidder_on_unapplied_applications()
+    migrate_backfill_profile_resume_count()
     with SessionLocal() as db:
         seed_default_users(db)
         seed_test_identity_profile(db)

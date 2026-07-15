@@ -112,6 +112,9 @@ class JobProfile(Base):
     resume_from_ai: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
+    resume_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
     reference_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     resume_detail: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

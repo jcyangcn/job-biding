@@ -34,10 +34,7 @@ import {
   persistApplicationScreenshotChanges,
   updateJobApplication
 } from 'src/services/jobApplicationApi';
-import { listAllIdentities } from 'src/services/identityApi';
-import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
 import {
-  buildResumeRequest,
   generateResumePdf,
   listAllResumeGenerations,
   matchBestResume
@@ -90,7 +87,6 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     [enqueueSnackbar, closeSnackbar]
   );
 
-  const [identity, setIdentity] = useState(null);
   const [resumeGenerations, setResumeGenerations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -166,20 +162,15 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
 
       try {
         const skillRole = (profile.roles || '').trim() || 'Full stack engineer';
-        const [generationRows, identityRows, applicationRows, keywords] = await Promise.all([
+        const [generationRows, applicationRows, keywords] = await Promise.all([
           listAllResumeGenerations(),
-          listAllIdentities(),
           listJobApplications(profile.id),
           listSkillKeywords(skillRole)
         ]);
         if (cancelled) return;
 
-        const identities = Array.isArray(identityRows) ? identityRows : [];
         const applications = Array.isArray(applicationRows) ? applicationRows : [];
         const generations = Array.isArray(generationRows) ? generationRows : [];
-        const matchedIdentity =
-          identities.find((row) => row.id === profile.identity_id) || null;
-        setIdentity(matchedIdentity);
         setExistingApplications(applications);
         setResumeGenerations(generations);
         setSkillKeywords(Array.isArray(keywords) ? keywords : []);
@@ -295,9 +286,6 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     if (!form.link.trim()) {
       throw new Error('Link is required before generating a resume');
     }
-    if (form.job_description.trim().length < 50) {
-      throw new Error('Job description must be at least 50 characters.');
-    }
 
     const payload = buildApplicationPayload();
     if (draftApplicationId) {
@@ -360,19 +348,12 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
       return;
     }
 
-    // Capture inputs now; generation continues even if this dialog unmounts.
-    const { markdown } = buildProfileContentFromJobProfile(profile, identity);
-    const body = buildResumeRequest({
-      jobDescription: form.job_description,
-      profileMode: 'markdown',
-      profileMarkdown: markdown,
-      profileJson: '',
-      profileId: profile.id,
-      applicationId
-    });
-
     try {
-      const { filename, generationId } = await generateResumePdf(body);
+      // The backend reads the job description and profile from these IDs.
+      const { filename, generationId } = await generateResumePdf({
+        profile_id: profile.id,
+        application_id: applicationId
+      });
 
       notifyFn(
         `Resume PDF finished and saved to the application${generationId ? ` (#${generationId})` : ''}. Downloaded ${filename}.`,

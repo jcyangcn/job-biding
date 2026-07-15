@@ -21,6 +21,7 @@ from app.db_models import JobApplication, JobProfile, User
 from app.history import (
     build_resume_content_payload,
     build_resume_vector,
+    bump_profile_resume_count,
     list_resume_generations_page,
     match_best_resume_for_profile,
     resolve_resume_generation_post,
@@ -75,7 +76,6 @@ from app.application_service import (
     list_applications_admin,
     list_applications_for_profile,
     list_applications_for_user,
-    next_application_number_for_profile,
     remove_application_screenshot,
     resolve_application_screenshot_file,
     set_application_resume_generation_status,
@@ -83,6 +83,7 @@ from app.application_service import (
     update_application,
 )
 from app.profile_service import (
+    build_profile_from_job_profile,
     create_profile,
     delete_profile,
     get_profile,
@@ -1507,7 +1508,8 @@ def _create_resume_response(
     db: Session,
     user: User,
 ) -> GenerateResumeResponse:
-    profile = _resolve_profile(request)
+    profile = _resolve_profile(request, db)
+    job_description = _resolve_job_description(request, db)
     provider = request.ai_provider or settings.resolved_provider()
 
     if request.application_id is not None:
@@ -1522,7 +1524,7 @@ def _create_resume_response(
 
     try:
         content = generate_resume_content(
-            profile, request.job_description, provider=provider,
+            profile, job_description, provider=provider,
         )
     except Exception as exc:
         if request.application_id is not None:
@@ -1558,7 +1560,7 @@ def _create_resume_response(
     try:
         post = resolve_resume_generation_post(
             db,
-            job_description=request.job_description,
+            job_description=job_description,
             post_id=request.post_id,
             application_id=request.application_id,
         )
@@ -1593,7 +1595,7 @@ def _create_resume_response(
                 request.application_id,
                 generation_id,
                 user,
-                job_description=request.job_description,
+                job_description=job_description,
             )
             attached_application_id = request.application_id
         except PermissionError as exc:
@@ -1747,15 +1749,40 @@ async def create_resume_from_files(
     )
 
 
-def _resolve_profile(request: GenerateResumeRequest) -> Profile:
+def _resolve_profile(request: GenerateResumeRequest, db: Session) -> Profile:
     try:
         if request.profile:
             return request.profile
         if request.profile_markdown:
             return parse_profile_markdown(request.profile_markdown)
+        if request.profile_id is not None:
+            profile = build_profile_from_job_profile(db, request.profile_id)
+            if profile is None:
+                raise HTTPException(status_code=422, detail="Profile not found")
+            return profile
         return load_default_profile()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _resolve_job_description(request: GenerateResumeRequest, db: Session) -> str:
+    """Resolve the job description, falling back to the linked post/application.
+
+    Clients that pass ``post_id`` (or ``application_id``) do not need to send the
+    job description text — it is read from the stored record instead. A resume is
+    still generated when the description is short or empty (the AI leans on the
+    profile), so no minimum length is enforced here.
+    """
+    job_description = (request.job_description or "").strip()
+    if not job_description and request.post_id is not None:
+        post = get_job_post(db, request.post_id)
+        if post:
+            job_description = (post.job_description or "").strip()
+    if not job_description and request.application_id is not None:
+        application = db.get(JobApplication, request.application_id)
+        if application:
+            job_description = (application.job_description or "").strip()
+    return job_description
 
 
 def _resolve_resume_output_path(
@@ -1767,7 +1794,7 @@ def _resolve_resume_output_path(
         job_profile = get_profile(db, request.profile_id)
         if not job_profile:
             raise HTTPException(status_code=422, detail="Profile not found")
-        app_number = next_application_number_for_profile(db, request.profile_id)
+        app_number = bump_profile_resume_count(db, request.profile_id)
     else:
         app_number = 0
     return build_resume_path(profile.name, app_number, GENERATED_DIR)

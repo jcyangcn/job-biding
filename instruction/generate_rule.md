@@ -99,8 +99,10 @@ put <hr/>
 
 Generate resumes as PDF files in `storage/downloads/generated_resumes/`.
 
-Filename format: `{resume_profile_display_name}_{application_id_3_digits}{4_random_alphanumeric}.pdf`
+Filename format: `{resume_profile_display_name}_{resume_sequence_3_digits}{4_random_alphanumeric}.pdf`
 
-Example: `Thomas_Raville_007aB3x9.pdf` — name shown on the resume PDF, zero-padded application sequence (001, 002, …), plus 4 random letters/numbers.
+The sequence number is the profile's existing resume count + 1, zero-padded to 3 digits (a profile with 5 resumes → next is `006`).
+
+Example: `Thomas_Raville_006aB3x9.pdf` — name shown on the resume PDF, the next per-profile resume number, plus 4 random letters/numbers.
 
 

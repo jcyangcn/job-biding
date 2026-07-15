@@ -38,11 +38,8 @@ import {
   persistApplicationScreenshotChanges,
   updateJobApplication
 } from 'src/services/jobApplicationApi';
-import { listAllIdentities } from 'src/services/identityApi';
 import { listAllProfiles } from 'src/services/profileApi';
-import { buildProfileContentFromJobProfile } from 'src/data/jobProfileResumeContent';
 import {
-  buildResumeRequest,
   downloadResumePdf,
   generateResumePdf,
   listAllResumeGenerations,
@@ -102,7 +99,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   );
 
   const [profile, setProfile] = useState(null);
-  const [identity, setIdentity] = useState(null);
   const [resumeGenerations, setResumeGenerations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -208,11 +204,10 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       try {
         const skillRole =
           (application.role || '').trim() || 'Full stack engineer';
-        const [fullApplication, generationRows, identityRows, profileRows, applicationRows, keywords] =
+        const [fullApplication, generationRows, profileRows, applicationRows, keywords] =
           await Promise.all([
             getJobApplication(application.id),
             listAllResumeGenerations(),
-            listAllIdentities(),
             listAllProfiles(),
             listJobApplications(application.profile_id),
             listSkillKeywords(skillRole)
@@ -257,18 +252,13 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         setResumeSource(loadedSource);
 
         const profiles = Array.isArray(profileRows) ? profileRows : [];
-        const identities = Array.isArray(identityRows) ? identityRows : [];
         const applications = Array.isArray(applicationRows) ? applicationRows : [];
         const generations = Array.isArray(generationRows) ? generationRows : [];
 
         const matchedProfile =
           profiles.find((row) => row.id === application.profile_id) || null;
-        const matchedIdentity = matchedProfile
-          ? identities.find((row) => row.id === matchedProfile.identity_id) || null
-          : null;
 
         setProfile(matchedProfile);
-        setIdentity(matchedIdentity);
         setExistingApplications(applications);
         setResumeGenerations(generations);
 
@@ -359,10 +349,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       notify('Application not found', { variant: 'warning' });
       return;
     }
-    if (form.job_description.trim().length < 50) {
-      notify('Job description must be at least 50 characters.', { variant: 'warning' });
-      return;
-    }
 
     setGenerating(true);
     const generateToken = generateTokenRef.current + 1;
@@ -388,16 +374,11 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       if (generateTokenRef.current !== generateToken) return;
       onSavedRef.current?.({ silent: true });
 
-      const { markdown } = buildProfileContentFromJobProfile(profile, identity);
-      const body = buildResumeRequest({
-        jobDescription: form.job_description,
-        profileMode: 'markdown',
-        profileMarkdown: markdown,
-        profileJson: '',
-        profileId: profile.id,
-        applicationId: application.id
+      // The backend reads the job description and profile from these IDs.
+      const { filename, generationId } = await generateResumePdf({
+        profile_id: profile.id,
+        application_id: application.id
       });
-      const { filename, generationId } = await generateResumePdf(body);
       if (generateTokenRef.current !== generateToken) return;
 
       notify(
