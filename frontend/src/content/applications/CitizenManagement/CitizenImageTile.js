@@ -7,6 +7,8 @@ import CitizenImageThumb from './CitizenImageThumb';
 function CitizenImageTile({
   citizenId,
   image,
+  images,
+  imageIndex,
   size = 72,
   onPreview,
   onDownload,
@@ -19,7 +21,11 @@ function CitizenImageTile({
         citizenId={citizenId}
         image={image}
         size={size}
-        onPreview={onPreview}
+        onPreview={
+          onPreview
+            ? (preview) => onPreview({ ...preview, images, imageIndex })
+            : undefined
+        }
       />
       {onDownload || onDelete ? (
         <Stack
@@ -80,6 +86,13 @@ CitizenImageTile.propTypes = {
     filename: PropTypes.string.isRequired,
     original_name: PropTypes.string
   }).isRequired,
+  images: PropTypes.arrayOf(
+    PropTypes.shape({
+      filename: PropTypes.string.isRequired,
+      original_name: PropTypes.string
+    })
+  ),
+  imageIndex: PropTypes.number,
   size: PropTypes.number,
   onPreview: PropTypes.func,
   onDownload: PropTypes.func,

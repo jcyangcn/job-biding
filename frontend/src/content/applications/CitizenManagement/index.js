@@ -55,6 +55,7 @@ import {
   deleteCitizenReviewFile,
   downloadCitizenImage,
   downloadCitizenReviewFile,
+  fetchCitizenImageBlob,
   listCitizens,
   updateCitizen,
   uploadCitizenImage,
@@ -107,6 +108,7 @@ function CitizenManagement() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [imagePreviewNavigating, setImagePreviewNavigating] = useState(false);
   const [reviewPdfPreview, setReviewPdfPreview] = useState(null);
 
   const {
@@ -183,11 +185,52 @@ function CitizenManagement() {
   }, [adminUsers, form.reviewer]);
 
   const closeImagePreview = () => {
+    if (imagePreview?.ownedSrc && imagePreview.src) {
+      URL.revokeObjectURL(imagePreview.src);
+    }
     setImagePreview(null);
   };
 
   const openImagePreview = (preview) => {
     setImagePreview(preview);
+  };
+
+  const navigateImagePreview = async (step) => {
+    const images = imagePreview?.images || [];
+    if (images.length < 2 || imagePreviewNavigating) return;
+
+    const currentIndex = Number.isInteger(imagePreview.imageIndex)
+      ? imagePreview.imageIndex
+      : 0;
+    const nextIndex = (currentIndex + step + images.length) % images.length;
+    const nextImage = images[nextIndex];
+
+    setImagePreviewNavigating(true);
+    try {
+      const blob = await fetchCitizenImageBlob(imagePreview.citizenId, nextImage.filename);
+      const nextSrc = URL.createObjectURL(blob);
+      setImagePreview((current) => {
+        if (!current) {
+          URL.revokeObjectURL(nextSrc);
+          return current;
+        }
+        if (current.ownedSrc && current.src) {
+          URL.revokeObjectURL(current.src);
+        }
+        return {
+          ...current,
+          src: nextSrc,
+          title: nextImage.original_name || nextImage.filename,
+          image: nextImage,
+          imageIndex: nextIndex,
+          ownedSrc: true
+        };
+      });
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to load image', { variant: 'error' });
+    } finally {
+      setImagePreviewNavigating(false);
+    }
   };
 
   const loadUsers = useCallback(async () => {
@@ -480,29 +523,8 @@ function CitizenManagement() {
                 <TableHead>
                   <TableRow>
                     <SortableTableCell
-                      label="Country"
-                      sortKey="country"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
                       label="Name"
                       sortKey="name"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Review"
-                      sortKey="review_status"
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableTableCell
-                      label="Reviewer"
-                      sortKey="reviewer"
                       sortField={sortField}
                       sortDirection={sortDirection}
                       onSort={handleSort}
@@ -529,6 +551,13 @@ function CitizenManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
+                      label="Review"
+                      sortKey="review_status"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
                       label="Review Files"
                       sortKey={(row) => (row.review_files || []).length}
                       sortField={sortField}
@@ -548,11 +577,11 @@ function CitizenManagement() {
                 <TableBody>
                   {loading && rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10}>Loading…</TableCell>
+                      <TableCell colSpan={8}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10}>
+                      <TableCell colSpan={8}>
                         {hasActiveFilters
                           ? 'No citizens match your filters.'
                           : 'No citizens yet.'}
@@ -560,15 +589,20 @@ function CitizenManagement() {
                     </TableRow>
                   ) : (
                     paginatedRows.map((row) => (
-                      <TableRow key={row.id} hover>
+                      <TableRow
+                        key={row.id}
+                        hover
+                        onClick={() => openDetail(row)}
+                        sx={{ cursor: 'pointer' }}
+                      >
                         <TableCell>
-                          <CountryLabel country={row.country} noWrap />
+                          <Stack direction="row" spacing={0.75} alignItems="center">
+                            <CountryLabel country={row.country} showName={false} />
+                            <Typography variant="body2" noWrap>
+                              {row.name}
+                            </Typography>
+                          </Stack>
                         </TableCell>
-                        <TableCell>{row.name}</TableCell>
-                        <TableCell>
-                          <CitizenReviewStatusLabel status={row.review_status} />
-                        </TableCell>
-                        <TableCell>{row.reviewer || '—'}</TableCell>
                         <TableCell sx={{ maxWidth: 220 }}>
                           <CitizenLinkedInCell url={row.linkedin} />
                         </TableCell>
@@ -585,14 +619,15 @@ function CitizenManagement() {
                         <TableCell>
                           {(row.images || []).length ? (
                             <Stack direction="row" gap={0.75} alignItems="center" flexWrap="wrap">
-                              {row.images.slice(0, 4).map((image) => (
+                              {row.images.slice(0, 4).map((image, imageIndex) => (
                                 <CitizenImageTile
                                   key={image.filename}
                                   citizenId={row.id}
                                   image={image}
+                                  images={row.images}
+                                  imageIndex={imageIndex}
                                   size={48}
                                   onPreview={openImagePreview}
-                                  onDownload={() => handleDownloadImage(row.id, image)}
                                 />
                               ))}
                               {row.images.length > 4 ? (
@@ -606,6 +641,19 @@ function CitizenManagement() {
                           )}
                         </TableCell>
                         <TableCell>
+                          <Stack spacing={0.35} alignItems="flex-start">
+                            <CitizenReviewStatusLabel status={row.review_status} />
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              noWrap
+                              sx={{ fontSize: '0.7rem', textTransform: 'lowercase' }}
+                            >
+                              {row.reviewer || 'No reviewer'}
+                            </Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell onClick={stopPropagation}>
                           {(row.review_files || []).length ? (
                             <Stack direction="row" gap={0.25} alignItems="center" flexWrap="wrap">
                               {row.review_files.slice(0, 4).map((file) => (
@@ -775,7 +823,7 @@ function CitizenManagement() {
 
                 {editingRecord && currentImages.length ? (
                   <Grid container spacing={1.5}>
-                    {currentImages.map((image) => (
+                    {currentImages.map((image, imageIndex) => (
                       <Grid item xs={6} sm={4} md={3} key={image.filename}>
                         <Box
                           sx={{
@@ -788,6 +836,8 @@ function CitizenManagement() {
                             <CitizenImageTile
                               citizenId={editingRecord.id}
                               image={image}
+                              images={currentImages}
+                              imageIndex={imageIndex}
                               size={120}
                               onPreview={openImagePreview}
                               onDownload={() => handleDownloadImage(editingRecord.id, image)}
@@ -850,6 +900,17 @@ function CitizenManagement() {
           src={imagePreview?.src}
           title={imagePreview?.title}
           onClose={closeImagePreview}
+          onPrevious={
+            imagePreview?.images?.length > 1
+              ? () => navigateImagePreview(-1)
+              : undefined
+          }
+          onNext={
+            imagePreview?.images?.length > 1
+              ? () => navigateImagePreview(1)
+              : undefined
+          }
+          navigating={imagePreviewNavigating}
           onDownload={
             imagePreview?.citizenId && imagePreview?.image
               ? () => handleDownloadImage(imagePreview.citizenId, imagePreview.image)
