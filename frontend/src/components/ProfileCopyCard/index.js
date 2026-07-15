@@ -106,11 +106,12 @@ function CopyableReadOnlyField({
                 type="button"
                 aria-label={`Copy ${label}`}
                 onClick={handleCopy}
+                sx={{ p: 0.35 }}
               >
                 {copied ? (
-                  <CheckTwoToneIcon fontSize="small" color="success" />
+                  <CheckTwoToneIcon color="success" sx={{ fontSize: 14 }} />
                 ) : (
-                  <ContentCopyTwoToneIcon fontSize="small" />
+                  <ContentCopyTwoToneIcon sx={{ fontSize: 14 }} />
                 )}
               </IconButton>
             </Tooltip>
@@ -176,7 +177,14 @@ function getFieldColumns(field) {
   return field.columns || DEFAULT_COLUMNS;
 }
 
-function ProfileCopyCard({ profile, identity, actions, onClick, showDetails = true }) {
+function ProfileCopyCard({
+  profile,
+  identity,
+  actions,
+  onClick,
+  showDetails = true,
+  subtitle
+}) {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   const { country, name: resolvedName } = resolveIdentityDisplay({
@@ -263,6 +271,11 @@ function ProfileCopyCard({ profile, identity, actions, onClick, showDetails = tr
                   </Label>
                 ))}
               </Stack>
+              {subtitle ? (
+                <Typography variant="body2" color="text.secondary" noWrap mt={0.5}>
+                  {subtitle}
+                </Typography>
+              ) : null}
             </Box>
           </Stack>
 
@@ -327,7 +340,8 @@ ProfileCopyCard.propTypes = {
   identity: PropTypes.object,
   actions: PropTypes.node,
   onClick: PropTypes.func,
-  showDetails: PropTypes.bool
+  showDetails: PropTypes.bool,
+  subtitle: PropTypes.node
 };
 
 export default ProfileCopyCard;

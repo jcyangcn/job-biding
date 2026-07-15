@@ -18,6 +18,7 @@ function ProgressionEmailProfileRow({ profile, identity, stats, lastCheckedAt, o
       identity={identity}
       showDetails={false}
       onClick={onViewClick}
+      subtitle={profile.email}
       actions={
         <Stack
           direction={{ xs: 'column', sm: 'row' }}

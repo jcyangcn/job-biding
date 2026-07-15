@@ -75,12 +75,12 @@ function EmailLinkInfo({ value, maxWidth = 220, multiline = false, detailed = fa
             type="button"
             onClick={handleCopy}
             aria-label="Copy email link"
-            sx={{ flexShrink: 0 }}
+            sx={{ flexShrink: 0, p: 0.35 }}
           >
             {copied ? (
-              <CheckTwoToneIcon fontSize="small" color="success" />
+              <CheckTwoToneIcon color="success" sx={{ fontSize: 14 }} />
             ) : (
-              <ContentCopyTwoToneIcon fontSize="small" />
+              <ContentCopyTwoToneIcon sx={{ fontSize: 14 }} />
             )}
           </IconButton>
         </Tooltip>
@@ -115,11 +115,12 @@ function EmailLinkInfo({ value, maxWidth = 220, multiline = false, detailed = fa
           type="button"
           onClick={handleCopy}
           aria-label="Copy email link"
+          sx={{ p: 0.35 }}
         >
           {copied ? (
-            <CheckTwoToneIcon fontSize="small" color="success" />
+            <CheckTwoToneIcon color="success" sx={{ fontSize: 14 }} />
           ) : (
-            <ContentCopyTwoToneIcon fontSize="small" />
+            <ContentCopyTwoToneIcon sx={{ fontSize: 14 }} />
           )}
         </IconButton>
       </Tooltip>
