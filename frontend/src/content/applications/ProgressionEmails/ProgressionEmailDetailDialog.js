@@ -2,7 +2,6 @@ import PropTypes from 'prop-types';
 import { Grid, Typography } from '@mui/material';
 import BusinessTwoToneIcon from '@mui/icons-material/BusinessTwoTone';
 import CalendarTodayTwoToneIcon from '@mui/icons-material/CalendarTodayTwoTone';
-import EmailTwoToneIcon from '@mui/icons-material/EmailTwoTone';
 import NotesTwoToneIcon from '@mui/icons-material/NotesTwoTone';
 import TagTwoToneIcon from '@mui/icons-material/TagTwoTone';
 import ProgressionEmailStatusLabel from './ProgressionEmailStatusLabel';
@@ -12,6 +11,7 @@ import { isHumanInterviewType } from 'src/data/progressionEmailOptions';
 import {
   DetailDialog,
   DetailField,
+  DetailItem,
   DetailTextSection,
   formatDetailDate
 } from 'src/components/DetailDialog';
@@ -40,20 +40,30 @@ function ProgressionEmailDetailDialog({ open, email, onClose }) {
       <Grid container spacing={2}>
         <DetailField label="Reference no" value={email.reference_no} icon={TagTwoToneIcon} />
         <DetailField label="Company" value={email.company || '—'} icon={BusinessTwoToneIcon} />
-        <DetailField label="Type" icon={EmailTwoToneIcon}>
-          <ProgressionEmailTypeLabel type={email.type} />
-        </DetailField>
-        <DetailField label="Status" icon={NotesTwoToneIcon}>
-          <ProgressionEmailStatusLabel status={email.status} />
-        </DetailField>
+        <Grid item xs={12}>
+          <EmailLinkInfo value={email.email_link} detailed />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <DetailItem elevation={0}>
+            <Typography variant="overline" color="text.secondary" display="block" mb={0.5}>
+              Type
+            </Typography>
+            <ProgressionEmailTypeLabel type={email.type} />
+          </DetailItem>
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <DetailItem elevation={0}>
+            <Typography variant="overline" color="text.secondary" display="block" mb={0.5}>
+              Status
+            </Typography>
+            <ProgressionEmailStatusLabel status={email.status} />
+          </DetailItem>
+        </Grid>
         <DetailField label="Email date" icon={CalendarTodayTwoToneIcon}>
           <Typography variant="body1">{formatDetailDate(email.email_date) || '—'}</Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
             Created {formatDetailDate(email.created_at) || '—'}
           </Typography>
-        </DetailField>
-        <DetailField label="Email" icon={EmailTwoToneIcon} xs={12} sm={12}>
-          <EmailLinkInfo value={email.email_link} multiline />
         </DetailField>
       </Grid>
 

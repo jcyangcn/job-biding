@@ -447,7 +447,7 @@ function ProgressionEmailsTableView({
                   onSort={handleSort}
                 />
                 <SortableTableCell
-                  label="Email"
+                  label="Email Link"
                   sortKey="email_link"
                   sortField={sortField}
                   sortDirection={sortDirection}

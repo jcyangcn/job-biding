@@ -25,7 +25,7 @@ export function isHumanInterviewType(value) {
 export function getProgressionEmailTypeColor(value) {
   switch (value) {
     case 'human_interview':
-      return 'black';
+      return 'success';
     case 'technical_assignment':
       return 'primary';
     case 'test_task':
