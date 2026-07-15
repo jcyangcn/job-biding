@@ -29,10 +29,12 @@ import {
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import ProfileDetailDialog from './ProfileDetailDialog';
 import ProfileDefaultResumeUpload from './ProfileDefaultResumeUpload';
+import ProfileResumeHistoryDialog from './ProfileResumeHistoryDialog';
 import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
@@ -95,6 +97,7 @@ function ProfileManagement() {
   const [roleOptions, setRoleOptions] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [resumeHistoryProfile, setResumeHistoryProfile] = useState(null);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deletingRecord, setDeletingRecord] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -465,7 +468,7 @@ function ProfileManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
-                      label="Resumes"
+                      label="Resumes Ready"
                       sortKey="resume_count"
                       align="right"
                       sortField={sortField}
@@ -517,7 +520,19 @@ function ProfileManagement() {
                         <TableCell>{row.reference_tag || '—'}</TableCell>
                         <TableCell>{row.email}</TableCell>
                         <TableCell>{row.phone}</TableCell>
-                        <TableCell align="right">{row.resume_count ?? 0}</TableCell>
+                        <TableCell align="right" onClick={stopPropagation}>
+                          <Tooltip title="View generated resumes">
+                            <Button
+                              size="small"
+                              color="primary"
+                              startIcon={<PictureAsPdfTwoToneIcon />}
+                              onClick={() => setResumeHistoryProfile(row)}
+                              sx={{ minWidth: 0 }}
+                            >
+                              {row.resume_count ?? 0}
+                            </Button>
+                          </Tooltip>
+                        </TableCell>
                         <TableCell>
                           <Label color={row.is_active ? 'success' : 'error'}>
                             {row.is_active ? 'Active' : 'Inactive'}
@@ -770,6 +785,12 @@ function ProfileManagement() {
         open={detailOpen}
         profile={selectedProfile}
         onClose={closeDetail}
+      />
+
+      <ProfileResumeHistoryDialog
+        open={Boolean(resumeHistoryProfile)}
+        profile={resumeHistoryProfile}
+        onClose={() => setResumeHistoryProfile(null)}
       />
     </>
   );

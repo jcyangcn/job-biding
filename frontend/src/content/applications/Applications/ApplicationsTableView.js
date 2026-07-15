@@ -596,7 +596,12 @@ function ApplicationsTableView({
                   </TableRow>
                 ) : (
                   paginatedRows.map((row, index) => (
-                    <TableRow key={row.id} hover>
+                    <TableRow
+                      key={row.id}
+                      hover
+                      onClick={() => openEditDialog(row)}
+                      sx={{ cursor: 'pointer' }}
+                    >
                       <TableCell sx={colSx(widths.no)}>{rowOffset + index + 1}</TableCell>
                       {showProfileColumn ? (
                         <TableCell sx={colSx(widths.profile)}>
