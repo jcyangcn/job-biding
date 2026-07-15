@@ -45,11 +45,12 @@ export function CopyFieldAdornment({ label, value, disabled = false }) {
           onMouseDown={handleMouseDown}
           onClick={handleCopy}
           disabled={!canCopy}
+          sx={{ p: 0.35 }}
         >
           {copied ? (
-            <CheckTwoToneIcon fontSize="small" color="success" />
+            <CheckTwoToneIcon color="success" sx={{ fontSize: 14 }} />
           ) : (
-            <ContentCopyTwoToneIcon fontSize="small" />
+            <ContentCopyTwoToneIcon sx={{ fontSize: 14 }} />
           )}
         </IconButton>
       </span>

@@ -121,6 +121,7 @@ function ApplicationManagement() {
                 <Grid item xs={12} md={3}>
                   <ProfileSidebar
                     profiles={profiles}
+                    identities={identities}
                     loading={loadingProfiles}
                     selectedProfileId={selectedProfileId}
                     onSelectProfile={setSelectedProfileId}

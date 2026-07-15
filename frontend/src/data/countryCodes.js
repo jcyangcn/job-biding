@@ -206,4 +206,16 @@ export function formatIdentityLabel(identity) {
   return `${getCountryCode(identity.country)}_${identity.name}`;
 }
 
+export function parseIdentityLabel(label) {
+  if (!label) return { countryCode: '', name: '' };
+  const underscoreIndex = label.indexOf('_');
+  if (underscoreIndex === -1) {
+    return { countryCode: '', name: label };
+  }
+  return {
+    countryCode: label.slice(0, underscoreIndex),
+    name: label.slice(underscoreIndex + 1)
+  };
+}
+
 export default COUNTRY_NAME_TO_CODE;

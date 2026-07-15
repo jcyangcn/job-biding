@@ -38,6 +38,7 @@ import ApplicationEditDialog from './ApplicationEditDialog';
 import ApplicationResumeCell from './ApplicationResumeCell';
 import ApplicationScreenshotThumb from './ApplicationScreenshotThumb';
 import TableListFilters from 'src/components/TableListFilters';
+import ApplicationIdentityLabel from 'src/components/IdentityLabel';
 import { parseProfileDefaultResumeRef } from 'src/utils/profileDefaultResumeRef';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
@@ -262,6 +263,16 @@ function ApplicationsTableView({
     rowsPerPageOptions,
     rowOffset
   } = useTablePagination(sortedRows);
+
+  const profileLookup = useMemo(
+    () => new Map(profiles.map((item) => [item.id, item])),
+    [profiles]
+  );
+
+  const identityLookup = useMemo(
+    () => new Map(identities.map((item) => [item.id, item])),
+    [identities]
+  );
 
   const profileLabelToId = useMemo(() => {
     const map = {};
@@ -589,9 +600,13 @@ function ApplicationsTableView({
                       <TableCell sx={colSx(widths.no)}>{rowOffset + index + 1}</TableCell>
                       {showProfileColumn ? (
                         <TableCell sx={colSx(widths.profile)}>
-                          <Typography variant="body2" sx={ellipsisSx}>
-                            {row.profile_label || '—'}
-                          </Typography>
+                          <ApplicationIdentityLabel
+                            identityId={profileLookup.get(row.profile_id)?.identity_id}
+                            label={row.profile_label}
+                            identityById={identityLookup}
+                            typographySx={ellipsisSx}
+                            sx={{ minWidth: 0, maxWidth: '100%' }}
+                          />
                         </TableCell>
                       ) : null}
                       <TableCell sx={colSx(widths.bidder)}>

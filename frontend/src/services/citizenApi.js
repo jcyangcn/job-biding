@@ -150,7 +150,7 @@ export function deleteCitizenReviewFile(citizenId, filename) {
   );
 }
 
-export async function downloadCitizenReviewFile(citizenId, filename, originalName) {
+export async function fetchCitizenReviewFileBlob(citizenId, filename) {
   const response = await fetch(
     `${getApiBase()}/api/citizens/${citizenId}/review-files/${encodeURIComponent(filename)}`,
     { headers: authHeaders() }
@@ -160,7 +160,11 @@ export async function downloadCitizenReviewFile(citizenId, filename, originalNam
     throw new Error(await parseError(response));
   }
 
-  const blob = await response.blob();
+  return response.blob();
+}
+
+export async function downloadCitizenReviewFile(citizenId, filename, originalName) {
+  const blob = await fetchCitizenReviewFileBlob(citizenId, filename);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

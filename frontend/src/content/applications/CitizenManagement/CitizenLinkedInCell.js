@@ -1,8 +1,36 @@
 import PropTypes from 'prop-types';
-import CopyableLink from 'src/components/CopyableLink';
+import { Link, Typography } from '@mui/material';
 
 function CitizenLinkedInCell({ url, maxWidth = 160 }) {
-  return <CopyableLink url={url} label="LinkedIn" maxWidth={maxWidth} emptyText="—" />;
+  const text = url?.trim();
+
+  if (!text) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        —
+      </Typography>
+    );
+  }
+
+  return (
+    <Link
+      href={text}
+      target="_blank"
+      rel="noopener noreferrer"
+      underline="hover"
+      title={text}
+      onClick={(event) => event.stopPropagation()}
+      sx={{
+        display: 'block',
+        maxWidth,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }}
+    >
+      {text}
+    </Link>
+  );
 }
 
 CitizenLinkedInCell.propTypes = {

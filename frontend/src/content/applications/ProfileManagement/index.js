@@ -40,6 +40,7 @@ import { useDetailDialog } from 'src/components/DetailDialog';
 import useServerTable from 'src/hooks/useServerTable';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { uniqueFieldValues } from 'src/utils/tableListFilters';
+import ProfileIdentityLabel from 'src/components/IdentityLabel';
 import { formatIdentityLabel } from 'src/data/countryCodes';
 import { listAllIdentities } from 'src/services/identityApi';
 import {
@@ -134,6 +135,11 @@ function ProfileManagement() {
     selectIds: ['role', 'active'],
     dateField: 'created_at'
   });
+
+  const identityById = useMemo(
+    () => new Map(identities.map((item) => [item.id, item])),
+    [identities]
+  );
 
   const selectedIdentity = useMemo(
     () => identities.find((item) => item.id === form.identity_id) || null,
@@ -498,7 +504,13 @@ function ProfileManagement() {
                         onClick={() => openDetail(row)}
                       >
                         <TableCell>{row.id}</TableCell>
-                        <TableCell>{row.identity_name}</TableCell>
+                        <TableCell>
+                          <ProfileIdentityLabel
+                            identityId={row.identity_id}
+                            identityName={row.identity_name}
+                            identityById={identityById}
+                          />
+                        </TableCell>
                         <TableCell>{row.bidder_name}</TableCell>
                         <TableCell>{row.caller_name || '—'}</TableCell>
                         <TableCell>{row.roles}</TableCell>

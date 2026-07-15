@@ -15,6 +15,17 @@ import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import ProgressionEmailProfileRow from './ProgressionEmailProfileRow';
 import { listAllIdentities } from 'src/services/identityApi';
 import { listAllProfiles } from 'src/services/profileApi';
+import { listAllProgressionEmails } from 'src/services/progressionEmailApi';
+
+const LAST_CHECKED_STORAGE_KEY = 'progression-email-last-checked';
+
+function loadLastCheckedDates() {
+  try {
+    return JSON.parse(window.localStorage.getItem(LAST_CHECKED_STORAGE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
 
 function ProgressionEmails() {
   const navigate = useNavigate();
@@ -25,6 +36,8 @@ function ProgressionEmails() {
   );
   const [profiles, setProfiles] = useState([]);
   const [identities, setIdentities] = useState([]);
+  const [progressionEmails, setProgressionEmails] = useState([]);
+  const [lastCheckedByProfile, setLastCheckedByProfile] = useState(loadLastCheckedDates);
   const [loading, setLoading] = useState(true);
 
   const activeProfiles = useMemo(
@@ -37,15 +50,38 @@ function ProgressionEmails() {
     [identities]
   );
 
+  const emailStatsByProfile = useMemo(() => {
+    const stats = {};
+    progressionEmails.forEach((email) => {
+      if (!stats[email.profile_id]) {
+        stats[email.profile_id] = {
+          total: 0,
+          humanInterviews: 0,
+          needAction: 0
+        };
+      }
+      stats[email.profile_id].total += 1;
+      if (email.type === 'human_interview') {
+        stats[email.profile_id].humanInterviews += 1;
+      }
+      if (email.status === 'received') {
+        stats[email.profile_id].needAction += 1;
+      }
+    });
+    return stats;
+  }, [progressionEmails]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [profileRows, identityRows] = await Promise.all([
+      const [profileRows, identityRows, emailRows] = await Promise.all([
         listAllProfiles(),
-        listAllIdentities()
+        listAllIdentities(),
+        listAllProgressionEmails()
       ]);
       setProfiles(profileRows);
       setIdentities(identityRows);
+      setProgressionEmails(emailRows);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load profiles', {
         variant: 'error'
@@ -60,6 +96,12 @@ function ProgressionEmails() {
   }, [loadData]);
 
   const handleProfileClick = (profile) => {
+    const checkedAt = new Date().toISOString();
+    setLastCheckedByProfile((current) => {
+      const updated = { ...current, [profile.id]: checkedAt };
+      window.localStorage.setItem(LAST_CHECKED_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
     navigate(`/applications/progression-emails/${profile.id}`);
   };
 
@@ -97,6 +139,8 @@ function ProgressionEmails() {
                 key={profile.id}
                 profile={profile}
                 identity={identityById[profile.identity_id]}
+                stats={emailStatsByProfile[profile.id]}
+                lastCheckedAt={lastCheckedByProfile[profile.id]}
                 onViewClick={() => handleProfileClick(profile)}
               />
             ))}

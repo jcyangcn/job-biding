@@ -43,7 +43,7 @@ from app.citizen_service import (
     create_citizen,
     delete_citizen,
     get_citizen,
-    list_citizens,
+    list_citizens_page,
     remove_citizen_image,
     remove_citizen_review_file,
     resolve_citizen_image_path,
@@ -1002,12 +1002,38 @@ def delete_job_progression_email_endpoint(
     return {"ok": True}
 
 
-@app.get("/api/citizens", response_model=list[CitizenResponse])
+@app.get("/api/citizens")
 def list_citizens_endpoint(
+    page: int = 1,
+    page_size: int = 10,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    review_status: str | None = None,
+    country: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return [citizen_to_response(row) for row in list_citizens(db)]
+    result = list_citizens_page(
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        review_status=review_status,
+        country=country,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    return {
+        "items": [citizen_to_response(row) for row in result["items"]],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+    }
 
 
 @app.post("/api/citizens", response_model=CitizenResponse)

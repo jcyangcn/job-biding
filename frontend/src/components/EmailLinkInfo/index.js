@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
 import { useSnackbar } from 'notistack';
-import { Box, IconButton, Tooltip, Typography } from '@mui/material';
+import { alpha, Box, IconButton, Link, Tooltip, Typography } from '@mui/material';
 import CheckTwoToneIcon from '@mui/icons-material/CheckTwoTone';
 import ContentCopyTwoToneIcon from '@mui/icons-material/ContentCopyTwoTone';
+import OpenInNewTwoToneIcon from '@mui/icons-material/OpenInNewTwoTone';
 import { copyOnUserClick } from 'src/utils/copyToClipboard';
 
-function EmailLinkInfo({ value, maxWidth = 220, multiline = false }) {
+function EmailLinkInfo({ value, maxWidth = 220, multiline = false, detailed = false }) {
   const { enqueueSnackbar } = useSnackbar();
   const [copied, setCopied] = useState(false);
   const text = value?.trim();
@@ -31,6 +32,59 @@ function EmailLinkInfo({ value, maxWidth = 220, multiline = false }) {
       <Typography variant="body2" color="text.secondary">
         —
       </Typography>
+    );
+  }
+
+  if (detailed) {
+    return (
+      <Box
+        onClick={(event) => event.stopPropagation()}
+        sx={(theme) => ({
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          width: '100%',
+          p: 1.25,
+          borderRadius: 1,
+          bgcolor: alpha(theme.palette.primary.main, 0.05),
+          border: `1px solid ${alpha(theme.palette.primary.main, 0.14)}`
+        })}
+      >
+        <OpenInNewTwoToneIcon color="primary" fontSize="small" />
+        <Link
+          href={text}
+          target="_blank"
+          rel="noopener noreferrer"
+          underline="hover"
+          title={text}
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+        >
+          {text}
+        </Link>
+        <Tooltip title={copied ? 'Copied' : 'Copy link'}>
+          <IconButton
+            size="small"
+            type="button"
+            onClick={handleCopy}
+            aria-label="Copy email link"
+            sx={{ flexShrink: 0, p: 0.35 }}
+          >
+            {copied ? (
+              <CheckTwoToneIcon color="success" sx={{ fontSize: 14 }} />
+            ) : (
+              <ContentCopyTwoToneIcon sx={{ fontSize: 14 }} />
+            )}
+          </IconButton>
+        </Tooltip>
+      </Box>
     );
   }
 
@@ -61,11 +115,12 @@ function EmailLinkInfo({ value, maxWidth = 220, multiline = false }) {
           type="button"
           onClick={handleCopy}
           aria-label="Copy email link"
+          sx={{ p: 0.35 }}
         >
           {copied ? (
-            <CheckTwoToneIcon fontSize="small" color="success" />
+            <CheckTwoToneIcon color="success" sx={{ fontSize: 14 }} />
           ) : (
-            <ContentCopyTwoToneIcon fontSize="small" />
+            <ContentCopyTwoToneIcon sx={{ fontSize: 14 }} />
           )}
         </IconButton>
       </Tooltip>
@@ -76,7 +131,8 @@ function EmailLinkInfo({ value, maxWidth = 220, multiline = false }) {
 EmailLinkInfo.propTypes = {
   value: PropTypes.string,
   maxWidth: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-  multiline: PropTypes.bool
+  multiline: PropTypes.bool,
+  detailed: PropTypes.bool
 };
 
 export default EmailLinkInfo;

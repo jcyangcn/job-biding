@@ -110,12 +110,14 @@ function CitizenDetailDialog({
         </Stack>
         {images.length ? (
           <Grid container spacing={1.5}>
-            {images.map((image) => (
+            {images.map((image, imageIndex) => (
               <Grid item xs={6} sm={4} md={3} key={image.filename}>
                 <Box textAlign="center">
                   <CitizenImageTile
                     citizenId={citizen.id}
                     image={image}
+                    images={images}
+                    imageIndex={imageIndex}
                     size={120}
                     onPreview={onPreviewImage}
                     onDownload={() => onDownloadImage(citizen.id, image)}

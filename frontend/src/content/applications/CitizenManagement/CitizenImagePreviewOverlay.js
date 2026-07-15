@@ -1,8 +1,19 @@
 import PropTypes from 'prop-types';
 import { Box, IconButton, Modal, Tooltip, Typography } from '@mui/material';
+import ChevronLeftTwoToneIcon from '@mui/icons-material/ChevronLeftTwoTone';
+import ChevronRightTwoToneIcon from '@mui/icons-material/ChevronRightTwoTone';
 import DownloadTwoToneIcon from '@mui/icons-material/DownloadTwoTone';
 
-function CitizenImagePreviewOverlay({ open, src, title, onClose, onDownload }) {
+function CitizenImagePreviewOverlay({
+  open,
+  src,
+  title,
+  onClose,
+  onDownload,
+  onPrevious,
+  onNext,
+  navigating = false
+}) {
   if (!open || !src) {
     return null;
   }
@@ -31,11 +42,34 @@ function CitizenImagePreviewOverlay({ open, src, title, onClose, onDownload }) {
           cursor: 'zoom-out'
         }}
       >
+        {onPrevious ? (
+          <IconButton
+            aria-label="Previous image"
+            disabled={navigating}
+            onClick={(event) => {
+              event.stopPropagation();
+              onPrevious();
+            }}
+            sx={{
+              position: 'absolute',
+              left: { xs: 4, sm: 20 },
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 1,
+              color: 'common.white',
+              bgcolor: 'rgba(0, 0, 0, 0.45)',
+              '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)' }
+            }}
+          >
+            <ChevronLeftTwoToneIcon fontSize="large" />
+          </IconButton>
+        ) : null}
+
         <Box
           onClick={(event) => event.stopPropagation()}
           sx={{
-            maxWidth: '92vw',
-            maxHeight: '92vh',
+            maxWidth: { xs: '84vw', sm: '78vw' },
+            maxHeight: '82vh',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -47,8 +81,8 @@ function CitizenImagePreviewOverlay({ open, src, title, onClose, onDownload }) {
             src={src}
             alt={title || 'Citizen image'}
             sx={{
-              maxWidth: '92vw',
-              maxHeight: '86vh',
+              maxWidth: { xs: '84vw', sm: '78vw' },
+              maxHeight: '76vh',
               objectFit: 'contain',
               borderRadius: 1,
               boxShadow: '0 8px 32px rgba(0,0,0,0.45)'
@@ -82,6 +116,29 @@ function CitizenImagePreviewOverlay({ open, src, title, onClose, onDownload }) {
             </Tooltip>
           ) : null}
         </Box>
+
+        {onNext ? (
+          <IconButton
+            aria-label="Next image"
+            disabled={navigating}
+            onClick={(event) => {
+              event.stopPropagation();
+              onNext();
+            }}
+            sx={{
+              position: 'absolute',
+              right: { xs: 4, sm: 20 },
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 1,
+              color: 'common.white',
+              bgcolor: 'rgba(0, 0, 0, 0.45)',
+              '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)' }
+            }}
+          >
+            <ChevronRightTwoToneIcon fontSize="large" />
+          </IconButton>
+        ) : null}
       </Box>
     </Modal>
   );
@@ -92,7 +149,10 @@ CitizenImagePreviewOverlay.propTypes = {
   src: PropTypes.string,
   title: PropTypes.string,
   onClose: PropTypes.func.isRequired,
-  onDownload: PropTypes.func
+  onDownload: PropTypes.func,
+  onPrevious: PropTypes.func,
+  onNext: PropTypes.func,
+  navigating: PropTypes.bool
 };
 
 export default CitizenImagePreviewOverlay;

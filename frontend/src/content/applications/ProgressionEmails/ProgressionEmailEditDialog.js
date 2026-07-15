@@ -154,7 +154,7 @@ function ProgressionEmailEditDialog({ open, email, onClose, onSaved }) {
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Email link"
+              label="Email Link"
               value={form.email_link}
               onChange={handleFormChange('email_link')}
               required

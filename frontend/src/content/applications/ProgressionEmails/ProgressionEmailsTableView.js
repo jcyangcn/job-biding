@@ -29,6 +29,7 @@ import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
 import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import EmailLinkInfo from 'src/components/EmailLinkInfo';
+import EmailIdentityLabel from 'src/components/IdentityLabel';
 import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
@@ -139,6 +140,16 @@ function ProgressionEmailsTableView({
       await onRefresh();
     }
   }, [refresh, onRefresh]);
+
+  const profileLookup = useMemo(
+    () => new Map(profiles.map((item) => [item.id, item])),
+    [profiles]
+  );
+
+  const identityLookup = useMemo(
+    () => new Map(identities.map((item) => [item.id, item])),
+    [identities]
+  );
 
   const profileLabelToId = useMemo(() => {
     const map = {};
@@ -436,7 +447,7 @@ function ProgressionEmailsTableView({
                   onSort={handleSort}
                 />
                 <SortableTableCell
-                  label="Email"
+                  label="Email Link"
                   sortKey="email_link"
                   sortField={sortField}
                   sortDirection={sortDirection}
@@ -489,7 +500,13 @@ function ProgressionEmailsTableView({
                   >
                     <TableCell>{row.reference_no}</TableCell>
                     {showProfileColumn ? (
-                      <TableCell>{row.profile_label || '—'}</TableCell>
+                      <TableCell>
+                        <EmailIdentityLabel
+                          identityId={profileLookup.get(row.profile_id)?.identity_id}
+                          label={row.profile_label}
+                          identityById={identityLookup}
+                        />
+                      </TableCell>
                     ) : null}
                     <TableCell>{row.company}</TableCell>
                     <TableCell>

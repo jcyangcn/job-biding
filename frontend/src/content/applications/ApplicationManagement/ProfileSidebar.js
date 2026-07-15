@@ -22,6 +22,8 @@ import {
 import AppsTwoToneIcon from '@mui/icons-material/AppsTwoTone';
 import SearchTwoToneIcon from '@mui/icons-material/SearchTwoTone';
 import Label from 'src/components/Label';
+import { CountryFlag } from 'src/components/CountryLabel';
+import { resolveIdentityDisplay } from 'src/components/IdentityLabel';
 import Scrollbar from 'src/components/Scrollbar';
 import { matchesSearch } from 'src/utils/tableListFilters';
 
@@ -96,15 +98,9 @@ const PROFILE_SEARCH_FIELDS = [
   'reference_tag'
 ];
 
-function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0] || ''}${parts[parts.length - 1][0] || ''}`.toUpperCase();
-}
-
 function ProfileSidebar({
   profiles,
+  identities = [],
   loading,
   selectedProfileId,
   onSelectProfile,
@@ -114,6 +110,11 @@ function ProfileSidebar({
   const theme = useTheme();
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
+
+  const identityById = useMemo(
+    () => new Map(identities.map((item) => [item.id, item])),
+    [identities]
+  );
 
   const filteredProfiles = useMemo(
     () =>
@@ -236,6 +237,11 @@ function ProfileSidebar({
                 ) : (
                   filteredProfiles.map((profile) => {
                     const appCount = itemCounts[profile.id] || 0;
+                    const { country, name: displayName } = resolveIdentityDisplay({
+                      identityId: profile.identity_id,
+                      identityName: profile.identity_name,
+                      identityById
+                    });
 
                     return (
                       <ListItemButton
@@ -244,24 +250,25 @@ function ProfileSidebar({
                         onClick={() => onSelectProfile(profile.id)}
                       >
                         <ListItemAvatar sx={{ minWidth: 44 }}>
-                          <Avatar
+                          <Box
                             sx={{
                               width: 36,
                               height: 36,
-                              bgcolor: profile.is_active
-                                ? theme.colors.primary.main
-                                : theme.colors.alpha.black[30],
-                              color: theme.palette.primary.contrastText,
-                              fontSize: theme.typography.pxToRem(13),
-                              fontWeight: 700
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
                           >
-                            {getInitials(profile.identity_name)}
-                          </Avatar>
+                            {country ? <CountryFlag country={country} height={18} /> : '—'}
+                          </Box>
                         </ListItemAvatar>
                         <ListItemText
-                          primary={profile.identity_name}
-                          primaryTypographyProps={{ variant: 'subtitle1', fontWeight: 600, noWrap: true }}
+                          primary={displayName || '—'}
+                          primaryTypographyProps={{
+                            variant: 'subtitle1',
+                            fontWeight: 600,
+                            noWrap: true
+                          }}
                         />
                         <Box display="flex" flexDirection="column" alignItems="flex-end" gap={0.5} ml={1}>
                           {renderCount(appCount)}
@@ -284,6 +291,7 @@ function ProfileSidebar({
 
 ProfileSidebar.propTypes = {
   profiles: PropTypes.array.isRequired,
+  identities: PropTypes.array,
   loading: PropTypes.bool.isRequired,
   selectedProfileId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   onSelectProfile: PropTypes.func.isRequired,
