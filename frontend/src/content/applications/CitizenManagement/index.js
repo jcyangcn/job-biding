@@ -31,6 +31,7 @@ import CloudUploadTwoToneIcon from '@mui/icons-material/CloudUploadTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import InsertDriveFileTwoToneIcon from '@mui/icons-material/InsertDriveFileTwoTone';
+import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
@@ -65,9 +66,15 @@ import CitizenImageTile from './CitizenImageTile';
 import CitizenImagePreviewOverlay from './CitizenImagePreviewOverlay';
 import CitizenDetailDialog from './CitizenDetailDialog';
 import CitizenLinkedInCell from './CitizenLinkedInCell';
+import CitizenReviewPdfDialog from './CitizenReviewPdfDialog';
 import CitizenReviewFormSection from './CitizenReviewFormSection';
 import CitizenReviewStatusLabel from './CitizenReviewStatusLabel';
 import PendingFileTile from './PendingFileTile';
+
+function isPdfFile(file) {
+  const name = file?.original_name || file?.filename || '';
+  return /\.pdf$/i.test(name);
+}
 
 function createEmptyForm() {
   return {
@@ -100,6 +107,7 @@ function CitizenManagement() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [reviewPdfPreview, setReviewPdfPreview] = useState(null);
 
   const {
     open: detailOpen,
@@ -382,6 +390,14 @@ function CitizenManagement() {
     }
   };
 
+  const openReviewPdfPreview = (citizenId, file) => {
+    if (!isPdfFile(file)) {
+      enqueueSnackbar('Only PDF files can be previewed', { variant: 'info' });
+      return;
+    }
+    setReviewPdfPreview({ citizenId, file });
+  };
+
   const handleDeleteReviewFile = async (citizenId, filename) => {
     setUploading(true);
     try {
@@ -513,7 +529,7 @@ function CitizenManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
-                      label="Files"
+                      label="Review Files"
                       sortKey={(row) => (row.review_files || []).length}
                       sortField={sortField}
                       sortDirection={sortDirection}
@@ -593,12 +609,24 @@ function CitizenManagement() {
                           {(row.review_files || []).length ? (
                             <Stack direction="row" gap={0.25} alignItems="center" flexWrap="wrap">
                               {row.review_files.slice(0, 4).map((file) => (
-                                <Tooltip key={file.filename} title={`Download ${file.original_name}`}>
+                                <Tooltip
+                                  key={file.filename}
+                                  title={
+                                    isPdfFile(file)
+                                      ? `View ${file.original_name}`
+                                      : `${file.original_name} cannot be previewed`
+                                  }
+                                >
                                   <IconButton
                                     size="small"
-                                    onClick={() => handleDownloadReviewFile(row.id, file)}
+                                    onClick={() => openReviewPdfPreview(row.id, file)}
+                                    disabled={!isPdfFile(file)}
                                   >
-                                    <InsertDriveFileTwoToneIcon fontSize="small" color="action" />
+                                    {isPdfFile(file) ? (
+                                      <PictureAsPdfTwoToneIcon fontSize="small" color="error" />
+                                    ) : (
+                                      <InsertDriveFileTwoToneIcon fontSize="small" color="action" />
+                                    )}
                                   </IconButton>
                                 </Tooltip>
                               ))}
@@ -827,6 +855,13 @@ function CitizenManagement() {
               ? () => handleDownloadImage(imagePreview.citizenId, imagePreview.image)
               : undefined
           }
+        />
+
+        <CitizenReviewPdfDialog
+          open={Boolean(reviewPdfPreview)}
+          citizenId={reviewPdfPreview?.citizenId}
+          file={reviewPdfPreview?.file}
+          onClose={() => setReviewPdfPreview(null)}
         />
 
         <Dialog open={deleteOpen} onClose={() => !saving && setDeleteOpen(false)}>
