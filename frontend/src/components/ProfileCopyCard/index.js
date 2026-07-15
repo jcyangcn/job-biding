@@ -3,7 +3,6 @@ import PropTypes from 'prop-types';
 import { useSnackbar } from 'notistack';
 import {
   alpha,
-  Avatar,
   Box,
   Button,
   Card,
@@ -24,15 +23,9 @@ import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import Label from 'src/components/Label';
 import { CountryFlag } from 'src/components/CountryLabel';
 import { formatDetailDateOnly } from 'src/components/DetailDialog';
+import { resolveIdentityDisplay } from 'src/components/IdentityLabel';
 import { downloadProfileDefaultResume } from 'src/services/profileApi';
 import { copyOnUserClick } from 'src/utils/copyToClipboard';
-
-function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0] || ''}${parts[parts.length - 1][0] || ''}`.toUpperCase();
-}
 
 function buildProfileFields(profile, identity) {
   return [
@@ -183,10 +176,15 @@ function getFieldColumns(field) {
   return field.columns || DEFAULT_COLUMNS;
 }
 
-function ProfileCopyCard({ profile, identity, actions, onClick }) {
+function ProfileCopyCard({ profile, identity, actions, onClick, showDetails = true }) {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
-  const displayName = profile.identity_name || identity?.name || 'Profile';
+  const { country, name: resolvedName } = resolveIdentityDisplay({
+    identity,
+    identityId: profile.identity_id,
+    identityName: profile.identity_name
+  });
+  const displayName = resolvedName || 'Profile';
   const roleItems = (profile.roles || '')
     .split(',')
     .map((role) => role.trim())
@@ -241,39 +239,29 @@ function ProfileCopyCard({ profile, identity, actions, onClick }) {
           spacing={1.5}
         >
           <Stack direction="row" spacing={1.5} alignItems="center" flex={1} minWidth={0}>
-            <Avatar
+            <Box
               sx={{
                 width: 48,
                 height: 48,
-                bgcolor: theme.colors.primary.main,
-                color: theme.palette.primary.contrastText,
-                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 flexShrink: 0
               }}
             >
-              {getInitials(displayName)}
-            </Avatar>
+              {country ? <CountryFlag country={country} height={24} /> : null}
+            </Box>
 
             <Box minWidth={0} flex={1}>
-              <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap" mb={0.5}>
+              <Stack direction="row" alignItems="center" gap={1.5} flexWrap="wrap">
                 <Typography variant="h4" noWrap>
                   {displayName}
                 </Typography>
-                <Label color="success">Active</Label>
-              </Stack>
-
-              <Stack direction="row" alignItems="center" gap={0.75} flexWrap="wrap">
-                {roleItems.length ? (
-                  roleItems.map((role) => (
-                    <Label key={role} color="primary">
-                      {role}
-                    </Label>
-                  ))
-                ) : (
-                  <Typography variant="caption" color="text.secondary">
-                    No roles listed
-                  </Typography>
-                )}
+                {roleItems.map((role) => (
+                  <Label key={role} color="primary">
+                    {role}
+                  </Label>
+                ))}
               </Stack>
             </Box>
           </Stack>
@@ -286,23 +274,25 @@ function ProfileCopyCard({ profile, identity, actions, onClick }) {
             onClick={handleActionsClick}
           >
             {actions}
-            <Button
-              size="small"
-              color="inherit"
-              onClick={handleToggleExpand}
-              aria-label={expanded ? 'Hide details' : 'Show details'}
-              endIcon={
-                <ExpandMoreTwoToneIcon
-                  sx={{
-                    transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: theme.transitions.create('transform')
-                  }}
-                />
-              }
-              sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
-            >
-              {expanded ? 'Hide details' : 'Show details'}
-            </Button>
+            {showDetails ? (
+              <Button
+                size="small"
+                color="inherit"
+                onClick={handleToggleExpand}
+                aria-label={expanded ? 'Hide details' : 'Show details'}
+                endIcon={
+                  <ExpandMoreTwoToneIcon
+                    sx={{
+                      transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: theme.transitions.create('transform')
+                    }}
+                  />
+                }
+                sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+              >
+                {expanded ? 'Hide details' : 'Show details'}
+              </Button>
+            ) : null}
           </Stack>
         </Stack>
       </Box>
@@ -336,7 +326,8 @@ ProfileCopyCard.propTypes = {
   profile: PropTypes.object.isRequired,
   identity: PropTypes.object,
   actions: PropTypes.node,
-  onClick: PropTypes.func
+  onClick: PropTypes.func,
+  showDetails: PropTypes.bool
 };
 
 export default ProfileCopyCard;
