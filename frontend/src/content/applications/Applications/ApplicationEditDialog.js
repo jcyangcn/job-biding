@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useSnackbar } from 'notistack';
 import {
@@ -46,7 +46,11 @@ import {
   matchBestResume
 } from 'src/services/resumeApi';
 import { appliedAtToIso, formatDateTime, formatDateTimeValue } from 'src/utils/dateFormat';
-import { isDuplicateCompanyName } from 'src/utils/normalizeCompanyName';
+import {
+  findApplicationsWithSameCompany,
+  isExactDuplicateApplication
+} from 'src/utils/normalizeCompanyName';
+import DuplicateApplicationWarning from './DuplicateApplicationWarning';
 import { buildJobVector } from 'src/utils/jobVector';
 import { listSkillKeywords } from 'src/services/skillApi';
 
@@ -104,7 +108,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [choosing, setChoosing] = useState(false);
-  const [companyDuplicate, setCompanyDuplicate] = useState(false);
   const [pendingScreenshotFile, setPendingScreenshotFile] = useState(null);
   const [existingScreenshot, setExistingScreenshot] = useState(null);
   const [removeExistingScreenshot, setRemoveExistingScreenshot] = useState(false);
@@ -129,6 +132,23 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const hasGeneratedResume = Boolean(form.resume_generated_id);
   const resumeFromAi = profile?.resume_fromAI !== false;
 
+  const duplicateCompanyApps = useMemo(
+    () =>
+      findApplicationsWithSameCompany(form.company, existingApplications, {
+        excludeId: application?.id
+      }),
+    [form.company, existingApplications, application?.id]
+  );
+  const isExactDuplicate = useMemo(
+    () =>
+      isExactDuplicateApplication(
+        { company: form.company, role: form.role, link: form.link },
+        existingApplications,
+        { excludeId: application?.id }
+      ),
+    [form.company, form.role, form.link, existingApplications, application?.id]
+  );
+
   const busy = submitting || generating || choosing || loading;
   const mountedRef = useRef(true);
   const onSavedRef = useRef(onSaved);
@@ -144,20 +164,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   useEffect(() => {
     onSavedRef.current = onSaved;
   }, [onSaved]);
-
-  const checkCompanyDuplicate = useCallback(
-    (companyValue) => {
-      const trimmed = companyValue.trim();
-      if (!trimmed) {
-        return false;
-      }
-      const existingCompanies = existingApplications
-        .filter((app) => app.id !== application?.id)
-        .map((app) => app.company);
-      return isDuplicateCompanyName(trimmed, existingCompanies);
-    },
-    [existingApplications, application?.id]
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -273,14 +279,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
           }
         }
 
-        setCompanyDuplicate(
-          isDuplicateCompanyName(
-            (fullApplication.company || '').trim(),
-            applications
-              .filter((app) => app.id !== application.id)
-              .map((app) => app.company)
-          )
-        );
       } catch (err) {
         if (!cancelled) {
           notify(err.message || 'Failed to load application data', { variant: 'error' });
@@ -310,20 +308,6 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       job_description: value,
       job_vector: buildJobVector(value, skillKeywords)
     }));
-  };
-
-  const handleCompanyChange = (event) => {
-    const value = event.target.value;
-    setForm((current) => ({ ...current, company: value }));
-    setCompanyDuplicate(checkCompanyDuplicate(value));
-  };
-
-  const handleCompanyBlur = () => {
-    if (checkCompanyDuplicate(form.company)) {
-      notify('This company has already been applied to for this profile.', {
-        variant: 'warning'
-      });
-    }
   };
 
   const handleAppliedSectionChange = (updates) => {
@@ -485,11 +469,11 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       notify('Link is required', { variant: 'warning' });
       return;
     }
-    if (checkCompanyDuplicate(form.company)) {
-      setCompanyDuplicate(true);
-      notify('This company has already been applied to for this profile.', {
-        variant: 'warning'
-      });
+    if (isExactDuplicate) {
+      notify(
+        'An identical application (same company, role, and link) already exists.',
+        { variant: 'warning' }
+      );
       return;
     }
 
@@ -868,15 +852,13 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                   size="small"
                   label="Company"
                   value={form.company}
-                  onChange={handleCompanyChange}
-                  onBlur={handleCompanyBlur}
-                  error={companyDuplicate}
-                  helperText={
-                    companyDuplicate
-                      ? 'This company has already been applied to for this profile.'
-                      : ''
-                  }
+                  onChange={handleFormChange('company')}
+                  error={isExactDuplicate}
                   disabled={loading}
+                />
+                <DuplicateApplicationWarning
+                  matches={duplicateCompanyApps}
+                  exact={isExactDuplicate}
                 />
 
                 <Box sx={{ flex: 1, minHeight: 0, display: { xs: 'none', md: 'block' } }} />
@@ -907,7 +889,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
             variant="contained"
             startIcon={<SaveTwoToneIcon />}
             onClick={handleSubmit}
-            disabled={busy}
+            disabled={busy || isExactDuplicate}
           >
             {submitting ? 'Saving…' : 'Save'}
           </Button>

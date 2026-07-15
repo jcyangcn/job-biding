@@ -83,22 +83,25 @@ function previewText(value, maxLength = 80) {
 // batch selection/generation silently skip posts outside the first page.
 async function fetchAllJobPostsComplete() {
   const pageSize = 200;
-  let page = 1;
-  const all = [];
-  for (;;) {
-    const result = await listJobPosts({ page, pageSize });
-    const items = Array.isArray(result?.items) ? result.items : [];
-    all.push(...items);
-    const total = Number(result?.total) || 0;
-    if (items.length < pageSize || all.length >= total) {
-      break;
-    }
-    page += 1;
-    if (page > 100) {
-      break;
-    }
+  const first = await listJobPosts({ page: 1, pageSize });
+  const firstItems = Array.isArray(first?.items) ? first.items : [];
+  const total = Number(first?.total) || firstItems.length;
+
+  if (firstItems.length >= total || firstItems.length < pageSize) {
+    return firstItems;
   }
-  return all;
+
+  const totalPages = Math.ceil(total / pageSize);
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      listJobPosts({ page: index + 2, pageSize })
+    )
+  );
+
+  return remainingPages.reduce(
+    (all, result) => all.concat(Array.isArray(result?.items) ? result.items : []),
+    firstItems
+  );
 }
 
 function PostManagement() {
