@@ -157,3 +157,85 @@ def delete_job_post(db: Session, record: JobPost) -> None:
         raise ValueError(
             "Cannot delete this post because it is still referenced by other records."
         ) from exc
+
+
+def _is_blank(value: str | None) -> bool:
+    return not (value or "").strip()
+
+
+def cleanup_job_posts(db: Session) -> dict:
+    """Delete empty role/URL posts and keep one post per company name."""
+    posts = list(db.scalars(select(JobPost).order_by(JobPost.id.asc())).all())
+    app_counts = dict(
+        db.execute(
+            select(JobApplication.post_id, func.count()).group_by(JobApplication.post_id)
+        ).all()
+    )
+
+    delete_ids: list[int] = []
+    empty_role_or_url = 0
+    duplicate_company = 0
+    skipped_linked = 0
+    remaining: list[JobPost] = []
+
+    for post in posts:
+        if _is_blank(post.role) or _is_blank(post.url):
+            if app_counts.get(post.id, 0):
+                skipped_linked += 1
+                remaining.append(post)
+                continue
+            delete_ids.append(post.id)
+            empty_role_or_url += 1
+            continue
+        remaining.append(post)
+
+    by_company: dict[str, list[JobPost]] = {}
+    for post in remaining:
+        key = (post.company or "").strip().lower()
+        if not key:
+            key = f"__empty_company_{post.id}"
+        by_company.setdefault(key, []).append(post)
+
+    for group in by_company.values():
+        if len(group) <= 1:
+            continue
+
+        def score(post: JobPost) -> tuple[int, int, int]:
+            apps = int(app_counts.get(post.id, 0) or 0)
+            has_desc = 1 if (post.job_description or "").strip() else 0
+            return (apps, has_desc, int(post.id))
+
+        ranked = sorted(group, key=score, reverse=True)
+        for loser in ranked[1:]:
+            if app_counts.get(loser.id, 0):
+                skipped_linked += 1
+                continue
+            delete_ids.append(loser.id)
+            duplicate_company += 1
+
+    # Preserve order uniqueness while deleting
+    seen: set[int] = set()
+    deleted = 0
+    failed = 0
+    for post_id in delete_ids:
+        if post_id in seen:
+            continue
+        seen.add(post_id)
+        record = db.get(JobPost, post_id)
+        if not record:
+            continue
+        try:
+            delete_job_post(db, record)
+            deleted += 1
+        except ValueError:
+            failed += 1
+
+    remaining_count = db.scalar(select(func.count()).select_from(JobPost)) or 0
+    return {
+        "deleted": deleted,
+        "failed": failed,
+        "empty_role_or_url": empty_role_or_url,
+        "duplicate_company": duplicate_company,
+        "skipped_linked": skipped_linked,
+        "remaining": remaining_count,
+    }

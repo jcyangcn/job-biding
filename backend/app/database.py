@@ -1,4 +1,5 @@
 from collections.abc import Generator
+import json
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -1452,6 +1453,13 @@ def migrate_job_application_post_id() -> None:
                 )
             ).fetchall()
             for row in rows:
+                vector = row.job_vector
+                if vector is None:
+                    vector_json = "[]"
+                elif isinstance(vector, str):
+                    vector_json = vector.strip() or "[]"
+                else:
+                    vector_json = json.dumps(list(vector))
                 post_id = conn.execute(
                     text(
                         """
@@ -1460,7 +1468,7 @@ def migrate_job_application_post_id() -> None:
                         )
                         VALUES (
                             :company, :role, :url, :job_description,
-                            COALESCE(:job_vector, '[]'::jsonb), :created_at
+                            CAST(:job_vector AS jsonb), :created_at
                         )
                         RETURNING id
                         """
@@ -1470,7 +1478,7 @@ def migrate_job_application_post_id() -> None:
                         "role": row.role or "",
                         "url": row.link or "",
                         "job_description": row.job_description or "",
-                        "job_vector": row.job_vector,
+                        "job_vector": vector_json,
                         "created_at": row.created_at,
                     },
                 ).scalar_one()
@@ -1828,6 +1836,30 @@ def migrate_resume_generations_structure() -> None:
         _mark_schema_migration_applied(conn, migration_name)
 
 
+def migrate_clear_bidder_on_unapplied_applications() -> None:
+    """Bidder is only recorded once an application is actually applied.
+
+    Older rows stamped ``bidder_user_id`` at assign/create time. Clear it for
+    any application that was never marked as applied so the Bidder column
+    reflects real applicants only.
+    """
+    migration_name = "clear_bidder_on_unapplied_v1"
+    with engine.begin() as conn:
+        if _schema_migration_applied(conn, migration_name):
+            return
+        conn.execute(
+            text(
+                """
+                UPDATE job_application
+                SET bidder_user_id = NULL
+                WHERE applied IS NOT TRUE
+                  AND bidder_user_id IS NOT NULL
+                """
+            )
+        )
+        _mark_schema_migration_applied(conn, migration_name)
+
+
 def init_db() -> None:
     from app import db_models  # noqa: F401
     from app.auth import seed_default_users
@@ -1860,6 +1892,7 @@ def init_db() -> None:
     migrate_job_application_drop_legacy_job_fields()
     migrate_job_application_applied_evidence_fields()
     migrate_resume_generations_post_id()
+    migrate_clear_bidder_on_unapplied_applications()
     with SessionLocal() as db:
         seed_default_users(db)
         seed_test_identity_profile(db)

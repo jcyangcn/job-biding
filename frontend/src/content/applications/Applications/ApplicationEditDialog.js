@@ -7,6 +7,7 @@ import {
   Button,
   Chip,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   IconButton,
@@ -16,11 +17,13 @@ import {
   ToggleButtonGroup,
   Tooltip,
   Typography,
+  useMediaQuery,
   useTheme
 } from '@mui/material';
 import { format } from 'date-fns';
 import AutoAwesomeTwoToneIcon from '@mui/icons-material/AutoAwesomeTwoTone';
 import CloseIcon from '@mui/icons-material/Close';
+import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
 import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
 import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
@@ -42,7 +45,8 @@ import {
   buildResumeRequest,
   downloadResumePdf,
   generateResumePdf,
-  listAllResumeGenerations
+  listAllResumeGenerations,
+  matchBestResume
 } from 'src/services/resumeApi';
 import { appliedAtToIso, formatDateTime, formatDateTimeValue } from 'src/utils/dateFormat';
 import { isDuplicateCompanyName } from 'src/utils/normalizeCompanyName';
@@ -74,6 +78,7 @@ const EMPTY_FORM = {
 
 function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const theme = useTheme();
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const notify = useCallback(
     (message, options = {}) =>
@@ -102,6 +107,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   const [companyDuplicate, setCompanyDuplicate] = useState(false);
   const [pendingScreenshotFile, setPendingScreenshotFile] = useState(null);
   const [existingScreenshot, setExistingScreenshot] = useState(null);
@@ -125,8 +131,9 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     application?.resume_pdf_filename ||
     resumeFilenameFromPath(selectedGeneration?.pdf_path);
   const hasGeneratedResume = Boolean(form.resume_generated_id);
+  const resumeFromAi = profile?.resume_fromAI !== false;
 
-  const busy = submitting || generating || loading;
+  const busy = submitting || generating || choosing || loading;
   const mountedRef = useRef(true);
   const onSavedRef = useRef(onSaved);
   const generateTokenRef = useRef(0);
@@ -168,6 +175,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     const loadData = async () => {
       generateTokenRef.current += 1;
       setGenerating(false);
+      setChoosing(false);
       setSubmitting(false);
       setLoading(true);
       setCompanyDuplicate(false);
@@ -430,6 +438,66 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     }
   };
 
+  const handleChooseResume = async () => {
+    if (!profile) {
+      notify('Profile not found for this application', { variant: 'warning' });
+      return;
+    }
+
+    const jobVector = buildJobVector(form.job_description, skillKeywords);
+    if (!jobVector.length) {
+      notify('No skill keywords available to score this job description.', {
+        variant: 'warning'
+      });
+      return;
+    }
+
+    setChoosing(true);
+    notify('Matching best resume for this job vector…', { variant: 'info' });
+
+    try {
+      const { filename, generationId, score } = await matchBestResume({
+        profileId: profile.id,
+        jobVector
+      });
+
+      if (!mountedRef.current) return;
+
+      setForm((current) => ({
+        ...current,
+        job_vector: jobVector,
+        resume_generated_id: generationId || current.resume_generated_id,
+        resume_online_link: generationId ? '' : current.resume_online_link
+      }));
+      if (generationId) {
+        setResumeSource('generated');
+      }
+
+      try {
+        const generationRows = await listAllResumeGenerations();
+        if (!mountedRef.current) return;
+        setResumeGenerations(generationRows);
+      } catch {
+        /* keep generation id already set above */
+      }
+
+      notify(
+        `Best match selected${generationId ? ` (#${generationId})` : ''}${
+          Number.isFinite(score) ? ` · score ${score}` : ''
+        }. Downloaded ${filename}.`,
+        { variant: 'success' }
+      );
+    } catch (err) {
+      if (mountedRef.current) {
+        notify(err.message || 'Failed to choose resume', { variant: 'error' });
+      }
+    } finally {
+      if (mountedRef.current) {
+        setChoosing(false);
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     if (!application) return;
     if (!form.link.trim()) {
@@ -487,6 +555,8 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
 
   const handleDialogClose = () => {
     if (submitting) return;
+    setGenerating(false);
+    setChoosing(false);
     onClose();
   };
 
@@ -496,11 +566,13 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         open={open}
         onClose={handleDialogClose}
         fullWidth
+        fullScreen={isSmallScreen}
         maxWidth="lg"
         PaperProps={{
           sx: {
-            height: { md: '55vh' },
-            maxHeight: '90vh',
+            height: { xs: '100%', md: '55vh' },
+            minHeight: { md: 'min(560px, 90vh)' },
+            maxHeight: { xs: '100%', md: '90vh' },
             display: 'flex',
             flexDirection: 'column'
           }
@@ -548,14 +620,15 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
             flexDirection: 'column',
             flex: 1,
             minHeight: 0,
-            overflow: 'hidden',
+            overflowX: 'hidden',
+            overflowY: 'auto',
             py: 1.5
           }}
         >
           <Box
             sx={{
               flex: 1,
-              minHeight: 0,
+              minHeight: { md: 360 },
               display: 'flex',
               flexDirection: { xs: 'column', md: 'row' },
               gap: 2,
@@ -564,7 +637,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
           >
             <Box
               sx={{
-                flex: 1,
+                flex: { xs: 'none', md: 1 },
                 minWidth: 0,
                 minHeight: 0,
                 display: 'flex',
@@ -575,7 +648,8 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
             >
               <Stack spacing={1} sx={{ flex: 1, minHeight: 0 }}>
                 <FixedHeightMultilineField
-                  fillHeight
+                  fillHeight={!isSmallScreen}
+                  height={isSmallScreen ? 200 : undefined}
                   label="Job description"
                   placeholder="Paste the full job posting here…"
                   value={form.job_description}
@@ -593,9 +667,12 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                   </Typography>
                   <Box
                     display="flex"
-                    alignItems="center"
+                    alignItems={{ xs: 'stretch', sm: 'center' }}
                     gap={1}
-                    sx={{ minWidth: 0 }}
+                    sx={{
+                      minWidth: 0,
+                      flexDirection: { xs: 'column', sm: 'row' }
+                    }}
                   >
                     <ToggleButtonGroup
                       exclusive
@@ -605,6 +682,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                       disabled={loading}
                       sx={{
                         flexShrink: 0,
+                        alignSelf: { xs: 'flex-start', sm: 'auto' },
                         border: `1px solid ${theme.colors.alpha.black[30]}`,
                         borderRadius: 1,
                         bgcolor: alpha(theme.palette.primary.main, 0.04),
@@ -619,9 +697,16 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                         }
                       }}
                     >
-                      <ToggleButton value="generated" aria-label="AI generate">
-                        <AutoAwesomeTwoToneIcon sx={{ fontSize: 16 }} />
-                        AI generate
+                      <ToggleButton
+                        value="generated"
+                        aria-label={resumeFromAi ? 'AI generate' : 'Choose resume'}
+                      >
+                        {resumeFromAi ? (
+                          <AutoAwesomeTwoToneIcon sx={{ fontSize: 16 }} />
+                        ) : (
+                          <DescriptionTwoToneIcon sx={{ fontSize: 16 }} />
+                        )}
+                        {resumeFromAi ? 'AI generate' : 'Choose'}
                       </ToggleButton>
                       <ToggleButton value="online" aria-label="Online">
                         <LinkTwoToneIcon sx={{ fontSize: 16 }} />
@@ -632,13 +717,15 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                     <Box
                       display="flex"
                       alignItems="center"
-                      justifyContent="flex-end"
+                      justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}
                       gap={0.75}
-                      sx={{ flex: 1, minWidth: 0 }}
+                      sx={{ flex: 1, minWidth: 0, flexWrap: 'wrap' }}
                     >
                       {resumeSource === 'generated' ? (
                         generating ? (
                           <Chip size="small" color="warning" label="Generating PDF…" />
+                        ) : choosing ? (
+                          <Chip size="small" color="info" label="Matching resume…" />
                         ) : hasGeneratedResume ? (
                           <Stack
                             direction="row"
@@ -698,21 +785,37 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                                 </span>
                               </Tooltip>
                             ) : null}
-                            <Tooltip title="Regenerate resume PDF">
-                              <span>
-                                <IconButton
-                                  size="small"
-                                  color="success"
-                                  disabled={loading}
-                                  onClick={handleGenerateResume}
-                                  aria-label="Regenerate resume PDF"
-                                >
-                                  <RefreshTwoToneIcon fontSize="small" />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
+                            {resumeFromAi ? (
+                              <Tooltip title="Regenerate resume PDF">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    color="success"
+                                    disabled={loading}
+                                    onClick={handleGenerateResume}
+                                    aria-label="Regenerate resume PDF"
+                                  >
+                                    <RefreshTwoToneIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title="Choose a different resume">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    disabled={loading}
+                                    onClick={handleChooseResume}
+                                    aria-label="Choose a different resume"
+                                  >
+                                    <RefreshTwoToneIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            )}
                           </Stack>
-                        ) : (
+                        ) : resumeFromAi ? (
                           <Button
                             size="small"
                             color="success"
@@ -722,6 +825,17 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                             onClick={handleGenerateResume}
                           >
                             Generate Resume PDF
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            color="primary"
+                            variant="contained"
+                            endIcon={<DescriptionTwoToneIcon />}
+                            disabled={loading}
+                            onClick={handleChooseResume}
+                          >
+                            Choose Resume
                           </Button>
                         )
                       ) : (
@@ -742,7 +856,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
 
             <Box
               sx={{
-                flex: 1,
+                flex: { xs: 'none', md: 1 },
                 minWidth: 0,
                 minHeight: 0,
                 display: 'flex',
@@ -784,7 +898,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                   disabled={loading}
                 />
 
-                <Box sx={{ flex: 1, minHeight: 0 }} />
+                <Box sx={{ flex: 1, minHeight: 0, display: { xs: 'none', md: 'block' } }} />
 
                 <ApplicationAppliedSection
                   applied={form.applied}
@@ -799,30 +913,24 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                   applicationId={application?.id}
                   disabled={loading || submitting}
                 />
-
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  justifyContent="flex-end"
-                  sx={{ flexShrink: 0 }}
-                >
-                  <Button
-                    variant="contained"
-                    startIcon={<SaveTwoToneIcon />}
-                    onClick={handleSubmit}
-                    disabled={busy}
-                  >
-                    {submitting ? 'Saving…' : 'Save'}
-                  </Button>
-                  <Button onClick={handleDialogClose} disabled={submitting}>
-                    Cancel
-                  </Button>
-                </Stack>
               </Stack>
             </Box>
           </Box>
         </DialogContent>
+
+        <DialogActions sx={{ px: 3, py: 1.5, flexShrink: 0 }}>
+          <Button onClick={handleDialogClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<SaveTwoToneIcon />}
+            onClick={handleSubmit}
+            disabled={busy}
+          >
+            {submitting ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <ApplicationResumePdfDialog

@@ -24,7 +24,9 @@ const Authenticated = (props) => {
   if (requestedLocation && location.pathname !== requestedLocation) {
     setRequestedLocation(null);
     const target =
-      requestedLocation === '/' ? '/dashboards' : requestedLocation;
+      requestedLocation === '/'
+        ? '/applications/job-applications'
+        : requestedLocation;
     return <Navigate to={target} replace />;
   }
 

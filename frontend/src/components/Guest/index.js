@@ -6,7 +6,7 @@ const Guest = ({ children }) => {
   const { isAuthenticated } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboards" replace />;
+    return <Navigate to="/applications/job-applications" replace />;
   }
 
   return <>{children}</>;

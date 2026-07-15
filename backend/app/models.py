@@ -175,7 +175,7 @@ class SkillBulkItem(BaseModel):
 
 class SkillBulkReplaceRequest(BaseModel):
     role: str = Field(min_length=1, max_length=255)
-    items: list[SkillBulkItem] = Field(min_length=1)
+    items: list[SkillBulkItem] = Field(default_factory=list)
 
 
 class SkillResponse(BaseModel):
@@ -189,8 +189,17 @@ class SkillResponse(BaseModel):
 class JobPostCreateRequest(BaseModel):
     company: str = Field(min_length=1, max_length=255)
     role: str = Field(min_length=1, max_length=255)
-    url: str = Field(default="", max_length=1000)
+    url: str = Field(min_length=1, max_length=1000)
     job_description: str = Field(default="")
+
+
+class JobPostCleanupResponse(BaseModel):
+    deleted: int
+    failed: int
+    empty_role_or_url: int
+    duplicate_company: int
+    skipped_linked: int
+    remaining: int
 
 
 class JobPostUpdateRequest(BaseModel):
@@ -413,6 +422,26 @@ class BatchAssignPostsItem(BaseModel):
 class BatchAssignPostsResponse(BaseModel):
     created: list[BatchAssignPostsItem]
     skipped: list[BatchAssignPostsItem]
+
+
+class BatchSelectResumesRequest(BaseModel):
+    profile_id: int
+    post_ids: list[int] = Field(min_length=1)
+
+
+class BatchSelectResumesItem(BaseModel):
+    post_id: int
+    application_id: int | None = None
+    company: str = ""
+    role: str = ""
+    reason: str = ""
+    generation_id: int | None = None
+    resume_online_link: str | None = None
+
+
+class BatchSelectResumesResponse(BaseModel):
+    updated: list[BatchSelectResumesItem]
+    skipped: list[BatchSelectResumesItem]
 
 
 class JobApplicationResponse(BaseModel):

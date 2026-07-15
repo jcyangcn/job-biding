@@ -6,7 +6,7 @@ const RequireAdmin = ({ children }) => {
   const { user } = useAuth();
 
   if (user?.role !== 'admin') {
-    return <Navigate to="/dashboards" replace />;
+    return <Navigate to="/applications/job-applications" replace />;
   }
 
   return <>{children}</>;

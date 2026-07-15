@@ -26,9 +26,13 @@ from app.user_roles import UserRole
 _APPLICATION_SCREENSHOT_STORAGE_PREFIX = "/storage/uploads/application screenshot/"
 
 
-def _resolve_application_creator(db: Session, record: JobApplication) -> User | None:
-    """Return the user who was logged in when the application was created."""
-    user_id = record.created_by_user_id or record.bidder_user_id
+def _resolve_application_bidder(db: Session, record: JobApplication) -> User | None:
+    """Return the bidder who actually applied to this job, if any.
+
+    A bidder is only recorded once an application is actually applied, so this
+    intentionally ignores ``created_by_user_id`` (who assigned/created the row).
+    """
+    user_id = record.bidder_user_id
     if user_id is None:
         return None
     return db.get(User, user_id)
@@ -97,9 +101,9 @@ def application_to_response(
         if generation and generation.pdf_path:
             resume_pdf_filename = Path(generation.pdf_path).name
 
-    creator = _resolve_application_creator(db, record)
-    bidder_username = creator.username if creator else ""
-    bidder_name = creator.full_name if creator else ""
+    bidder = _resolve_application_bidder(db, record)
+    bidder_username = bidder.username if bidder else ""
+    bidder_name = bidder.full_name if bidder else ""
 
     post = _load_job_post(db, record)
     screenshot = _parse_application_screenshot(record.applied_screenshot)
@@ -285,7 +289,7 @@ def create_application(
         success_link=success_link,
         applied=applied,
         applied_at=applied_at,
-        bidder_user_id=user.id,
+        bidder_user_id=user.id if applied else None,
         created_by_user_id=user.id,
     )
     db.add(record)
@@ -397,6 +401,14 @@ def update_application(
     record.applied = applied
     record.applied_at = applied_at
 
+    # The bidder is only attributed once an application is actually applied.
+    # Editing a non-applied application must never stamp the editor as bidder.
+    if applied:
+        if record.bidder_user_id is None:
+            record.bidder_user_id = user.id
+    else:
+        record.bidder_user_id = None
+
     db.commit()
     db.refresh(record)
     return record
@@ -463,6 +475,7 @@ def set_application_screenshot(
     *,
     original_name: str,
     content: bytes,
+    user: User,
 ) -> JobApplication:
     if not content:
         raise ValueError("Empty file")
@@ -490,6 +503,13 @@ def set_application_screenshot(
     record.applied = applied
     record.applied_at = applied_at
 
+    # Uploading proof of application makes the acting user the bidder.
+    if applied:
+        if record.bidder_user_id is None:
+            record.bidder_user_id = user.id
+    else:
+        record.bidder_user_id = None
+
     db.commit()
     db.refresh(record)
     return record
@@ -511,6 +531,11 @@ def remove_application_screenshot(db: Session, record: JobApplication) -> JobApp
     )
     record.applied = applied
     record.applied_at = applied_at
+
+    # If there is no remaining proof of application, the bidder attribution
+    # is cleared as well (applied ⇒ bidder invariant).
+    if not applied:
+        record.bidder_user_id = None
 
     db.commit()
     db.refresh(record)
@@ -642,7 +667,9 @@ def assign_posts_to_profile(
             resume_generated_id=generation.id if generation else None,
             applied=False,
             applied_at=None,
-            bidder_user_id=user.id,
+            # Assigning a post does not make anyone the bidder; that is only
+            # attributed once the application is actually applied.
+            bidder_user_id=None,
             created_by_user_id=user.id,
         )
         db.add(record)
@@ -661,3 +688,145 @@ def assign_posts_to_profile(
 
     db.commit()
     return {"created": created, "skipped": skipped}
+
+
+def batch_select_resumes_for_posts(
+    db: Session,
+    *,
+    profile_id: int,
+    post_ids: list[int],
+    user: User,
+) -> dict:
+    """Match and attach resumes to applications for the given profile/posts."""
+    from urllib.parse import quote
+
+    from app.history import match_best_resume_for_profile
+
+    profile = get_profile(db, profile_id)
+    if not profile:
+        raise ValueError("Profile not found")
+    if not profile.is_active:
+        raise ValueError("Profile is not active")
+    if not user_can_access_profile(user, profile):
+        raise PermissionError("Access denied")
+
+    default_resume_name = (profile.default_resume_original_name or "").strip()
+    default_resume_ref = (
+        f"profile-default-resume:{profile.id}:{quote(default_resume_name, safe='')}"
+        if default_resume_name
+        else None
+    )
+
+    updated: list[dict] = []
+    skipped: list[dict] = []
+    seen_post_ids: set[int] = set()
+
+    for post_id in post_ids:
+        if post_id in seen_post_ids:
+            skipped.append(
+                {
+                    "post_id": post_id,
+                    "application_id": None,
+                    "company": "",
+                    "role": "",
+                    "reason": "Duplicate post in request",
+                    "generation_id": None,
+                    "resume_online_link": None,
+                }
+            )
+            continue
+        seen_post_ids.add(post_id)
+
+        post = get_job_post(db, post_id)
+        if not post:
+            skipped.append(
+                {
+                    "post_id": post_id,
+                    "application_id": None,
+                    "company": "",
+                    "role": "",
+                    "reason": "Post not found",
+                    "generation_id": None,
+                    "resume_online_link": None,
+                }
+            )
+            continue
+
+        application = db.scalar(
+            select(JobApplication).where(
+                JobApplication.profile_id == profile_id,
+                JobApplication.post_id == post.id,
+            )
+        )
+        if not application:
+            skipped.append(
+                {
+                    "post_id": post.id,
+                    "application_id": None,
+                    "company": post.company or "",
+                    "role": post.role or "",
+                    "reason": "Assign the post first to create an application",
+                    "generation_id": None,
+                    "resume_online_link": None,
+                }
+            )
+            continue
+
+        job_vector = list(post.job_vector or [])
+        if not job_vector and (post.job_description or "").strip():
+            entries = list_skill_vector_entries(db, role=(post.role or "").strip() or None)
+            job_vector = build_job_vector_weighted(post.job_description or "", entries)
+            post.job_vector = job_vector
+
+        generation_id: int | None = None
+        resume_online_link: str | None = None
+        attach_error = ""
+
+        try:
+            best_row, _best_score, _scores = match_best_resume_for_profile(
+                db,
+                profile_id=profile_id,
+                job_vector=job_vector,
+            )
+            attach_generated_resume_to_application(
+                db,
+                application.id,
+                best_row.id,
+                user,
+            )
+            generation_id = best_row.id
+        except ValueError as exc:
+            attach_error = str(exc)
+            if default_resume_ref:
+                application.resume_generated_id = None
+                application.resume_online_link = default_resume_ref
+                application.resume_generation_status = None
+                db.commit()
+                resume_online_link = default_resume_ref
+            else:
+                skipped.append(
+                    {
+                        "post_id": post.id,
+                        "application_id": application.id,
+                        "company": post.company or "",
+                        "role": post.role or "",
+                        "reason": attach_error or "No matching resume available",
+                        "generation_id": None,
+                        "resume_online_link": None,
+                    }
+                )
+                continue
+
+        updated.append(
+            {
+                "post_id": post.id,
+                "application_id": application.id,
+                "company": post.company or "",
+                "role": post.role or "",
+                "reason": "",
+                "generation_id": generation_id,
+                "resume_online_link": resume_online_link,
+            }
+        )
+
+    return {"updated": updated, "skipped": skipped}

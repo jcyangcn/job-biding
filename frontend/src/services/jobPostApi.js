@@ -102,8 +102,24 @@ export function deleteJobPost(postId) {
   });
 }
 
+export function cleanupJobPosts() {
+  return request('/api/job-posts/cleanup', {
+    method: 'POST'
+  });
+}
+
 export function batchAssignPostsToProfile(profileId, postIds) {
   return request('/api/job-posts/batch-assign-applications', {
+    method: 'POST',
+    body: JSON.stringify({
+      profile_id: Number(profileId),
+      post_ids: postIds.map((id) => Number(id))
+    })
+  });
+}
+
+export function batchSelectResumesForPosts(profileId, postIds) {
+  return request('/api/job-posts/batch-select-resumes', {
     method: 'POST',
     body: JSON.stringify({
       profile_id: Number(profileId),

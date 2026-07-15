@@ -7,6 +7,7 @@ import {
   Button,
   Chip,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   IconButton,
@@ -15,6 +16,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Typography,
+  useMediaQuery,
   useTheme
 } from '@mui/material';
 import { format } from 'date-fns';
@@ -65,6 +67,7 @@ const EMPTY_FORM = {
 
 function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
   const theme = useTheme();
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const notify = useCallback(
     (message, options = {}) =>
@@ -538,11 +541,13 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
         open={open}
         onClose={handleDialogClose}
         fullWidth
+        fullScreen={isSmallScreen}
         maxWidth="lg"
         PaperProps={{
           sx: {
-            height: { md: '55vh' },
-            maxHeight: '90vh',
+            height: { xs: '100%', md: '55vh' },
+            minHeight: { md: 'min(560px, 90vh)' },
+            maxHeight: { xs: '100%', md: '90vh' },
             display: 'flex',
             flexDirection: 'column'
           }
@@ -585,14 +590,15 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
             flexDirection: 'column',
             flex: 1,
             minHeight: 0,
-            overflow: 'hidden',
+            overflowX: 'hidden',
+            overflowY: 'auto',
             py: 1.5
           }}
         >
           <Box
             sx={{
               flex: 1,
-              minHeight: 0,
+              minHeight: { md: 360 },
               display: 'flex',
               flexDirection: { xs: 'column', md: 'row' },
               gap: 2,
@@ -601,7 +607,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
           >
             <Box
               sx={{
-                flex: 1,
+                flex: { xs: 'none', md: 1 },
                 minWidth: 0,
                 minHeight: 0,
                 display: 'flex',
@@ -612,7 +618,8 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
             >
               <Stack spacing={1} sx={{ flex: 1, minHeight: 0 }}>
                 <FixedHeightMultilineField
-                  fillHeight
+                  fillHeight={!isSmallScreen}
+                  height={isSmallScreen ? 200 : undefined}
                   label="Job description"
                   placeholder="Paste the full job posting here…"
                   value={form.job_description}
@@ -630,9 +637,12 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
                   </Typography>
                   <Box
                     display="flex"
-                    alignItems="center"
+                    alignItems={{ xs: 'stretch', sm: 'center' }}
                     gap={1}
-                    sx={{ minWidth: 0 }}
+                    sx={{
+                      minWidth: 0,
+                      flexDirection: { xs: 'column', sm: 'row' }
+                    }}
                   >
                     <ToggleButtonGroup
                       exclusive
@@ -642,6 +652,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
                       disabled={loading}
                       sx={{
                         flexShrink: 0,
+                        alignSelf: { xs: 'flex-start', sm: 'auto' },
                         border: `1px solid ${theme.colors.alpha.black[30]}`,
                         borderRadius: 1,
                         bgcolor: alpha(theme.palette.primary.main, 0.04),
@@ -676,9 +687,9 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
                     <Box
                       display="flex"
                       alignItems="center"
-                      justifyContent="flex-end"
+                      justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}
                       gap={1}
-                      sx={{ flex: 1, minWidth: 0 }}
+                      sx={{ flex: 1, minWidth: 0, flexWrap: 'wrap' }}
                     >
                       {resumeSource === 'generated' ? (
                         <>
@@ -736,7 +747,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
 
             <Box
               sx={{
-                flex: 1,
+                flex: { xs: 'none', md: 1 },
                 minWidth: 0,
                 minHeight: 0,
                 display: 'flex',
@@ -778,7 +789,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
                   disabled={loading}
                 />
 
-                <Box sx={{ flex: 1, minHeight: 0 }} />
+                <Box sx={{ flex: 1, minHeight: 0, display: { xs: 'none', md: 'block' } }} />
 
                 <ApplicationAppliedSection
                   applied={form.applied}
@@ -790,30 +801,24 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
                   applicationId={draftApplicationId}
                   disabled={loading || submitting}
                 />
-
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  justifyContent="flex-end"
-                  sx={{ flexShrink: 0 }}
-                >
-                  <Button
-                    variant="contained"
-                    startIcon={<SaveTwoToneIcon />}
-                    onClick={handleSubmit}
-                    disabled={busy}
-                  >
-                    {submitting ? 'Saving…' : 'Save'}
-                  </Button>
-                  <Button onClick={handleDialogClose} disabled={submitting}>
-                    Cancel
-                  </Button>
-                </Stack>
               </Stack>
             </Box>
           </Box>
         </DialogContent>
+
+        <DialogActions sx={{ px: 3, py: 1.5, flexShrink: 0 }}>
+          <Button onClick={handleDialogClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<SaveTwoToneIcon />}
+            onClick={handleSubmit}
+            disabled={busy}
+          >
+            {submitting ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
       </Dialog>
     </>
   );

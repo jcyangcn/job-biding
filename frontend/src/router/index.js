@@ -24,7 +24,7 @@ const router = [
     children: [
       {
         path: '',
-        element: <Navigate to="dashboards" replace />
+        element: <Navigate to="applications/job-applications" replace />
       },
       {
         path: 'dashboards',
@@ -44,7 +44,7 @@ const router = [
       },
       {
         path: '*',
-        element: <Navigate to="dashboards" replace />
+        element: <Navigate to="applications/job-applications" replace />
       }
     ]
   }

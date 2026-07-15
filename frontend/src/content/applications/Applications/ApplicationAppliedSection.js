@@ -16,7 +16,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadTwoToneIcon from '@mui/icons-material/CloudUploadTwoTone';
 import ContentPasteTwoToneIcon from '@mui/icons-material/ContentPasteTwoTone';
 import {
-  currentAppliedTimestamp,
   resolveAppliedFromEvidence
 } from 'src/utils/applicationAppliedHelpers';
 import {
@@ -194,14 +193,6 @@ function ApplicationAppliedSection({
     applyEvidenceState(value, nextHasScreenshot);
   };
 
-  const handleAppliedChange = (event) => {
-    const checked = event.target.checked;
-    onChange({
-      applied: checked,
-      applied_at: checked ? currentAppliedTimestamp(appliedAt) : ''
-    });
-  };
-
   const handleClearScreenshot = (event) => {
     event.stopPropagation();
     if (imageInputRef.current) {
@@ -239,13 +230,23 @@ function ApplicationAppliedSection({
             control={
               <Switch
                 checked={applied}
-                onChange={handleAppliedChange}
                 color={applied ? 'success' : 'error'}
                 disabled={disabled}
+                disableRipple
+                tabIndex={-1}
+                inputProps={{
+                  'aria-label': 'Applied status',
+                  'aria-readonly': true,
+                  readOnly: true
+                }}
+                sx={{
+                  cursor: 'default',
+                  pointerEvents: 'none'
+                }}
               />
             }
             label=""
-            sx={{ m: 0 }}
+            sx={{ m: 0, cursor: 'default', pointerEvents: 'none' }}
           />
         </Stack>
 

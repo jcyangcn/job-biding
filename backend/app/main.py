@@ -67,6 +67,7 @@ from app.application_service import (
     application_to_response,
     assign_posts_to_profile,
     attach_generated_resume_to_application,
+    batch_select_resumes_for_posts,
     create_application,
     delete_application,
     get_application,
@@ -117,6 +118,7 @@ from app.models import (
     SkillResponse,
     SkillUpdateRequest,
     JobPostCreateRequest,
+    JobPostCleanupResponse,
     JobPostResponse,
     JobPostUpdateRequest,
     JobIdentityCreateRequest,
@@ -127,6 +129,8 @@ from app.models import (
     JobProfileUpdateRequest,
     BatchAssignPostsRequest,
     BatchAssignPostsResponse,
+    BatchSelectResumesRequest,
+    BatchSelectResumesResponse,
     JobApplicationCreateRequest,
     JobApplicationResponse,
     JobApplicationUpdateRequest,
@@ -163,6 +167,7 @@ from app.skill_service import (
     update_skill,
 )
 from app.job_post_service import (
+    cleanup_job_posts,
     create_job_post,
     delete_job_post,
     get_job_post,
@@ -493,6 +498,15 @@ def create_job_post_endpoint(
     return job_post_to_response(record)
 
 
+@app.post("/api/job-posts/cleanup", response_model=JobPostCleanupResponse)
+def cleanup_job_posts_endpoint(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Remove empty role/URL posts and duplicate company posts (keeps best of each company)."""
+    return cleanup_job_posts(db)
+
+
 @app.post("/api/job-posts/batch-assign-applications", response_model=BatchAssignPostsResponse)
 def batch_assign_posts_to_profile_endpoint(
     request: BatchAssignPostsRequest,
@@ -501,6 +515,27 @@ def batch_assign_posts_to_profile_endpoint(
 ):
     try:
         result = assign_posts_to_profile(
+            db,
+            profile_id=request.profile_id,
+            post_ids=request.post_ids,
+            user=user,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
+
+
+@app.post("/api/job-posts/batch-select-resumes", response_model=BatchSelectResumesResponse)
+def batch_select_resumes_for_posts_endpoint(
+    request: BatchSelectResumesRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Attach the best-matching resume (or profile default) to applications for selected posts."""
+    try:
+        result = batch_select_resumes_for_posts(
             db,
             profile_id=request.profile_id,
             post_ids=request.post_ids,
@@ -822,6 +857,7 @@ async def upload_job_application_screenshot_endpoint(
             record,
             original_name=file.filename or "screenshot.png",
             content=content,
+            user=user,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

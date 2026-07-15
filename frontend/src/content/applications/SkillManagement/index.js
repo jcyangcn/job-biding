@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSnackbar } from 'notistack';
 import {
@@ -9,8 +9,16 @@ import {
   Chip,
   Collapse,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Tooltip,
@@ -18,6 +26,7 @@ import {
 } from '@mui/material';
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import CloseTwoToneIcon from '@mui/icons-material/CloseTwoTone';
+import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import WorkTwoToneIcon from '@mui/icons-material/WorkTwoTone';
@@ -59,6 +68,13 @@ function SkillManagement() {
   const [addingFieldKey, setAddingFieldKey] = useState(null);
   const [draftKeyword, setDraftKeyword] = useState('');
   const [draftWeight, setDraftWeight] = useState('1');
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteRole, setDeleteRole] = useState('');
+
+  const roleOptions = useMemo(
+    () => roleGroups.map((group) => group.role).filter(Boolean),
+    [roleGroups]
+  );
 
   const loadSkills = useCallback(async () => {
     setLoading(true);
@@ -85,6 +101,39 @@ function SkillManagement() {
   const handleCancelForm = () => {
     if (!saving) {
       setFormOpen(false);
+    }
+  };
+
+  const handleOpenDelete = (role = '') => {
+    setDeleteRole(role || roleOptions[0] || '');
+    setDeleteOpen(true);
+  };
+
+  const handleCloseDelete = () => {
+    if (!saving) {
+      setDeleteOpen(false);
+      setDeleteRole('');
+    }
+  };
+
+  const handleDeleteData = async () => {
+    const role = deleteRole.trim();
+    if (!role) {
+      enqueueSnackbar('Select a role to delete', { variant: 'warning' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await bulkReplaceSkills({ role, items: [] });
+      enqueueSnackbar(`Deleted skill data for ${role}`, { variant: 'success' });
+      setDeleteOpen(false);
+      setDeleteRole('');
+      await loadSkills();
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -208,6 +257,15 @@ function SkillManagement() {
             Refresh
           </Button>
           <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteTwoToneIcon />}
+            onClick={() => handleOpenDelete()}
+            disabled={loading || saving || roleOptions.length === 0}
+          >
+            Delete Data
+          </Button>
+          <Button
             variant="contained"
             startIcon={<AddTwoToneIcon />}
             onClick={handleOpenForm}
@@ -278,11 +336,33 @@ function SkillManagement() {
           roleGroups.map((roleGroup) => (
             <Card key={roleGroup.role} sx={{ mb: 3 }}>
               <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <WorkTwoToneIcon color="primary" />
-                  <Typography variant="h5" component="h2">
-                    {roleGroup.role}
-                  </Typography>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  justifyContent="space-between"
+                  sx={{ mb: 2 }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <WorkTwoToneIcon color="primary" />
+                    <Typography variant="h5" component="h2">
+                      {roleGroup.role}
+                    </Typography>
+                  </Stack>
+                  <Tooltip title="Delete this role's skill data" arrow>
+                    <span>
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        startIcon={<DeleteTwoToneIcon />}
+                        onClick={() => handleOpenDelete(roleGroup.role)}
+                        disabled={saving}
+                      >
+                        Delete Data
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </Stack>
 
                 {roleGroup.fields.map((fieldGroup, fieldIndex) => {
@@ -382,6 +462,45 @@ function SkillManagement() {
           ))
         )}
       </Container>
+
+      <Dialog open={deleteOpen} onClose={handleCloseDelete} fullWidth maxWidth="xs">
+        <DialogTitle>Delete skill data</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            This removes all skill keywords for the selected role. Job post vectors are not changed
+            until you recompute them.
+          </Typography>
+          <FormControl fullWidth size="small">
+            <InputLabel id="skill-delete-role-label">Role</InputLabel>
+            <Select
+              labelId="skill-delete-role-label"
+              label="Role"
+              value={deleteRole}
+              onChange={(event) => setDeleteRole(event.target.value)}
+              disabled={saving}
+            >
+              {roleOptions.map((role) => (
+                <MenuItem key={role} value={role}>
+                  {role}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDelete} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={handleDeleteData}
+            disabled={saving || !deleteRole}
+          >
+            {saving ? 'Deleting…' : 'Delete Data'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

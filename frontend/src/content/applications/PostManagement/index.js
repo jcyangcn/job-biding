@@ -34,6 +34,7 @@ import AssignmentIndTwoToneIcon from '@mui/icons-material/AssignmentIndTwoTone';
 import AutoAwesomeTwoToneIcon from '@mui/icons-material/AutoAwesomeTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SelectAllTwoToneIcon from '@mui/icons-material/SelectAllTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
@@ -141,6 +142,8 @@ function PostManagement() {
     fetcher: fetchPosts,
     defaultSort: { field: 'id', direction: 'desc' }
   });
+
+  const busy = loading || saving || generatingResumes || assigningPosts;
 
   const selectedPostIdSet = useMemo(() => new Set(selectedPostIds.map(Number)), [selectedPostIds]);
 
@@ -328,11 +331,17 @@ function PostManagement() {
       return;
     }
 
+    const urlValue = form.url.trim();
+    if (!urlValue) {
+      enqueueSnackbar('URL is required', { variant: 'warning' });
+      return;
+    }
+
     const jobDescription = form.job_description.trim();
     const payload = {
       company: companyName,
       role: roleName,
-      url: form.url.trim(),
+      url: urlValue,
       job_description: jobDescription
     };
 
@@ -382,19 +391,25 @@ function PostManagement() {
       enqueueSnackbar('Select a profile first', { variant: 'warning' });
       return;
     }
+    if (!selectedPostIds.length) {
+      enqueueSnackbar('Select at least one post', { variant: 'warning' });
+      return;
+    }
 
     setGeneratingResumes(true);
     setGenerateProgress({ current: 0, total: 0, label: 'Loading posts…' });
 
     try {
       const [posts, identities] = await Promise.all([listAllJobPosts(), listAllIdentities()]);
-      const eligiblePosts = posts.filter(
+      const selectedIdSet = new Set(selectedPostIds.map(Number));
+      const selectedPosts = posts.filter((post) => selectedIdSet.has(Number(post.id)));
+      const eligiblePosts = selectedPosts.filter(
         (post) => String(post.job_description || '').trim().length >= 50
       );
-      const skippedShort = posts.length - eligiblePosts.length;
+      const skippedShort = selectedPosts.length - eligiblePosts.length;
 
       if (!eligiblePosts.length) {
-        enqueueSnackbar('No posts with a long enough job description to generate resumes', {
+        enqueueSnackbar('No selected posts with a long enough job description to generate resumes', {
           variant: 'warning'
         });
         return;
@@ -490,7 +505,7 @@ function PostManagement() {
                 <FormControl
                   size="small"
                   sx={{ minWidth: 220, flexShrink: 0 }}
-                  disabled={loading || saving || generatingResumes || assigningPosts}
+                  disabled={busy}
                 >
                   <InputLabel id="post-management-profile-label">Profile</InputLabel>
                   <Select
@@ -513,7 +528,7 @@ function PostManagement() {
                   variant="outlined"
                   startIcon={<SelectAllTwoToneIcon />}
                   onClick={handleSelectAllPosts}
-                  disabled={loading || saving || generatingResumes || assigningPosts}
+                  disabled={busy}
                 >
                   Select all
                 </Button>
@@ -522,14 +537,7 @@ function PostManagement() {
                   color="primary"
                   startIcon={<AssignmentIndTwoToneIcon />}
                   onClick={handleAssignPosts}
-                  disabled={
-                    loading ||
-                    saving ||
-                    generatingResumes ||
-                    assigningPosts ||
-                    !selectedProfile ||
-                    !selectedPostIds.length
-                  }
+                  disabled={busy || !selectedProfile || !selectedPostIds.length}
                 >
                   {assigningPosts ? 'Assigning…' : 'Assign'}
                 </Button>
@@ -537,16 +545,17 @@ function PostManagement() {
                   variant="contained"
                   color="secondary"
                   startIcon={<AutoAwesomeTwoToneIcon />}
+                  endIcon={<PictureAsPdfTwoToneIcon />}
                   onClick={handleGenerateResumes}
-                  disabled={loading || saving || generatingResumes || assigningPosts || !selectedProfile}
+                  disabled={busy || !selectedProfile || !selectedPostIds.length}
                 >
-                  {generatingResumes ? 'Generating…' : 'Generate resumes'}
+                  {generatingResumes ? 'Generating…' : 'Generate Resume'}
                 </Button>
                 <Button
                   variant="outlined"
                   startIcon={<RefreshTwoToneIcon />}
                   onClick={() => refresh()}
-                  disabled={loading || saving || generatingResumes || assigningPosts}
+                  disabled={busy}
                 >
                   Refresh
                 </Button>
@@ -554,7 +563,7 @@ function PostManagement() {
                   variant="contained"
                   startIcon={<AddTwoToneIcon />}
                   onClick={openCreateDialog}
-                  disabled={saving || generatingResumes || assigningPosts}
+                  disabled={busy}
                 >
                   Add post
                 </Button>
