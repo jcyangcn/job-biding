@@ -177,13 +177,63 @@ export async function loadDefaultProfileJson() {
 }
 
 export function listResumeGenerations(options = {}) {
-  const params = toListQueryParams(options);
+  const params = {
+    ...toListQueryParams(options),
+    profile_id: options.profileId ?? undefined
+  };
   return fetchJson(`/api/resume-generations${buildListQuery(params)}`).then(asListEnvelope);
 }
 
 export async function listAllResumeGenerations(options = {}) {
-  const result = await listResumeGenerations({ page: 1, pageSize: 200, ...options });
-  return result.items || [];
+  const pageSize = 200;
+  const first = await listResumeGenerations({ ...options, page: 1, pageSize });
+  const firstRows = first.items || [];
+  const total = Number(first.total) || firstRows.length;
+  const pageCount = Math.ceil(total / pageSize);
+  if (pageCount <= 1) return firstRows;
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: pageCount - 1 }, (_value, index) =>
+      listResumeGenerations({
+        ...options,
+        page: index + 2,
+        pageSize
+      })
+    )
+  );
+  return [
+    ...firstRows,
+    ...remainingPages.flatMap((result) => result.items || [])
+  ];
+}
+
+export async function rebuildResumeGeneration(generationId, content) {
+  const res = await fetch(
+    `${getApiBase()}/api/resume-generations/${encodeURIComponent(generationId)}`,
+    {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(content)
+    }
+  );
+  if (!res.ok) {
+    throw new Error(await readErrorDetail(res));
+  }
+  return res.json();
+}
+
+export async function deleteResumeGeneration(generationId) {
+  const res = await fetch(
+    `${getApiBase()}/api/resume-generations/${encodeURIComponent(generationId)}`,
+    {
+      method: 'DELETE',
+      headers: authHeaders()
+    }
+  );
+  if (!res.ok) {
+    throw new Error(await readErrorDetail(res));
+  }
+  return res.json();
 }
 
 export async function fetchHealth() {

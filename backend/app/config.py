@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # The Cursor Cloud Agents "create agent" call regularly takes ~60s to
     # return, so the HTTP timeout must be comfortably above that.
     cursor_request_timeout: float = 180.0
+    # A request timeout only covers one create/poll HTTP call. Agent runs have
+    # their own, longer deadline and transient API failures are retried.
+    cursor_run_timeout: float = 900.0
+    cursor_request_attempts: int = 4
+    cursor_generation_attempts: int = 3
+    cursor_poll_interval: float = 5.0
     host: str = "0.0.0.0"
     port: int = 8000
     database_url: str

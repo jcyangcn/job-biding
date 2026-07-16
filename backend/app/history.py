@@ -19,11 +19,13 @@ from app.skill_service import list_skill_vector_entries
 
 
 def build_resume_content_payload(content: ResumeContent) -> dict:
-    """Persist summary, skills, and work experience from AI output."""
+    """Persist all editable content needed to rebuild the generated PDF."""
     return {
+        "title": content.title,
         "summary": content.summary,
         "skills": [skill.model_dump(mode="json") for skill in content.skills],
         "experience": [job.model_dump(mode="json") for job in content.experience],
+        "projects": [project.model_dump(mode="json") for project in content.projects],
     }
 
 
@@ -33,6 +35,9 @@ def resume_content_to_match_text(resume_content: dict | None) -> str:
         return ""
 
     parts: list[str] = []
+    title = resume_content.get("title")
+    if title:
+        parts.append(str(title))
     summary = resume_content.get("summary")
     if summary:
         parts.append(str(summary))
@@ -56,6 +61,16 @@ def resume_content_to_match_text(resume_content: dict | None) -> str:
             if value:
                 parts.append(str(value))
         for bullet in job.get("bullets") or []:
+            if bullet:
+                parts.append(str(bullet))
+
+    for project in resume_content.get("projects") or []:
+        if not isinstance(project, dict):
+            continue
+        name = project.get("name")
+        if name:
+            parts.append(str(name))
+        for bullet in project.get("bullets") or []:
             if bullet:
                 parts.append(str(bullet))
 
@@ -277,6 +292,7 @@ def bump_profile_resume_count(db: Session, profile_id: int) -> int:
 def list_resume_generations_page(
     db: Session,
     *,
+    profile_id: int | None = None,
     page: int | None = None,
     page_size: int | None = None,
     search: str | None = None,
@@ -287,6 +303,9 @@ def list_resume_generations_page(
 ) -> dict:
     params = normalize_page_params(page, page_size)
     query = select(ResumeGeneration).join(JobPost, ResumeGeneration.post_id == JobPost.id)
+
+    if profile_id is not None:
+        query = query.where(ResumeGeneration.profile_id == profile_id)
 
     search_text = (search or "").strip()
     if search_text:

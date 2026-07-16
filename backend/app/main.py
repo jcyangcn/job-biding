@@ -28,6 +28,11 @@ from app.history import (
     resume_generation_to_response,
     save_resume_generation,
 )
+from app.resume_management_service import (
+    delete_resume_generation,
+    get_resume_generation,
+    rebuild_resume_generation,
+)
 from app.identity_service import (
     create_identity,
     delete_identity,
@@ -113,6 +118,7 @@ from app.models import (
     LoginRequest,
     LoginResponse,
     Profile,
+    ResumeContent,
     UserCreateRequest,
     UserResponse,
     UserUpdateRequest,
@@ -1514,6 +1520,7 @@ def get_default_jd():
 
 @app.get("/api/resume-generations")
 def list_resume_generations(
+    profile_id: int | None = None,
     page: int = 1,
     page_size: int = 10,
     search: str | None = None,
@@ -1526,6 +1533,7 @@ def list_resume_generations(
 ):
     result = list_resume_generations_page(
         db,
+        profile_id=profile_id,
         page=page,
         page_size=page_size,
         search=search,
@@ -1540,6 +1548,67 @@ def list_resume_generations(
         "page": result["page"],
         "page_size": result["page_size"],
     }
+
+
+@app.patch("/api/resume-generations/{generation_id}")
+def update_resume_generation(
+    generation_id: int,
+    request: ResumeContent,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_resume_generation(db, generation_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Resume generation not found")
+    if record.profile_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="This resume has no profile and cannot be rebuilt",
+        )
+
+    profile = build_profile_from_job_profile(db, record.profile_id)
+    if not profile:
+        raise HTTPException(status_code=422, detail="Resume profile not found")
+
+    job_profile = db.get(JobProfile, record.profile_id)
+    role = (job_profile.roles or "").strip() if job_profile else None
+    try:
+        rebuilt = rebuild_resume_generation(
+            db,
+            record,
+            profile=profile,
+            content=request,
+            role=role,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not rebuild resume: {exc}",
+        ) from exc
+    return resume_generation_to_response(db, rebuilt)
+
+
+@app.delete("/api/resume-generations/{generation_id}")
+def remove_resume_generation(
+    generation_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    record = get_resume_generation(db, generation_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Resume generation not found")
+    try:
+        delete_resume_generation(db, record)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not delete resume: {exc}",
+        ) from exc
+    return {"deleted": generation_id}
 
 
 def _resolve_resume_vector_role(

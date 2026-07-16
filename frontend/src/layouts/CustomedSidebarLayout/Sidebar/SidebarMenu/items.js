@@ -58,6 +58,10 @@ const menuItems = [
             link: '/applications/application-management'
           },
           {
+            name: 'Resume Management',
+            link: '/applications/resume-management'
+          },
+          {
             name: 'Email Management',
             link: '/applications/email-management'
           }

@@ -52,6 +52,9 @@ const ProfileManagement = Loader(
 const ApplicationManagement = Loader(
   lazy(() => import('src/content/applications/ApplicationManagement'))
 );
+const ResumeManagement = Loader(
+  lazy(() => import('src/content/applications/ResumeManagement'))
+);
 const EmailManagement = Loader(
   lazy(() => import('src/content/applications/EmailManagement'))
 );
@@ -149,6 +152,14 @@ const applicationsRoutes = [
     element: (
       <RequireAdmin>
         <ApplicationManagement />
+      </RequireAdmin>
+    )
+  },
+  {
+    path: 'resume-management',
+    element: (
+      <RequireAdmin>
+        <ResumeManagement />
       </RequireAdmin>
     )
   },
