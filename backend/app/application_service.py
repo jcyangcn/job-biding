@@ -14,6 +14,7 @@ from app.models import (
 )
 from app.job_vector import build_job_vector_weighted
 from app.job_post_service import get_job_post
+from app.pagination import parse_optional_date
 from app.profile_service import (
     _format_identity_label,
     get_profile,
@@ -24,6 +25,78 @@ from app.skill_service import list_skill_vector_entries
 from app.user_roles import UserRole
 
 _APPLICATION_SCREENSHOT_STORAGE_PREFIX = "/storage/uploads/application screenshot/"
+
+
+def list_application_post_ids(
+    db: Session,
+    *,
+    profile_id: int | None = None,
+    bidder_user_id: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    without_profile: bool = False,
+) -> dict:
+    """Return post IDs matching related-application or unassigned-post filters."""
+    if (
+        profile_id is None
+        and bidder_user_id is None
+        and not date_from
+        and not date_to
+        and not without_profile
+    ):
+        raise ValueError("Provide at least one application filter")
+
+    from_date = parse_optional_date(date_from)
+    to_date = parse_optional_date(date_to)
+    if from_date is not None and to_date is not None and from_date > to_date:
+        raise ValueError("Post created from date cannot be after created to date")
+
+    if without_profile:
+        if profile_id is not None or bidder_user_id is not None or from_date or to_date:
+            raise ValueError(
+                "No profile related cannot be combined with application filters"
+            )
+        post_ids = list(
+            db.scalars(
+                select(JobPost.id)
+                .outerjoin(
+                    JobApplication,
+                    JobApplication.post_id == JobPost.id,
+                )
+                .where(JobApplication.id.is_(None))
+                .order_by(JobPost.id.asc())
+            ).all()
+        )
+        return {
+            "post_ids": post_ids,
+            "post_count": len(post_ids),
+            "matched_application_count": 0,
+        }
+
+    if profile_id is not None and db.get(JobProfile, profile_id) is None:
+        raise ValueError("Profile not found")
+    if bidder_user_id is not None and db.get(User, bidder_user_id) is None:
+        raise ValueError("Bidder not found")
+
+    query = select(JobApplication.id, JobApplication.post_id).join(
+        JobPost, JobPost.id == JobApplication.post_id
+    )
+    if profile_id is not None:
+        query = query.where(JobApplication.profile_id == profile_id)
+    if bidder_user_id is not None:
+        query = query.where(JobApplication.bidder_user_id == bidder_user_id)
+    if from_date is not None:
+        query = query.where(func.date(JobPost.created_at) >= from_date)
+    if to_date is not None:
+        query = query.where(func.date(JobPost.created_at) <= to_date)
+
+    rows = db.execute(query.order_by(JobApplication.post_id.asc())).all()
+    post_ids = sorted({int(row.post_id) for row in rows})
+    return {
+        "post_ids": post_ids,
+        "post_count": len(post_ids),
+        "matched_application_count": len(rows),
+    }
 
 
 def _resolve_application_bidder(db: Session, record: JobApplication) -> User | None:
@@ -626,19 +699,6 @@ def assign_posts_to_profile(
             )
             continue
 
-        company_key = _normalize_company_name(post.company)
-        if company_key and company_key in seen_company_names:
-            skipped.append(
-                {
-                    "post_id": post.id,
-                    "application_id": None,
-                    "company": post.company or "",
-                    "role": post.role or "",
-                    "reason": "Application with this company already exists",
-                }
-            )
-            continue
-
         existing = db.scalar(
             select(JobApplication).where(
                 JobApplication.profile_id == profile_id,
@@ -653,6 +713,19 @@ def assign_posts_to_profile(
                     "company": post.company or "",
                     "role": post.role or "",
                     "reason": "Application already exists",
+                }
+            )
+            continue
+
+        company_key = _normalize_company_name(post.company)
+        if company_key and company_key in seen_company_names:
+            skipped.append(
+                {
+                    "post_id": post.id,
+                    "application_id": None,
+                    "company": post.company or "",
+                    "role": post.role or "",
+                    "reason": "Application with this company already exists",
                 }
             )
             continue

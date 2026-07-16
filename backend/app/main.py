@@ -73,6 +73,7 @@ from app.application_service import (
     delete_application,
     get_application,
     get_application_for_user,
+    list_application_post_ids,
     list_applications_admin,
     list_applications_for_profile,
     list_applications_for_user,
@@ -130,6 +131,7 @@ from app.models import (
     JobProfileUpdateRequest,
     BatchAssignPostsRequest,
     BatchAssignPostsResponse,
+    JobApplicationPostIdsResponse,
     BatchSelectResumesRequest,
     BatchSelectResumesResponse,
     JobApplicationCreateRequest,
@@ -774,6 +776,32 @@ def list_job_applications_endpoint(
         )
         for row in rows
     ]
+
+
+@app.get(
+    "/api/job-applications/post-ids",
+    response_model=JobApplicationPostIdsResponse,
+)
+def list_job_application_post_ids_endpoint(
+    profile_id: int | None = None,
+    bidder_user_id: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    without_profile: bool = False,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    try:
+        return list_application_post_ids(
+            db,
+            profile_id=profile_id,
+            bidder_user_id=bidder_user_id,
+            date_from=date_from,
+            date_to=date_to,
+            without_profile=without_profile,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/job-applications/{application_id}", response_model=JobApplicationResponse)

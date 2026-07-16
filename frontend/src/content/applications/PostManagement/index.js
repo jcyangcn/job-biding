@@ -4,9 +4,11 @@ import { useSnackbar } from 'notistack';
 import {
   Box,
   Button,
+  ButtonGroup,
   Card,
   CardContent,
   Checkbox,
+  Chip,
   Container,
   Dialog,
   DialogActions,
@@ -34,6 +36,7 @@ import AssignmentIndTwoToneIcon from '@mui/icons-material/AssignmentIndTwoTone';
 import AutoAwesomeTwoToneIcon from '@mui/icons-material/AutoAwesomeTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import FilterAltTwoToneIcon from '@mui/icons-material/FilterAltTwoTone';
 import PictureAsPdfTwoToneIcon from '@mui/icons-material/PictureAsPdfTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SelectAllTwoToneIcon from '@mui/icons-material/SelectAllTwoTone';
@@ -51,6 +54,8 @@ import { buildJobVector } from 'src/utils/jobVector';
 import { listAllProfiles } from 'src/services/profileApi';
 import { generateResumeForPost } from 'src/services/resumeApi';
 import { listSkillKeywords } from 'src/services/skillApi';
+import { listAllUsers } from 'src/services/usersApi';
+import { listJobApplicationPostIds } from 'src/services/jobApplicationApi';
 import {
   createJobPost,
   batchAssignPostsToProfile,
@@ -65,6 +70,13 @@ const emptyForm = {
   url: '',
   job_description: '',
   job_vector: []
+};
+
+const emptySelectionFilters = {
+  profileId: '',
+  bidderUserId: '',
+  dateFrom: '',
+  dateTo: ''
 };
 
 function previewText(value, maxLength = 80) {
@@ -112,14 +124,20 @@ function PostManagement() {
   );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const [selectionFilterDialogOpen, setSelectionFilterDialogOpen] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
   const [deletingPost, setDeletingPost] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [skillKeywords, setSkillKeywords] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [bidderUsers, setBidderUsers] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [selectedPostIds, setSelectedPostIds] = useState([]);
+  const [selectionFilters, setSelectionFilters] = useState(emptySelectionFilters);
+  const [selectingByFilters, setSelectingByFilters] = useState(false);
   const [generatingResumes, setGeneratingResumes] = useState(false);
   const [assigningPosts, setAssigningPosts] = useState(false);
   const [generateProgress, setGenerateProgress] = useState({
@@ -136,10 +154,23 @@ function PostManagement() {
       .catch(() => setProfiles([]));
   }, []);
 
+  useEffect(() => {
+    listAllUsers()
+      .then((rows) =>
+        setBidderUsers(
+          (Array.isArray(rows) ? rows : []).filter(
+            (user) => String(user.role || '').toLowerCase() === 'bidder'
+          )
+        )
+      )
+      .catch(() => setBidderUsers([]));
+  }, []);
+
   const selectedProfile = useMemo(
     () => profiles.find((profile) => Number(profile.id) === Number(selectedProfileId)) || null,
     [profiles, selectedProfileId]
   );
+  const withoutProfileSelected = selectionFilters.profileId === 'without-profile';
 
   const fetchPosts = useCallback((opts) => listJobPosts(opts), []);
 
@@ -166,7 +197,7 @@ function PostManagement() {
     defaultSort: { field: 'id', direction: 'desc' }
   });
 
-  const busy = loading || saving || generatingResumes || assigningPosts;
+  const busy = loading || saving || generatingResumes || assigningPosts || selectingByFilters;
 
   const selectedPostIdSet = useMemo(() => new Set(selectedPostIds.map(Number)), [selectedPostIds]);
 
@@ -214,6 +245,78 @@ function PostManagement() {
     }
   };
 
+  const handleSelectCurrentPage = () => {
+    setSelectedPostIds((current) => {
+      const merged = new Set(current.map(Number));
+      pagePostIds.forEach((id) => merged.add(id));
+      return Array.from(merged);
+    });
+  };
+
+  const handleSelectionFilterChange = (field) => (event) => {
+    const value = event.target.value;
+    setSelectionFilters((current) => {
+      if (field === 'profileId' && value === 'without-profile') {
+        return {
+          ...emptySelectionFilters,
+          profileId: value
+        };
+      }
+      return { ...current, [field]: value };
+    });
+  };
+
+  const closeSelectionFilterDialog = () => {
+    if (!selectingByFilters) {
+      setSelectionFilterDialogOpen(false);
+    }
+  };
+
+  const handleSelectByApplicationFilters = async () => {
+    const hasCriterion = Object.values(selectionFilters).some(Boolean);
+    if (!hasCriterion) {
+      enqueueSnackbar('Choose at least one application filter', { variant: 'warning' });
+      return;
+    }
+    if (
+      selectionFilters.dateFrom &&
+      selectionFilters.dateTo &&
+      selectionFilters.dateFrom > selectionFilters.dateTo
+    ) {
+      enqueueSnackbar('Post created from date cannot be after created to date', {
+        variant: 'warning'
+      });
+      return;
+    }
+
+    setSelectingByFilters(true);
+    try {
+      const withoutProfile = selectionFilters.profileId === 'without-profile';
+      const result = await listJobApplicationPostIds({
+        ...selectionFilters,
+        profileId: withoutProfile ? '' : selectionFilters.profileId,
+        withoutProfile
+      });
+      const postIds = Array.isArray(result?.post_ids) ? result.post_ids.map(Number) : [];
+      setSelectedPostIds(postIds);
+      setSelectionFilterDialogOpen(false);
+      enqueueSnackbar(
+        withoutProfile
+          ? `Selected ${postIds.length} post(s) with no related profile`
+          : `Selected ${postIds.length} post(s) from ${
+              result?.matched_application_count || 0
+            } matching application(s)`,
+        { variant: postIds.length ? 'success' : 'info' }
+      );
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to select posts by application filters', {
+        variant: 'error'
+      });
+    } finally {
+      setSelectingByFilters(false);
+    }
+  };
+
   const handleAssignPosts = async () => {
     if (!selectedProfile) {
       enqueueSnackbar('Select a profile first', { variant: 'warning' });
@@ -228,24 +331,38 @@ function PostManagement() {
     try {
       const result = await batchAssignPostsToProfile(selectedProfile.id, selectedPostIds);
       const createdCount = result.created?.length || 0;
-      const skippedCount = result.skipped?.length || 0;
+      const skipped = Array.isArray(result.skipped) ? result.skipped : [];
+      const alreadyAssignedCount = skipped.filter(
+        (item) => item.reason === 'Application already exists'
+      ).length;
+      const otherSkipped = skipped.filter(
+        (item) => item.reason !== 'Application already exists'
+      );
+      const summary = [];
 
       if (createdCount) {
-        enqueueSnackbar(
-          `Created ${createdCount} application(s) for ${selectedProfile.identity_name || 'profile'}`,
-          { variant: 'success' }
+        summary.push(`${createdCount} assigned`);
+      }
+      if (alreadyAssignedCount) {
+        summary.push(`${alreadyAssignedCount} already assigned (not added again)`);
+      }
+      if (otherSkipped.length) {
+        const reason = otherSkipped[0]?.reason;
+        summary.push(
+          `${otherSkipped.length} skipped${reason ? `: ${reason}` : ''}`
         );
       }
-      if (skippedCount) {
-        const reason = result.skipped[0]?.reason || 'Already assigned';
-        enqueueSnackbar(
-          `${skippedCount} post(s) skipped${createdCount ? '' : `: ${reason}`}`,
-          { variant: createdCount ? 'warning' : 'info' }
-        );
+      if (!summary.length) {
+        summary.push('No applications were created');
       }
-      if (!createdCount && !skippedCount) {
-        enqueueSnackbar('No applications were created', { variant: 'warning' });
-      }
+
+      enqueueSnackbar(
+        `${selectedProfile.identity_name || 'Profile'}: ${summary.join(', ')}`,
+        {
+          variant: skipped.length ? (createdCount ? 'warning' : 'info') : 'success'
+        }
+      );
+      setAssignDialogOpen(false);
     } catch (err) {
       enqueueSnackbar(err.message || 'Assign failed', { variant: 'error' });
     } finally {
@@ -419,6 +536,7 @@ function PostManagement() {
       return;
     }
 
+    setGenerateDialogOpen(false);
     setGeneratingResumes(true);
     setGenerateProgress({ current: 0, total: 0, label: 'Loading posts…' });
 
@@ -512,55 +630,6 @@ function PostManagement() {
             totalCount={total}
             actions={
               <>
-                <FormControl
-                  size="small"
-                  sx={{ minWidth: 220, flexShrink: 0 }}
-                  disabled={busy}
-                >
-                  <InputLabel id="post-management-profile-label">Profile</InputLabel>
-                  <Select
-                    labelId="post-management-profile-label"
-                    label="Profile"
-                    value={selectedProfileId}
-                    onChange={(event) => setSelectedProfileId(event.target.value)}
-                  >
-                    <MenuItem value="">
-                      <em>Select profile…</em>
-                    </MenuItem>
-                    {profiles.map((profile) => (
-                      <MenuItem key={profile.id} value={String(profile.id)}>
-                        {profile.identity_name || `Profile #${profile.id}`}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Button
-                  variant="outlined"
-                  startIcon={<SelectAllTwoToneIcon />}
-                  onClick={handleSelectAllPosts}
-                  disabled={busy}
-                >
-                  Select all
-                </Button>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<AssignmentIndTwoToneIcon />}
-                  onClick={handleAssignPosts}
-                  disabled={busy || !selectedProfile || !selectedPostIds.length}
-                >
-                  {assigningPosts ? 'Assigning…' : 'Assign'}
-                </Button>
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  startIcon={<AutoAwesomeTwoToneIcon />}
-                  endIcon={<PictureAsPdfTwoToneIcon />}
-                  onClick={handleGenerateResumes}
-                  disabled={busy || !selectedProfile || !selectedPostIds.length}
-                >
-                  {generatingResumes ? 'Generating…' : 'Generate Resume'}
-                </Button>
                 <Button
                   variant="outlined"
                   startIcon={<RefreshTwoToneIcon />}
@@ -580,6 +649,64 @@ function PostManagement() {
               </>
             }
           />
+        </Box>
+        <Box
+          sx={{
+            mb: 2,
+            p: 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            flexWrap: 'wrap',
+            border: (theme) => `1px solid ${theme.palette.divider}`,
+            borderRadius: 1,
+            bgcolor: 'background.paper'
+          }}
+        >
+          <Typography variant="body2" fontWeight="bold" color="text.secondary">
+            Select:
+          </Typography>
+          <ButtonGroup size="small" variant="outlined" disabled={busy}>
+            <Button onClick={handleSelectCurrentPage} disabled={busy || !pagePostIds.length}>
+              Current Page
+            </Button>
+            <Button onClick={handleSelectAllPosts} disabled={busy || !total}>
+              All Posts
+            </Button>
+            <Button
+              startIcon={<FilterAltTwoToneIcon />}
+              onClick={() => setSelectionFilterDialogOpen(true)}
+              disabled={busy}
+            >
+              Application Filters
+            </Button>
+          </ButtonGroup>
+          <Chip
+            size="small"
+            color={selectedPostIds.length ? 'primary' : 'default'}
+            label={`${selectedPostIds.length} selected`}
+            onDelete={selectedPostIds.length ? () => setSelectedPostIds([]) : undefined}
+          />
+          <Box sx={{ flex: 1 }} />
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AssignmentIndTwoToneIcon />}
+            onClick={() => setAssignDialogOpen(true)}
+            disabled={busy || !selectedPostIds.length}
+          >
+            Assign to Profile
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={<AutoAwesomeTwoToneIcon />}
+            endIcon={<PictureAsPdfTwoToneIcon />}
+            onClick={() => setGenerateDialogOpen(true)}
+            disabled={busy || !selectedPostIds.length}
+          >
+            Generate Resumes
+          </Button>
         </Box>
         <Card>
           <CardContent>
@@ -794,6 +921,198 @@ function PostManagement() {
           </Button>
           <Button onClick={handleSave} variant="contained" disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={selectionFilterDialogOpen}
+        onClose={closeSelectionFilterDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Select posts by application filters</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Filter posts by their existing applications, or choose “No profile related” to find
+            posts that have not been assigned yet. The profile here is only a source filter; you
+            choose the target profile separately when assigning posts or generating resumes. Date
+            filters use the job post creation date.
+          </Typography>
+          <Box sx={{ display: 'grid', gap: 2 }}>
+            <FormControl fullWidth disabled={selectingByFilters}>
+              <InputLabel id="selection-source-profile-label">Application Profile</InputLabel>
+              <Select
+                labelId="selection-source-profile-label"
+                label="Application Profile"
+                value={selectionFilters.profileId}
+                onChange={handleSelectionFilterChange('profileId')}
+              >
+                <MenuItem value="">
+                  <em>Any related profile</em>
+                </MenuItem>
+                <MenuItem value="without-profile">No profile related</MenuItem>
+                {profiles.map((profile) => (
+                  <MenuItem key={profile.id} value={String(profile.id)}>
+                    {profile.identity_name || `Profile #${profile.id}`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth disabled={selectingByFilters || withoutProfileSelected}>
+              <InputLabel id="selection-actual-bidder-label">Actual Bidder</InputLabel>
+              <Select
+                labelId="selection-actual-bidder-label"
+                label="Actual Bidder"
+                value={selectionFilters.bidderUserId}
+                onChange={handleSelectionFilterChange('bidderUserId')}
+              >
+                <MenuItem value="">
+                  <em>Any bidder</em>
+                </MenuItem>
+                {bidderUsers.map((user) => (
+                  <MenuItem key={user.id} value={String(user.id)}>
+                    {user.full_name || user.username || `Bidder #${user.id}`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                gap: 2
+              }}
+            >
+              <TextField
+                label="Post Created From"
+                type="date"
+                value={selectionFilters.dateFrom}
+                onChange={handleSelectionFilterChange('dateFrom')}
+                disabled={selectingByFilters || withoutProfileSelected}
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Post Created To"
+                type="date"
+                value={selectionFilters.dateTo}
+                onChange={handleSelectionFilterChange('dateTo')}
+                disabled={selectingByFilters || withoutProfileSelected}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeSelectionFilterDialog} disabled={selectingByFilters}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<SelectAllTwoToneIcon />}
+            onClick={handleSelectByApplicationFilters}
+            disabled={selectingByFilters || !Object.values(selectionFilters).some(Boolean)}
+          >
+            {selectingByFilters ? 'Selecting…' : 'Replace Selection'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={assignDialogOpen}
+        onClose={() => !assigningPosts && setAssignDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Assign job posts to profile</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Create applications from {selectedPostIds.length} selected job post(s).
+          </Typography>
+          <FormControl fullWidth disabled={assigningPosts}>
+            <InputLabel id="assign-posts-profile-label">Profile</InputLabel>
+            <Select
+              labelId="assign-posts-profile-label"
+              label="Profile"
+              value={selectedProfileId}
+              onChange={(event) => setSelectedProfileId(event.target.value)}
+            >
+              <MenuItem value="">
+                <em>Select profile…</em>
+              </MenuItem>
+              {profiles.map((profile) => (
+                <MenuItem key={profile.id} value={String(profile.id)}>
+                  {profile.identity_name || `Profile #${profile.id}`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setAssignDialogOpen(false)}
+            disabled={assigningPosts}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AssignmentIndTwoToneIcon />}
+            onClick={handleAssignPosts}
+            disabled={assigningPosts || !selectedProfile || !selectedPostIds.length}
+          >
+            {assigningPosts ? 'Assigning…' : 'Assign Posts'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={generateDialogOpen}
+        onClose={() => !generatingResumes && setGenerateDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Generate resumes for job posts</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Generate and save one tailored resume for each of the {selectedPostIds.length} selected
+            job post(s). Generation may take 1–3 minutes per resume.
+          </Typography>
+          <FormControl fullWidth disabled={generatingResumes}>
+            <InputLabel id="generate-resumes-profile-label">Profile</InputLabel>
+            <Select
+              labelId="generate-resumes-profile-label"
+              label="Profile"
+              value={selectedProfileId}
+              onChange={(event) => setSelectedProfileId(event.target.value)}
+            >
+              <MenuItem value="">
+                <em>Select profile…</em>
+              </MenuItem>
+              {profiles.map((profile) => (
+                <MenuItem key={profile.id} value={String(profile.id)}>
+                  {profile.identity_name || `Profile #${profile.id}`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setGenerateDialogOpen(false)}
+            disabled={generatingResumes}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={<AutoAwesomeTwoToneIcon />}
+            endIcon={<PictureAsPdfTwoToneIcon />}
+            onClick={handleGenerateResumes}
+            disabled={generatingResumes || !selectedProfile || !selectedPostIds.length}
+          >
+            Generate Resumes
           </Button>
         </DialogActions>
       </Dialog>

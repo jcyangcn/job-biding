@@ -35,8 +35,8 @@ const SidebarRoot = styled(Card)(
 
     .MuiListItemButton-root {
       border-radius: ${theme.general.borderRadius};
-      margin: ${theme.spacing(0.5, 1.5)};
-      padding: ${theme.spacing(1, 1.25)};
+      margin: ${theme.spacing(0.4, 1)};
+      padding: ${theme.spacing(0.75, 1)};
 
       &.Mui-selected {
         background-color: ${alpha(theme.colors.primary.main, 0.08)};
@@ -142,22 +142,22 @@ function ProfileSidebar({
           '&:last-child': { pb: 0 }
         }}
       >
-        <Box px={2} pt={2} pb={1.5} flexShrink={0}>
+        <Box px={1.5} pt={1.5} pb={1} flexShrink={0}>
           <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
-            <Typography variant="h4">Profiles</Typography>
+            <Typography variant="h5">Profiles</Typography>
             <Label color="info">
               {filteredProfiles.length}/{profiles.length}
             </Label>
           </Box>
         </Box>
 
-        <Box px={2} pb={1} flexShrink={0}>
+        <Box px={1.5} pb={0.75} flexShrink={0}>
           <TextField
             size="small"
             fullWidth
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, email, roles…"
+            placeholder="Search profiles…"
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -168,7 +168,7 @@ function ProfileSidebar({
           />
         </Box>
 
-        <Box px={2} pb={0.75} flexShrink={0} display="flex" justifyContent="flex-end">
+        <Box px={1.5} pb={0.5} flexShrink={0} display="flex" justifyContent="flex-end">
           <Box
             component="label"
             htmlFor="profile-show-inactive"
@@ -195,7 +195,7 @@ function ProfileSidebar({
           </Box>
         </Box>
 
-        <Divider sx={{ mx: 2, my: 1 }} />
+        <Divider sx={{ mx: 1.5, my: 0.75 }} />
 
         {loading ? (
           <Box display="flex" justifyContent="center" alignItems="center" flex={1} py={4}>
@@ -209,11 +209,11 @@ function ProfileSidebar({
                   selected={selectedProfileId === ALL_PROFILES}
                   onClick={() => onSelectProfile(ALL_PROFILES)}
                 >
-                  <ListItemAvatar sx={{ minWidth: 44 }}>
+                  <ListItemAvatar sx={{ minWidth: 36 }}>
                     <Avatar
                       sx={{
-                        width: 36,
-                        height: 36,
+                        width: 30,
+                        height: 30,
                         bgcolor: alpha(theme.colors.primary.main, 0.12),
                         color: theme.colors.primary.main
                       }}
@@ -223,7 +223,8 @@ function ProfileSidebar({
                   </ListItemAvatar>
                   <ListItemText
                     primary="All profiles"
-                    primaryTypographyProps={{ variant: 'subtitle1', fontWeight: 600, noWrap: true }}
+                    primaryTypographyProps={{ variant: 'body2', fontWeight: 600, noWrap: true }}
+                    sx={{ minWidth: 0 }}
                   />
                   {renderCount(itemCounts.total || 0)}
                 </ListItemButton>
@@ -249,28 +250,29 @@ function ProfileSidebar({
                         selected={selectedProfileId === profile.id}
                         onClick={() => onSelectProfile(profile.id)}
                       >
-                        <ListItemAvatar sx={{ minWidth: 44 }}>
+                        <ListItemAvatar sx={{ minWidth: 36 }}>
                           <Box
                             sx={{
-                              width: 36,
-                              height: 36,
+                              width: 30,
+                              height: 30,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center'
                             }}
                           >
-                            {country ? <CountryFlag country={country} height={18} /> : '—'}
+                            {country ? <CountryFlag country={country} height={16} /> : '—'}
                           </Box>
                         </ListItemAvatar>
                         <ListItemText
                           primary={displayName || '—'}
                           primaryTypographyProps={{
-                            variant: 'subtitle1',
+                            variant: 'body2',
                             fontWeight: 600,
                             noWrap: true
                           }}
+                          sx={{ minWidth: 0 }}
                         />
-                        <Box display="flex" flexDirection="column" alignItems="flex-end" gap={0.5} ml={1}>
+                        <Box display="flex" flexDirection="column" alignItems="flex-end" gap={0.25} ml={0.5}>
                           {renderCount(appCount)}
                           <Label color={profile.is_active ? 'success' : 'warning'}>
                             {profile.is_active ? 'Active' : 'Inactive'}

@@ -14,10 +14,11 @@ import { mergeApplicationResumeStatus } from 'src/utils/mergeApplicationResumeSt
 function ApplicationManagement() {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
-  const sectionHeight = {
+  const tableHeight = {
     xs: 320,
     md: `calc(100vh - ${theme.header.height} - ${theme.spacing(14)})`
   };
+  const profileSidebarHeight = { xs: 260, md: 480 };
   useSetPageHeader(
     'Application Management',
     'View and manage job applications by profile'
@@ -113,12 +114,12 @@ function ApplicationManagement() {
           profiles={profiles}
           identities={identities}
           showProfileColumn={selectedProfileId === ALL_PROFILES}
-          tableCardHeight={sectionHeight}
+          tableCardHeight={tableHeight}
           renderLayout={({ toolbar, table, dialogs }) => (
             <>
               <Box sx={{ mb: 2, width: '100%' }}>{toolbar}</Box>
               <Grid container spacing={2} alignItems="flex-start">
-                <Grid item xs={12} md={3}>
+                <Grid item xs={12} md={2}>
                   <ProfileSidebar
                     profiles={profiles}
                     identities={identities}
@@ -126,10 +127,10 @@ function ApplicationManagement() {
                     selectedProfileId={selectedProfileId}
                     onSelectProfile={setSelectedProfileId}
                     itemCounts={applicationCounts}
-                    height={sectionHeight}
+                    height={profileSidebarHeight}
                   />
                 </Grid>
-                <Grid item xs={12} md={9}>
+                <Grid item xs={12} md={10}>
                   {table}
                 </Grid>
               </Grid>

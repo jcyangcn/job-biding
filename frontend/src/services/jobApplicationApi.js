@@ -42,6 +42,40 @@ export function listJobApplications(profileId, options = {}) {
   });
 }
 
+export function listJobApplicationPostIds({
+  profileId,
+  bidderUserId,
+  dateFrom,
+  dateTo,
+  withoutProfile
+} = {}) {
+  const params = new URLSearchParams();
+  if (profileId !== undefined && profileId !== null && profileId !== '') {
+    params.set('profile_id', String(profileId));
+  }
+  if (bidderUserId !== undefined && bidderUserId !== null && bidderUserId !== '') {
+    params.set('bidder_user_id', String(bidderUserId));
+  }
+  if (dateFrom) {
+    params.set('date_from', dateFrom);
+  }
+  if (dateTo) {
+    params.set('date_to', dateTo);
+  }
+  if (withoutProfile) {
+    params.set('without_profile', 'true');
+  }
+
+  return fetch(`${getApiBase()}/api/job-applications/post-ids?${params.toString()}`, {
+    headers: authHeaders()
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
 export function getJobApplication(applicationId) {
   return fetch(`${getApiBase()}/api/job-applications/${applicationId}`, {
     headers: authHeaders()

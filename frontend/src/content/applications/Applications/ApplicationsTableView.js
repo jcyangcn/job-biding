@@ -11,6 +11,7 @@ import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
 import {
+  alpha,
   Box,
   Button,
   Card,
@@ -19,9 +20,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Link,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -99,28 +102,26 @@ const COLUMN_WIDTHS = {
   no: '4%',
   profile: '9%',
   bidder: '8%',
-  role: '14%',
-  company: '10%',
-  link: '11%',
-  resume: '12%',
+  roleCompany: '18%',
+  link: '13%',
+  resume: '14%',
   applied: '9%',
-  screenshot: '10%',
-  successLink: '10%',
+  screenshot: '11%',
+  successLink: '11%',
   actions: '13%'
 };
 
 /** When Profile is shown, slightly shrink neighboring columns. */
 const COLUMN_WIDTHS_WITH_PROFILE = {
   no: '4%',
-  profile: '7%',
-  bidder: '7%',
-  role: '12%',
-  company: '9%',
-  link: '10%',
-  resume: '11%',
+  profile: '8%',
+  bidder: '8%',
+  roleCompany: '16%',
+  link: '11%',
+  resume: '12%',
   applied: '9%',
   screenshot: '9%',
-  successLink: '9%',
+  successLink: '10%',
   actions: '13%'
 };
 
@@ -183,6 +184,7 @@ function ApplicationsTableView({
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showNotAppliedOnly, setShowNotAppliedOnly] = useState(false);
   const { open: detailOpen, selected: selectedApplication, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
 
@@ -252,7 +254,17 @@ function ApplicationsTableView({
     [bidderOptions, selectValues.bidder_username, setSelectValue]
   );
 
-  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(filteredRows);
+  const visibleRows = useMemo(
+    () => (showNotAppliedOnly ? filteredRows.filter((row) => !row.applied) : filteredRows),
+    [filteredRows, showNotAppliedOnly]
+  );
+
+  const handleClearFilters = () => {
+    clearFilters();
+    setShowNotAppliedOnly(false);
+  };
+
+  const { sortedRows, sortField, sortDirection, handleSort } = useTableSort(visibleRows);
 
   const {
     page,
@@ -408,7 +420,7 @@ function ApplicationsTableView({
     }
   };
 
-  const columnCount = showProfileColumn ? 11 : 10;
+  const columnCount = showProfileColumn ? 10 : 9;
   const fixedTableCard = Boolean(tableCardHeight);
   const widths = showProfileColumn ? COLUMN_WIDTHS_WITH_PROFILE : COLUMN_WIDTHS;
 
@@ -425,35 +437,42 @@ function ApplicationsTableView({
       dateFromLabel="Applied from"
       dateToLabel="Applied to"
       selects={filterSelects}
-      onClear={clearFilters}
-      hasActiveFilters={hasActiveFilters}
-      filteredCount={filteredRows.length}
+      onClear={handleClearFilters}
+      hasActiveFilters={hasActiveFilters || showNotAppliedOnly}
+      filteredCount={visibleRows.length}
       totalCount={rows.length}
       actions={
         <>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            hidden
-            onChange={handleImportFileSelected}
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showNotAppliedOnly}
+                onChange={(event) => setShowNotAppliedOnly(event.target.checked)}
+              />
+            }
+            label="Not applied only"
+            sx={{
+              m: 0,
+              mr: 0.75,
+              px: 1,
+              py: 0.25,
+              whiteSpace: 'nowrap',
+              border: '1px solid',
+              borderColor: showNotAppliedOnly ? 'primary.main' : 'divider',
+              borderRadius: 1,
+              bgcolor: showNotAppliedOnly
+                ? alpha(theme.palette.primary.main, 0.1)
+                : 'background.paper',
+              boxShadow: showNotAppliedOnly
+                ? `0 0 0 2px ${alpha(theme.palette.primary.main, 0.12)}`
+                : 'none',
+              '& .MuiFormControlLabel-label': {
+                fontWeight: 600,
+                color: showNotAppliedOnly ? 'primary.main' : 'text.primary'
+              }
+            }}
           />
-          <Button
-            variant="outlined"
-            startIcon={<FileUploadTwoToneIcon />}
-            onClick={handleImportClick}
-            disabled={loading || importing}
-          >
-            {importing ? 'Importing…' : 'Import'}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<FileDownloadTwoToneIcon />}
-            onClick={handleExportCsv}
-            disabled={loading || exporting}
-          >
-            {exporting ? 'Exporting…' : 'Export'}
-          </Button>
           <Button
             variant="outlined"
             startIcon={<RefreshTwoToneIcon />}
@@ -530,20 +549,12 @@ function ApplicationsTableView({
                     sx={colSx(widths.bidder)}
                   />
                   <SortableTableCell
-                    label="Role"
-                    sortKey="role"
+                    label="Role / Company"
+                    sortKey={(row) => `${row.role || ''} ${row.company || ''}`}
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
-                    sx={colSx(widths.role)}
-                  />
-                  <SortableTableCell
-                    label="Company"
-                    sortKey="company"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    sx={colSx(widths.company)}
+                    sx={colSx(widths.roleCompany)}
                   />
                   <SortableTableCell
                     label="Link"
@@ -590,7 +601,7 @@ function ApplicationsTableView({
                   <TableRow>
                     <TableCell colSpan={columnCount}>No applications yet.</TableCell>
                   </TableRow>
-                ) : filteredRows.length === 0 ? (
+                ) : visibleRows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={columnCount}>No applications match your filters.</TableCell>
                   </TableRow>
@@ -619,21 +630,19 @@ function ApplicationsTableView({
                           {formatBidderLabel(row) || '—'}
                         </Typography>
                       </TableCell>
-                      <TableCell sx={colSx(widths.role)}>
-                        {row.role ? (
-                          <Tooltip title={row.role}>
+                      <TableCell sx={colSx(widths.roleCompany)}>
+                        <Tooltip
+                          title={[row.role, row.company].filter(Boolean).join(' · ') || '—'}
+                        >
+                          <Box sx={{ minWidth: 0 }}>
                             <Typography variant="body2" sx={ellipsisSx}>
-                              {row.role}
+                              {row.role || '—'}
                             </Typography>
-                          </Tooltip>
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                      <TableCell sx={colSx(widths.company)}>
-                        <Typography variant="body2" sx={ellipsisSx}>
-                          {row.company || '—'}
-                        </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={ellipsisSx}>
+                              {row.company || '—'}
+                            </Typography>
+                          </Box>
+                        </Tooltip>
                       </TableCell>
                       <TableCell sx={colSx(widths.link)} onClick={stopPropagation}>
                         {row.link ? (
@@ -754,14 +763,50 @@ function ApplicationsTableView({
               </TableBody>
             </Table>
           </TableContainer>
-          <TablePaginationFooter
-            count={filteredRows.length}
-            page={page}
-            rowsPerPage={limit}
-            onPageChange={handlePageChange}
-            onRowsPerPageChange={handleLimitChange}
-            rowsPerPageOptions={rowsPerPageOptions}
-          />
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              flexWrap: 'wrap',
+              pt: 1
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              hidden
+              onChange={handleImportFileSelected}
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<FileUploadTwoToneIcon />}
+              onClick={handleImportClick}
+              disabled={loading || importing}
+            >
+              {importing ? 'Importing…' : 'Import'}
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<FileDownloadTwoToneIcon />}
+              onClick={handleExportCsv}
+              disabled={loading || exporting}
+            >
+              {exporting ? 'Exporting…' : 'Export'}
+            </Button>
+            <Box sx={{ flex: 1 }} />
+            <TablePaginationFooter
+              count={visibleRows.length}
+              page={page}
+              rowsPerPage={limit}
+              onPageChange={handlePageChange}
+              onRowsPerPageChange={handleLimitChange}
+              rowsPerPageOptions={rowsPerPageOptions}
+            />
+          </Box>
         </CardContent>
       </Card>
   );

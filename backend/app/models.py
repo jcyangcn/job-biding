@@ -426,6 +426,12 @@ class BatchAssignPostsResponse(BaseModel):
     skipped: list[BatchAssignPostsItem]
 
 
+class JobApplicationPostIdsResponse(BaseModel):
+    post_ids: list[int]
+    post_count: int
+    matched_application_count: int
+
+
 class BatchSelectResumesRequest(BaseModel):
     profile_id: int
     post_ids: list[int] = Field(min_length=1)

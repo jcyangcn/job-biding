@@ -44,6 +44,14 @@ const menuItems = [
           {
             name: 'Profile Management',
             link: '/applications/profile-management'
+          },        
+          {
+            name: 'Skill Management',
+            link: '/applications/skill-management'
+          },
+          {
+            name: 'Job Posts Management',
+            link: '/applications/post-management'
           },
           {
             name: 'Application Management',
@@ -52,14 +60,6 @@ const menuItems = [
           {
             name: 'Email Management',
             link: '/applications/email-management'
-          },
-          {
-            name: 'Skill Management',
-            link: '/applications/skill-management'
-          },
-          {
-            name: 'Post Management',
-            link: '/applications/post-management'
           }
         ]
       }
