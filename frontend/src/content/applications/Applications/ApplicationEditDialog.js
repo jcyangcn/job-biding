@@ -40,11 +40,13 @@ import {
 } from 'src/services/jobApplicationApi';
 import { listAllProfiles } from 'src/services/profileApi';
 import {
+  buildApplicationResumeFilename,
   downloadResumePdf,
   generateResumePdf,
   listAllResumeGenerations,
   matchBestResume
 } from 'src/services/resumeApi';
+import { parseIdentityLabel } from 'src/data/countryCodes';
 import { appliedAtToIso, formatDateTime, formatDateTimeValue } from 'src/utils/dateFormat';
 import {
   findApplicationsWithSameCompany,
@@ -358,14 +360,16 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       onSavedRef.current?.({ silent: true });
 
       // The backend reads the job description and profile from these IDs.
-      const { filename, generationId } = await generateResumePdf({
+      const { filename, downloadedFilename, generationId } = await generateResumePdf({
         profile_id: profile.id,
         application_id: application.id
       });
       if (generateTokenRef.current !== generateToken) return;
 
       notify(
-        `Resume PDF finished and saved to the application${generationId ? ` (#${generationId})` : ''}. Downloaded ${filename}.`,
+        `Resume PDF finished and saved to the application${
+          generationId ? ` (#${generationId})` : ''
+        }. Downloaded ${downloadedFilename || filename}.`,
         { variant: 'success' }
       );
       onSavedRef.current?.({ silent: true });
@@ -420,9 +424,13 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     notify('Matching best resume for this job vector…', { variant: 'info' });
 
     try {
-      const { filename, generationId, score } = await matchBestResume({
+      const { filename, downloadedFilename, generationId, score } = await matchBestResume({
         profileId: profile.id,
-        jobVector
+        jobVector,
+        downloadFilename: buildApplicationResumeFilename(
+          parseIdentityLabel(profile.identity_name).name,
+          form.company
+        )
       });
 
       if (!mountedRef.current) return;
@@ -448,7 +456,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       notify(
         `Best match selected${generationId ? ` (#${generationId})` : ''}${
           Number.isFinite(score) ? ` · score ${score}` : ''
-        }. Downloaded ${filename}.`,
+        }. Downloaded ${downloadedFilename || filename}.`,
         { variant: 'success' }
       );
     } catch (err) {
@@ -731,8 +739,11 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                                     onClick={async () => {
                                       setDownloadingResume(true);
                                       try {
-                                        await downloadResumePdf(generatedFilename);
-                                        notify(`Downloaded ${generatedFilename}`, {
+                                        const resolvedName = await downloadResumePdf(
+                                          generatedFilename,
+                                          { applicationId: application.id }
+                                        );
+                                        notify(`Downloaded ${resolvedName}`, {
                                           variant: 'success'
                                         });
                                       } catch (err) {
@@ -898,6 +909,11 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       <ApplicationResumePdfDialog
         open={viewerOpen}
         filename={generatedFilename}
+        applicationId={application.id}
+        downloadFilename={buildApplicationResumeFilename(
+          parseIdentityLabel(profile?.identity_name).name,
+          form.company
+        )}
         onClose={() => setViewerOpen(false)}
       />
     </>

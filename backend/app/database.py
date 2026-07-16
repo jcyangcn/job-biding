@@ -1614,6 +1614,18 @@ def migrate_job_application_applied_evidence_fields() -> None:
             )
 
 
+def migrate_drop_job_application_resume_title() -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS job_application
+                DROP COLUMN IF EXISTS resume_title
+                """
+            )
+        )
+
+
 def migrate_resume_generations_post_id() -> None:
     """Replace job_details on resume_generations with post_id referencing job_posts."""
     migration_name = "resume_generations_post_id_v1"
@@ -1936,6 +1948,7 @@ def init_db() -> None:
     migrate_job_application_post_id()
     migrate_job_application_drop_legacy_job_fields()
     migrate_job_application_applied_evidence_fields()
+    migrate_drop_job_application_resume_title()
     migrate_resume_generations_post_id()
     migrate_clear_bidder_on_unapplied_applications()
     migrate_backfill_profile_resume_count()

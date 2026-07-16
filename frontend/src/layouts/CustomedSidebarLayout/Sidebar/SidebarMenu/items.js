@@ -46,7 +46,7 @@ const menuItems = [
             link: '/applications/profile-management'
           },        
           {
-            name: 'Skill Management',
+            name: 'Keywords Management',
             link: '/applications/skill-management'
           },
           {

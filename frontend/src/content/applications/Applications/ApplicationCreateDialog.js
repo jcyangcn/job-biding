@@ -35,10 +35,12 @@ import {
   updateJobApplication
 } from 'src/services/jobApplicationApi';
 import {
+  buildApplicationResumeFilename,
   generateResumePdf,
   listAllResumeGenerations,
   matchBestResume
 } from 'src/services/resumeApi';
+import { parseIdentityLabel } from 'src/data/countryCodes';
 import { appliedAtToIso, formatDateTime } from 'src/utils/dateFormat';
 import { resolveAppliedFromEvidence } from 'src/utils/applicationAppliedHelpers';
 import {
@@ -339,13 +341,15 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
 
     try {
       // The backend reads the job description and profile from these IDs.
-      const { filename, generationId } = await generateResumePdf({
+      const { filename, downloadedFilename, generationId } = await generateResumePdf({
         profile_id: profile.id,
         application_id: applicationId
       });
 
       notifyFn(
-        `Resume PDF finished and saved to the application${generationId ? ` (#${generationId})` : ''}. Downloaded ${filename}.`,
+        `Resume PDF finished and saved to the application${
+          generationId ? ` (#${generationId})` : ''
+        }. Downloaded ${downloadedFilename || filename}.`,
         { variant: 'success' }
       );
       refreshList?.({ silent: true });
@@ -393,9 +397,13 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     notify('Matching best resume for this job vector…', { variant: 'info' });
 
     try {
-      const { filename, generationId, score } = await matchBestResume({
+      const { filename, downloadedFilename, generationId, score } = await matchBestResume({
         profileId: profile.id,
-        jobVector
+        jobVector,
+        downloadFilename: buildApplicationResumeFilename(
+          parseIdentityLabel(profile.identity_name).name,
+          form.company
+        )
       });
 
       if (!mountedRef.current) return;
@@ -429,7 +437,7 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
       notify(
         `Best match selected${generationId ? ` (#${generationId})` : ''}${
           Number.isFinite(score) ? ` · score ${score}` : ''
-        }. Downloaded ${filename}.`,
+        }. Downloaded ${downloadedFilename || filename}.`,
         { variant: 'success' }
       );
     } catch (err) {

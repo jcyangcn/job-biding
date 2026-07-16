@@ -16,7 +16,13 @@ import CloseIcon from '@mui/icons-material/Close';
 import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
 import { downloadResumePdf, fetchResumePdfBlob } from 'src/services/resumeApi';
 
-function ApplicationResumePdfDialog({ open, filename, onClose }) {
+function ApplicationResumePdfDialog({
+  open,
+  filename,
+  applicationId,
+  downloadFilename,
+  onClose
+}) {
   const { enqueueSnackbar } = useSnackbar();
   const [blobUrl, setBlobUrl] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -40,7 +46,10 @@ function ApplicationResumePdfDialog({ open, filename, onClose }) {
       setBlobUrl(null);
 
       try {
-        const { blob } = await fetchResumePdfBlob(filename, { inline: true });
+        const { blob } = await fetchResumePdfBlob(filename, {
+          inline: true,
+          applicationId
+        });
         if (cancelled) return;
 
         objectUrl = URL.createObjectURL(blob);
@@ -64,14 +73,14 @@ function ApplicationResumePdfDialog({ open, filename, onClose }) {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [open, filename]);
+  }, [applicationId, open, filename]);
 
   const handleDownload = async () => {
     if (!filename) return;
     setDownloading(true);
     try {
-      await downloadResumePdf(filename);
-      enqueueSnackbar(`Downloaded ${filename}`, { variant: 'success' });
+      const resolvedName = await downloadResumePdf(filename, { applicationId });
+      enqueueSnackbar(`Downloaded ${resolvedName || downloadFilename}`, { variant: 'success' });
     } catch (err) {
       enqueueSnackbar(err.message || 'Download failed', { variant: 'error' });
     } finally {
@@ -105,7 +114,7 @@ function ApplicationResumePdfDialog({ open, filename, onClose }) {
         }}
       >
         <Typography variant="h4" component="span" noWrap sx={{ minWidth: 0 }}>
-          {filename || 'Resume PDF'}
+          {downloadFilename || filename || 'Resume PDF'}
         </Typography>
         <IconButton aria-label="Close" onClick={onClose} size="small">
           <CloseIcon />
@@ -179,6 +188,8 @@ function ApplicationResumePdfDialog({ open, filename, onClose }) {
 ApplicationResumePdfDialog.propTypes = {
   open: PropTypes.bool.isRequired,
   filename: PropTypes.string,
+  applicationId: PropTypes.number,
+  downloadFilename: PropTypes.string,
   onClose: PropTypes.func.isRequired
 };
 

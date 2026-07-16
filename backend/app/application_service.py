@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -154,6 +155,27 @@ def _resolve_application_screenshot_path(image: CitizenImageInfo) -> Path:
 def _build_application_screenshot_filename(application_id: int, original_name: str) -> str:
     ext = Path(original_name or "image.png").suffix or ".png"
     return f"app-{application_id}-{uuid4().hex[:10]}{ext}"
+
+
+def _sanitize_resume_filename_part(value: str, fallback: str) -> str:
+    sanitized = re.sub(r"[^\w]+", "_", (value or "").strip()).strip("_")
+    return sanitized or fallback
+
+
+def build_application_resume_download_filename(
+    db: Session,
+    record: JobApplication,
+    post: JobPost | None = None,
+) -> str:
+    profile = get_profile(db, record.profile_id)
+    identity = db.get(JobIdentity, profile.identity_id) if profile else None
+    full_name = _sanitize_resume_filename_part(
+        identity.name if identity else "",
+        "Resume",
+    )
+    resolved_post = post or _load_job_post(db, record)
+    company = _sanitize_resume_filename_part(resolved_post.company or "", "Company")
+    return f"{full_name}_{company}"[:496].rstrip("_") + ".pdf"
 
 
 def application_to_response(

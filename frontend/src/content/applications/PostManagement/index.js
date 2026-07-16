@@ -90,6 +90,43 @@ function previewText(value, maxLength = 80) {
   return `${text.slice(0, maxLength)}…`;
 }
 
+function renderApplicationStatuses(applications) {
+  const rows = Array.from(
+    new Map(
+      (Array.isArray(applications) ? applications : []).map((item) => [
+        item.profile_id,
+        item
+      ])
+    ).values()
+  );
+  if (!rows.length) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        No applied profiles
+      </Typography>
+    );
+  }
+
+  const summary = rows.map((item) => item.profile_name).join('\n');
+
+  return (
+    <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{summary}</span>} arrow>
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', minWidth: 180 }}>
+        {rows.slice(0, 3).map((item) => (
+          <Chip
+            key={item.application_id}
+            size="small"
+            color="success"
+            label={item.profile_name}
+            sx={{ maxWidth: 210 }}
+          />
+        ))}
+        {rows.length > 3 ? <Chip size="small" label={`+${rows.length - 3} more`} /> : null}
+      </Box>
+    </Tooltip>
+  );
+}
+
 // Fetch every job post across all pages. The list API caps page size (200),
 // so a single call misses posts when there are more than that — which made
 // batch selection/generation silently skip posts outside the first page.
@@ -363,6 +400,7 @@ function PostManagement() {
         }
       );
       setAssignDialogOpen(false);
+      refresh();
     } catch (err) {
       enqueueSnackbar(err.message || 'Assign failed', { variant: 'error' });
     } finally {
@@ -744,6 +782,7 @@ function PostManagement() {
                       sortDirection={sortDirection}
                       onSort={handleSort}
                     />
+                    <TableCell sx={{ minWidth: 230 }}>Applied Profiles</TableCell>
                     <SortableTableCell
                       label="URL"
                       sortKey="url"
@@ -772,7 +811,7 @@ function PostManagement() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9}>
+                      <TableCell colSpan={10}>
                         <Typography variant="body2" color="text.secondary">
                           Loading…
                         </Typography>
@@ -780,7 +819,7 @@ function PostManagement() {
                     </TableRow>
                   ) : paginatedRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9}>
+                      <TableCell colSpan={10}>
                         <Typography variant="body2" color="text.secondary">
                           {hasActiveFilters
                             ? 'No posts match your filters.'
@@ -807,6 +846,7 @@ function PostManagement() {
                         <TableCell>{row.id}</TableCell>
                         <TableCell>{row.company || '—'}</TableCell>
                         <TableCell>{row.role || '—'}</TableCell>
+                        <TableCell>{renderApplicationStatuses(row.applications)}</TableCell>
                         <TableCell onClick={stopPropagation}>
                           {row.url ? (
                             <Link

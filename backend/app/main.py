@@ -17,7 +17,7 @@ from app.config import GENERATED_DIR, INSTRUCTION_DIR, REPO_ROOT, settings
 from app.database import get_db, init_db
 from app.auth import authenticate_user, create_access_token, user_to_response
 from app.dependencies import get_current_user, get_current_user_response, require_admin
-from app.db_models import JobApplication, JobProfile, User
+from app.db_models import JobApplication, JobProfile, ResumeGeneration, User
 from app.history import (
     build_resume_content_payload,
     build_resume_vector,
@@ -69,6 +69,7 @@ from app.application_service import (
     assign_posts_to_profile,
     attach_generated_resume_to_application,
     batch_select_resumes_for_posts,
+    build_application_resume_download_filename,
     create_application,
     delete_application,
     get_application,
@@ -175,6 +176,7 @@ from app.job_post_service import (
     delete_job_post,
     get_job_post,
     job_post_to_response,
+    job_posts_to_responses,
     list_job_posts_page,
     update_job_post,
 )
@@ -481,7 +483,7 @@ def list_job_posts_endpoint(
         sort_dir=sort_dir,
     )
     return {
-        "items": [job_post_to_response(row) for row in result["items"]],
+        "items": job_posts_to_responses(db, result["items"]),
         "total": result["total"],
         "page": result["page"],
         "page_size": result["page_size"],
@@ -562,7 +564,7 @@ def update_job_post_endpoint(
     if not record:
         raise HTTPException(status_code=404, detail="Job post not found")
     updated = update_job_post(db, record, request)
-    return job_post_to_response(updated)
+    return job_posts_to_responses(db, [updated])[0]
 
 
 @app.delete("/api/job-posts/{post_id}")
@@ -1737,15 +1739,32 @@ def _resolve_generated_pdf(filename: str) -> Path:
 
 
 @app.get("/api/resumes/download/{filename}")
-def download_resume_pdf(filename: str, inline: bool = False):
+def download_resume_pdf(
+    filename: str,
+    inline: bool = False,
+    application_id: int | None = None,
+    db: Session = Depends(get_db),
+):
     """Return a generated PDF. Use inline=true to open in the browser."""
     pdf_path = _resolve_generated_pdf(filename)
     disposition = "inline" if inline else "attachment"
+    download_name = pdf_path.name
+    if application_id is not None:
+        application = db.get(JobApplication, application_id)
+        if application and application.resume_generated_id is not None:
+            generation = db.get(ResumeGeneration, application.resume_generated_id)
+            if (
+                generation
+                and Path(generation.pdf_path).name == pdf_path.name
+            ):
+                download_name = build_application_resume_download_filename(
+                    db, application
+                )
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
-        filename=pdf_path.name,
-        headers={"Content-Disposition": f'{disposition}; filename="{pdf_path.name}"'},
+        filename=download_name,
+        content_disposition_type=disposition,
     )
 
 

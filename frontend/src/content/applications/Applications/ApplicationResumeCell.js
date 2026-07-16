@@ -15,8 +15,9 @@ import LinkTwoToneIcon from '@mui/icons-material/LinkTwoTone';
 import Label from 'src/components/Label';
 import ApplicationResumePdfDialog from './ApplicationResumePdfDialog';
 import { downloadProfileDefaultResume } from 'src/services/profileApi';
-import { downloadResumePdf } from 'src/services/resumeApi';
+import { buildApplicationResumeFilename, downloadResumePdf } from 'src/services/resumeApi';
 import { parseProfileDefaultResumeRef } from 'src/utils/profileDefaultResumeRef';
+import { parseIdentityLabel } from 'src/data/countryCodes';
 
 function ApplicationResumeCell({ row }) {
   const { enqueueSnackbar } = useSnackbar();
@@ -26,6 +27,10 @@ function ApplicationResumeCell({ row }) {
   const status = row.resume_generation_status;
   const hasGeneratedPdf = Boolean(row.resume_generated_id && filename);
   const defaultResumeRef = parseProfileDefaultResumeRef(row.resume_online_link);
+  const downloadFilename = buildApplicationResumeFilename(
+    parseIdentityLabel(row.profile_label).name,
+    row.company
+  );
 
   if (status === 'generating') {
     return (
@@ -60,8 +65,10 @@ function ApplicationResumeCell({ row }) {
       event.stopPropagation();
       setDownloading(true);
       try {
-        await downloadResumePdf(filename);
-        enqueueSnackbar(`Downloaded ${filename}`, { variant: 'success' });
+        const resolvedName = await downloadResumePdf(filename, {
+          applicationId: row.id
+        });
+        enqueueSnackbar(`Downloaded ${resolvedName}`, { variant: 'success' });
       } catch (err) {
         enqueueSnackbar(err.message || 'Download failed', { variant: 'error' });
       } finally {
@@ -102,7 +109,7 @@ function ApplicationResumeCell({ row }) {
                 }
               }}
             >
-              {filename}
+              {downloadFilename}
             </Typography>
           </Tooltip>
           <Tooltip title="Download PDF">
@@ -110,7 +117,7 @@ function ApplicationResumeCell({ row }) {
               <IconButton
                 size="small"
                 color="primary"
-                aria-label={`Download ${filename}`}
+                aria-label={`Download ${downloadFilename}`}
                 disabled={downloading}
                 onClick={handleDownload}
                 sx={{ flexShrink: 0 }}
@@ -127,6 +134,8 @@ function ApplicationResumeCell({ row }) {
         <ApplicationResumePdfDialog
           open={viewerOpen}
           filename={filename}
+          applicationId={row.id}
+          downloadFilename={downloadFilename}
           onClose={() => setViewerOpen(false)}
         />
       </>
@@ -140,9 +149,11 @@ function ApplicationResumeCell({ row }) {
       try {
         await downloadProfileDefaultResume(
           defaultResumeRef.profileId,
-          defaultResumeRef.filename
+          downloadFilename || defaultResumeRef.filename
         );
-        enqueueSnackbar(`Downloaded ${defaultResumeRef.filename}`, { variant: 'success' });
+        enqueueSnackbar(`Downloaded ${downloadFilename || defaultResumeRef.filename}`, {
+          variant: 'success'
+        });
       } catch (err) {
         enqueueSnackbar(err.message || 'Download failed', { variant: 'error' });
       } finally {
@@ -181,7 +192,7 @@ function ApplicationResumeCell({ row }) {
               }
             }}
           >
-            {downloading ? 'Downloading…' : defaultResumeRef.filename}
+            {downloading ? 'Downloading…' : downloadFilename}
           </Typography>
         </Tooltip>
         <Tooltip title="Download PDF">
@@ -189,7 +200,7 @@ function ApplicationResumeCell({ row }) {
             <IconButton
               size="small"
               color="primary"
-              aria-label={`Download ${defaultResumeRef.filename}`}
+              aria-label={`Download ${downloadFilename}`}
               disabled={downloading}
               onClick={handleDownloadDefault}
               sx={{ flexShrink: 0 }}

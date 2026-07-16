@@ -45,17 +45,38 @@ function sanitizePdfFilename(filename) {
   return safeName;
 }
 
-function buildResumeDownloadUrl(filename) {
+export function buildApplicationResumeFilename(fullName, company) {
+  const safePart = (value, fallback) =>
+    String(value || '')
+      .trim()
+      .replace(/[^\w]+/g, '_')
+      .replace(/^_+|_+$/g, '') || fallback;
+  return sanitizePdfFilename(
+    `${safePart(fullName, 'Resume')}_${safePart(company, 'Company')}`
+  );
+}
+
+function buildResumeDownloadUrl(filename, { inline = false, applicationId } = {}) {
   const safeName = sanitizePdfFilename(filename);
-  return `${getApiBase()}/api/resumes/download/${encodeURIComponent(safeName)}`;
+  const params = new URLSearchParams();
+  if (inline) {
+    params.set('inline', 'true');
+  }
+  if (applicationId !== undefined && applicationId !== null) {
+    params.set('application_id', String(applicationId));
+  }
+  const query = params.toString();
+  return `${getApiBase()}/api/resumes/download/${encodeURIComponent(safeName)}${
+    query ? `?${query}` : ''
+  }`;
 }
 
-export function getResumeDownloadUrl(filename) {
-  return buildResumeDownloadUrl(filename);
+export function getResumeDownloadUrl(filename, options) {
+  return buildResumeDownloadUrl(filename, options);
 }
 
-export function getResumeInlineUrl(filename) {
-  return `${buildResumeDownloadUrl(filename)}?inline=true`;
+export function getResumeInlineUrl(filename, options = {}) {
+  return buildResumeDownloadUrl(filename, { ...options, inline: true });
 }
 
 async function readErrorDetail(res) {
@@ -108,9 +129,12 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-export async function fetchResumePdfBlob(filename, { inline = false } = {}) {
+export async function fetchResumePdfBlob(
+  filename,
+  { inline = false, applicationId } = {}
+) {
   const safeName = sanitizePdfFilename(filename);
-  const url = inline ? getResumeInlineUrl(safeName) : buildResumeDownloadUrl(safeName);
+  const url = buildResumeDownloadUrl(safeName, { inline, applicationId });
   const response = await fetch(url, { headers: authHeaders() });
   if (!response.ok) {
     throw new Error(await readErrorDetail(response));
@@ -127,8 +151,8 @@ export async function fetchResumePdfBlob(filename, { inline = false } = {}) {
   return { blob: pdfBlob, filename: resolvedName };
 }
 
-export async function downloadResumePdf(filename) {
-  const { blob, filename: resolvedName } = await fetchResumePdfBlob(filename);
+export async function downloadResumePdf(filename, options) {
+  const { blob, filename: resolvedName } = await fetchResumePdfBlob(filename, options);
   downloadBlob(blob, resolvedName);
   return resolvedName;
 }
@@ -243,7 +267,8 @@ export async function generateResumeForPost(body) {
 export async function generateResumePdf(body) {
   const meta = await postResumeRequest(body);
   const filename = sanitizePdfFilename(meta.filename);
-  await downloadResumePdf(filename);
+  const downloadOptions = { applicationId: body.application_id };
+  const downloadedFilename = await downloadResumePdf(filename, downloadOptions);
 
   const generationId =
     meta.generation_id != null && meta.generation_id !== ''
@@ -252,12 +277,13 @@ export async function generateResumePdf(body) {
 
   return {
     filename,
+    downloadedFilename,
     generationId,
-    download: () => downloadResumePdf(filename)
+    download: () => downloadResumePdf(filename, downloadOptions)
   };
 }
 
-export async function matchBestResume({ profileId, jobVector }) {
+export async function matchBestResume({ profileId, jobVector, downloadFilename }) {
   const res = await fetch(`${getApiBase()}/api/resumes/match-best`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -283,10 +309,12 @@ export async function matchBestResume({ profileId, jobVector }) {
   const blob = await res.blob();
   const pdfBlob =
     blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
-  downloadBlob(pdfBlob, filename);
+  const resolvedDownloadFilename = sanitizePdfFilename(downloadFilename || filename);
+  downloadBlob(pdfBlob, resolvedDownloadFilename);
 
   return {
     filename,
+    downloadedFilename: resolvedDownloadFilename,
     generationId:
       generationIdHeader != null && generationIdHeader !== ''
         ? Number(generationIdHeader)
@@ -296,6 +324,6 @@ export async function matchBestResume({ profileId, jobVector }) {
       profileIdHeader != null && profileIdHeader !== ''
         ? Number(profileIdHeader)
         : Number(profileId),
-    download: () => downloadBlob(pdfBlob, filename)
+    download: () => downloadBlob(pdfBlob, resolvedDownloadFilename)
   };
 }

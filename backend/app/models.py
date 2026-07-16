@@ -211,6 +211,15 @@ class JobPostUpdateRequest(BaseModel):
     job_vector: list[float] | None = None
 
 
+class JobPostApplicationSummary(BaseModel):
+    application_id: int
+    profile_id: int
+    profile_name: str
+    profile_country: str = ""
+    applied: bool
+    applied_at: datetime | None = None
+
+
 class JobPostResponse(BaseModel):
     id: int
     company: str
@@ -218,6 +227,7 @@ class JobPostResponse(BaseModel):
     url: str
     job_description: str
     job_vector: list[float] = Field(default_factory=list)
+    applications: list[JobPostApplicationSummary] = Field(default_factory=list)
     created_at: datetime
 
 

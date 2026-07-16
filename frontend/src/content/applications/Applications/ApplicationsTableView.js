@@ -49,13 +49,14 @@ import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
 import useTableSort from 'src/hooks/useTableSort';
-import { formatIdentityLabel } from 'src/data/countryCodes';
+import { formatIdentityLabel, parseIdentityLabel } from 'src/data/countryCodes';
 import { importJobApplicationsSequentially, parseApplicationCsv } from 'src/utils/applicationCsvImport';
 import {
   APPLICATION_CSV_HEADERS,
   buildApplicationExportRows
 } from 'src/utils/applicationCsvExport';
 import { createJobApplication, deleteJobApplication, listJobApplications } from 'src/services/jobApplicationApi';
+import { buildApplicationResumeFilename } from 'src/services/resumeApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
 
@@ -67,7 +68,10 @@ function formatResumeSource(row) {
     return 'Failed';
   }
   if (row.resume_pdf_filename) {
-    return row.resume_pdf_filename;
+    return buildApplicationResumeFilename(
+      parseIdentityLabel(row.profile_label).name,
+      row.company
+    );
   }
   if (row.resume_generated_id) {
     return `Generated #${row.resume_generated_id}`;
@@ -75,7 +79,10 @@ function formatResumeSource(row) {
   if (row.resume_online_link) {
     const defaultResumeRef = parseProfileDefaultResumeRef(row.resume_online_link);
     if (defaultResumeRef) {
-      return defaultResumeRef.filename;
+      return buildApplicationResumeFilename(
+        parseIdentityLabel(row.profile_label).name,
+        row.company
+      );
     }
     return 'Online link';
   }
@@ -104,10 +111,9 @@ const COLUMN_WIDTHS = {
   bidder: '8%',
   roleCompany: '18%',
   link: '13%',
-  resume: '14%',
+  resume: '20%',
   applied: '9%',
-  screenshot: '11%',
-  successLink: '11%',
+  applyProof: '16%',
   actions: '13%'
 };
 
@@ -118,10 +124,9 @@ const COLUMN_WIDTHS_WITH_PROFILE = {
   bidder: '8%',
   roleCompany: '16%',
   link: '11%',
-  resume: '12%',
+  resume: '17%',
   applied: '9%',
-  screenshot: '9%',
-  successLink: '10%',
+  applyProof: '14%',
   actions: '13%'
 };
 
@@ -420,7 +425,7 @@ function ApplicationsTableView({
     }
   };
 
-  const columnCount = showProfileColumn ? 10 : 9;
+  const columnCount = showProfileColumn ? 9 : 8;
   const fixedTableCard = Boolean(tableCardHeight);
   const widths = showProfileColumn ? COLUMN_WIDTHS_WITH_PROFILE : COLUMN_WIDTHS;
 
@@ -580,15 +585,7 @@ function ApplicationsTableView({
                     onSort={handleSort}
                     sx={colSx(widths.applied)}
                   />
-                  <TableCell sx={colSx(widths.screenshot)}>Screenshot</TableCell>
-                  <SortableTableCell
-                    label="Success link"
-                    sortKey="success_link"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    sx={colSx(widths.successLink)}
-                  />
+                  <TableCell sx={colSx(widths.applyProof)}>Apply Proof</TableCell>
                   <TableCell align="right" sx={colSx(widths.actions)} />
                 </TableRow>
               </TableHead>
@@ -683,50 +680,54 @@ function ApplicationsTableView({
                           </Tooltip>
                         )}
                       </TableCell>
-                      <TableCell sx={{ ...colSx(widths.screenshot), py: 0.5 }}>
-                        {row.applied_screenshot ? (
-                          <Box
-                            sx={{
-                              width: 128,
-                              height: 72,
-                              borderRadius: 1,
-                              overflow: 'hidden',
-                              border: `1px solid ${theme.palette.divider}`
-                            }}
-                          >
-                            <ApplicationScreenshotThumb
-                              applicationId={row.id}
-                              image={row.applied_screenshot}
-                              fill
-                              fillMode="cover"
-                              alt={row.role || 'Application screenshot'}
-                            />
-                          </Box>
-                        ) : (
-                          <Box
-                            sx={{
-                              width: 128,
-                              height: 72,
-                              borderRadius: 1,
-                              border: `1px dashed ${theme.palette.divider}`,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'text.disabled'
-                            }}
-                          >
-                            <ImageOutlinedIcon sx={{ fontSize: 28 }} />
-                          </Box>
-                        )}
-                      </TableCell>
-                      <TableCell sx={colSx(widths.successLink)}>
-                        {row.success_link ? (
-                          <Typography variant="body2" noWrap title={row.success_link}>
-                            {row.success_link}
-                          </Typography>
-                        ) : (
-                          '—'
-                        )}
+                      <TableCell
+                        sx={{ ...colSx(widths.applyProof), py: 0.5 }}
+                        onClick={stopPropagation}
+                      >
+                        <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                          {row.applied_screenshot ? (
+                            <Box
+                              sx={{
+                                width: '100%',
+                                maxWidth: 128,
+                                aspectRatio: '16 / 9',
+                                borderRadius: 1,
+                                overflow: 'hidden',
+                                border: `1px solid ${theme.palette.divider}`
+                              }}
+                            >
+                              <ApplicationScreenshotThumb
+                                applicationId={row.id}
+                                image={row.applied_screenshot}
+                                fill
+                                fillMode="cover"
+                                alt={row.role || 'Application screenshot'}
+                              />
+                            </Box>
+                          ) : row.success_link ? (
+                            <Tooltip title={row.success_link}>
+                              <Link
+                                href={row.success_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                underline="hover"
+                                variant="caption"
+                                sx={ellipsisSx}
+                              >
+                                {formatLinkPreview(row.success_link, 24)}
+                              </Link>
+                            </Tooltip>
+                          ) : (
+                            <Stack direction="row" alignItems="center" spacing={0.5}>
+                              <ImageOutlinedIcon
+                                sx={{ fontSize: 18, color: 'text.disabled' }}
+                              />
+                              <Typography variant="caption" color="text.secondary">
+                                No proof
+                              </Typography>
+                            </Stack>
+                          )}
+                        </Stack>
                       </TableCell>
                       <TableCell align="right" sx={colSx(widths.actions)} onClick={stopPropagation}>
                         <Tooltip title="View details">

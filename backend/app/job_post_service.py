@@ -2,7 +2,13 @@ from sqlalchemy import String, cast, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db_models import JobApplication, JobPost, ResumeGeneration
+from app.db_models import (
+    JobApplication,
+    JobIdentity,
+    JobPost,
+    JobProfile,
+    ResumeGeneration,
+)
 from app.job_vector import build_job_vector_weighted
 from app.models import JobPostCreateRequest, JobPostUpdateRequest
 from app.pagination import (
@@ -14,7 +20,10 @@ from app.pagination import (
 from app.skill_service import list_skill_vector_entries
 
 
-def job_post_to_response(record: JobPost) -> dict:
+def job_post_to_response(
+    record: JobPost,
+    applications: list[dict] | None = None,
+) -> dict:
     return {
         "id": record.id,
         "company": record.company or "",
@@ -22,8 +31,51 @@ def job_post_to_response(record: JobPost) -> dict:
         "url": record.url or "",
         "job_description": record.job_description or "",
         "job_vector": list(record.job_vector or []),
+        "applications": applications or [],
         "created_at": record.created_at,
     }
+
+
+def job_posts_to_responses(db: Session, records: list[JobPost]) -> list[dict]:
+    if not records:
+        return []
+
+    summaries_by_post_id: dict[int, list[dict]] = {
+        record.id: [] for record in records
+    }
+    rows = db.execute(
+        select(JobApplication, JobProfile, JobIdentity)
+        .join(JobProfile, JobProfile.id == JobApplication.profile_id)
+        .join(JobIdentity, JobIdentity.id == JobProfile.identity_id)
+        .where(JobApplication.post_id.in_(summaries_by_post_id))
+        .order_by(
+            JobApplication.post_id.asc(),
+            JobApplication.applied.desc(),
+            JobIdentity.name.asc(),
+        )
+    ).all()
+
+    seen_profiles: set[tuple[int, int]] = set()
+    for application, profile, identity in rows:
+        relation_key = (application.post_id, profile.id)
+        if relation_key in seen_profiles:
+            continue
+        seen_profiles.add(relation_key)
+        summaries_by_post_id[application.post_id].append(
+            {
+                "application_id": application.id,
+                "profile_id": profile.id,
+                "profile_name": identity.name or f"Profile #{profile.id}",
+                "profile_country": identity.country or "",
+                "applied": bool(application.applied),
+                "applied_at": application.applied_at,
+            }
+        )
+
+    return [
+        job_post_to_response(record, summaries_by_post_id.get(record.id))
+        for record in records
+    ]
 
 
 def _resolve_job_vector(
