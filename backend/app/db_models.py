@@ -161,7 +161,11 @@ class JobApplication(Base):
     )
     resume_online_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     resume_generation_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    resume_distance: Mapped[float | None] = mapped_column(Float, nullable=True)
     applied: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    approved: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     success_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     applied_screenshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -186,6 +190,12 @@ class Citizen(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     country: Mapped[str] = mapped_column(String(100), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    gender: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="Male", server_default=text("'Male'")
+    )
+    found_citizen: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     linkedin: Mapped[str | None] = mapped_column(String(500), nullable=True)
     review_status: Mapped[str] = mapped_column(String(20), nullable=False, default="None")
     reviewer: Mapped[str | None] = mapped_column(String(255), nullable=True)

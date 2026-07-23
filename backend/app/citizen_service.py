@@ -46,6 +46,8 @@ def citizen_to_response(record: Citizen) -> dict:
         "id": record.id,
         "country": record.country,
         "name": record.name,
+        "gender": record.gender or "Male",
+        "found_citizen": bool(record.found_citizen),
         "linkedin": record.linkedin,
         "details": record.details or "",
         "review_status": record.review_status or "None",
@@ -86,6 +88,7 @@ def list_citizens_page(
         query = query.where(
             or_(
                 Citizen.name.ilike(pattern),
+                Citizen.gender.ilike(pattern),
                 Citizen.country.ilike(pattern),
                 Citizen.linkedin.ilike(pattern),
                 Citizen.details.ilike(pattern),
@@ -114,6 +117,8 @@ def list_citizens_page(
     sort_map = {
         "id": Citizen.id,
         "name": Citizen.name,
+        "gender": Citizen.gender,
+        "found_citizen": Citizen.found_citizen,
         "country": Citizen.country,
         "linkedin": Citizen.linkedin,
         "details": Citizen.details,
@@ -123,7 +128,7 @@ def list_citizens_page(
         "created_at": Citizen.created_at,
         "updated_at": Citizen.updated_at,
     }
-    column, descending = resolve_sort(sort_by, sort_dir, sort_map, "id")
+    column, descending = resolve_sort(sort_by, sort_dir, sort_map, "created_at")
     order_expr = column.desc() if descending else column.asc()
     if hasattr(order_expr, "nulls_last"):
         order_expr = order_expr.nulls_last()
@@ -141,6 +146,8 @@ def create_citizen(db: Session, data: CitizenCreateRequest) -> Citizen:
     record = Citizen(
         country=data.country.strip(),
         name=data.name.strip(),
+        gender=data.gender,
+        found_citizen=data.found_citizen,
         linkedin=data.linkedin.strip() if data.linkedin and data.linkedin.strip() else None,
         details=data.details or "",
         review_status=data.review_status or "None",
@@ -159,6 +166,8 @@ def create_citizen(db: Session, data: CitizenCreateRequest) -> Citizen:
 def update_citizen(db: Session, record: Citizen, data: CitizenUpdateRequest) -> Citizen:
     updates = data.model_dump(exclude_unset=True)
     for field, value in updates.items():
+        if field == "gender" and value is None:
+            continue
         if field in ("country", "name") and isinstance(value, str):
             value = value.strip()
         if field == "linkedin":

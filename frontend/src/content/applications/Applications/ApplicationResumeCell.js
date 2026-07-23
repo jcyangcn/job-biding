@@ -18,6 +18,7 @@ import { downloadProfileDefaultResume } from 'src/services/profileApi';
 import { buildApplicationResumeFilename, downloadResumePdf } from 'src/services/resumeApi';
 import { parseProfileDefaultResumeRef } from 'src/utils/profileDefaultResumeRef';
 import { parseIdentityLabel } from 'src/data/countryCodes';
+import externalUrl from 'src/utils/externalUrl';
 
 function ApplicationResumeCell({ row }) {
   const { enqueueSnackbar } = useSnackbar();
@@ -225,7 +226,7 @@ function ApplicationResumeCell({ row }) {
         <LinkTwoToneIcon color="info" sx={{ fontSize: 18, flexShrink: 0 }} />
         <Tooltip title={row.resume_online_link}>
           <Link
-            href={row.resume_online_link}
+            href={externalUrl(row.resume_online_link)}
             target="_blank"
             rel="noopener noreferrer"
             underline="hover"

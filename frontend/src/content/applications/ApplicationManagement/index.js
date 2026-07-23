@@ -114,6 +114,7 @@ function ApplicationManagement() {
           profiles={profiles}
           identities={identities}
           showProfileColumn={selectedProfileId === ALL_PROFILES}
+          enableApproval
           tableCardHeight={tableHeight}
           renderLayout={({ toolbar, table, dialogs }) => (
             <>

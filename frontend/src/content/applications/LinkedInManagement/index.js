@@ -37,6 +37,7 @@ import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import SaveTwoToneIcon from '@mui/icons-material/SaveTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import CountrySelectField from 'src/components/CountrySelectField';
+import ImportExportPasswordDialog from 'src/components/ImportExportPasswordDialog';
 import { CountryFlag } from 'src/components/CountryLabel';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
@@ -44,6 +45,7 @@ import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import useServerTable from 'src/hooks/useServerTable';
+import useImportExportPassword from 'src/hooks/useImportExportPassword';
 import { LINKEDIN_NEED_ACTIONS, LINKEDIN_STATUSES, getLinkedInNeedActionColor, isLinkedInNeedActionActive } from 'src/data/linkedinOptions';
 import COUNTRIES from 'src/data/countries';
 import { getCountryCode } from 'src/data/countryCodes';
@@ -99,6 +101,10 @@ function LinkedInManagement() {
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const {
+    requestImportExportConfirmation,
+    importExportPasswordDialogProps
+  } = useImportExportPassword();
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -612,7 +618,9 @@ function LinkedInManagement() {
                 <Button
                   variant="outlined"
                   startIcon={<FileUploadTwoToneIcon />}
-                  onClick={handleImportClick}
+                  onClick={() =>
+                    requestImportExportConfirmation('Import', handleImportClick)
+                  }
                   disabled={loading || saving || importing || exporting}
                 >
                   {importing ? 'Importing…' : 'Import'}
@@ -620,7 +628,9 @@ function LinkedInManagement() {
                 <Button
                   variant="outlined"
                   startIcon={<FileDownloadTwoToneIcon />}
-                  onClick={handleExportCsv}
+                  onClick={() =>
+                    requestImportExportConfirmation('Export', handleExportCsv)
+                  }
                   disabled={loading || saving || importing || exporting}
                 >
                   {exporting ? 'Exporting…' : 'Export'}
@@ -1103,6 +1113,8 @@ function LinkedInManagement() {
         onDelete={confirmDelete}
         disabled={saving || loadingEdit}
       />
+
+      <ImportExportPasswordDialog {...importExportPasswordDialogProps} />
     </>
   );
 }

@@ -74,6 +74,7 @@ const EMPTY_FORM = {
   job_vector: [],
   resume_generated_id: '',
   resume_online_link: '',
+  resume_distance: null,
   applied: false,
   applied_at: '',
   success_link: ''
@@ -202,6 +203,8 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         job_vector: Array.isArray(application.job_vector) ? application.job_vector : [],
         resume_generated_id: application.resume_generated_id || '',
         resume_online_link: application.resume_online_link || '',
+        resume_distance:
+          application.resume_distance == null ? null : Number(application.resume_distance),
         applied: Boolean(application.applied),
         applied_at:
           formatDateTimeValue(application.applied_at) || format(new Date(), 'yyyy-MM-dd HH:mm'),
@@ -239,6 +242,10 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                 : buildJobVector(jd, keywords || []),
           resume_generated_id: fullApplication.resume_generated_id || '',
           resume_online_link: fullApplication.resume_online_link || '',
+          resume_distance:
+            fullApplication.resume_distance == null
+              ? null
+              : Number(fullApplication.resume_distance),
           applied: Boolean(fullApplication.applied),
           applied_at:
             formatDateTimeValue(fullApplication.applied_at) ||
@@ -321,7 +328,8 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
     setForm((current) => ({
       ...current,
       resume_generated_id: value === 'generated' ? current.resume_generated_id : '',
-      resume_online_link: value === 'online' ? current.resume_online_link : ''
+      resume_online_link: value === 'online' ? current.resume_online_link : '',
+      resume_distance: value === 'generated' ? current.resume_distance : null
     }));
   };
 
@@ -352,6 +360,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         job_vector: buildJobVector(form.job_description.trim(), skillKeywords),
         resume_generated_id: form.resume_generated_id ? Number(form.resume_generated_id) : null,
         resume_online_link: null,
+        resume_distance: null,
         success_link: form.success_link.trim() ? form.success_link.trim() : null,
         applied: form.applied,
         applied_at: form.applied ? appliedAtToIso(form.applied_at) : null
@@ -386,12 +395,20 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         setResumeGenerations(generationRows);
         const selectedId = generationId || generationRows[0]?.id || '';
         if (selectedId) {
-          setForm((current) => ({ ...current, resume_generated_id: selectedId }));
+          setForm((current) => ({
+            ...current,
+            resume_generated_id: selectedId,
+            resume_distance: null
+          }));
           setResumeSource('generated');
         }
       } catch {
         if (generationId && generateTokenRef.current === generateToken) {
-          setForm((current) => ({ ...current, resume_generated_id: generationId }));
+          setForm((current) => ({
+            ...current,
+            resume_generated_id: generationId,
+            resume_distance: null
+          }));
           setResumeSource('generated');
         }
       }
@@ -414,19 +431,22 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
 
     const jobVector = buildJobVector(form.job_description, skillKeywords);
     if (!jobVector.length) {
-      notify('No skill keywords available to score this job description.', {
+      notify('No skill keywords available to compare this job description.', {
         variant: 'warning'
       });
       return;
     }
 
     setChoosing(true);
-    notify('Matching best resume for this job vector…', { variant: 'info' });
+    notify('Finding the resume with the smallest weighted distance…', {
+      variant: 'info'
+    });
 
     try {
-      const { filename, downloadedFilename, generationId, score } = await matchBestResume({
+      const { filename, downloadedFilename, generationId, distance } = await matchBestResume({
         profileId: profile.id,
         jobVector,
+        applicationId: application.id,
         downloadFilename: buildApplicationResumeFilename(
           parseIdentityLabel(profile.identity_name).name,
           form.company
@@ -439,11 +459,13 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         ...current,
         job_vector: jobVector,
         resume_generated_id: generationId || current.resume_generated_id,
-        resume_online_link: generationId ? '' : current.resume_online_link
+        resume_online_link: generationId ? '' : current.resume_online_link,
+        resume_distance: Number.isFinite(distance) ? distance : null
       }));
       if (generationId) {
         setResumeSource('generated');
       }
+      onSavedRef.current?.({ silent: true });
 
       try {
         const generationRows = await listAllResumeGenerations();
@@ -455,7 +477,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
 
       notify(
         `Best match selected${generationId ? ` (#${generationId})` : ''}${
-          Number.isFinite(score) ? ` · score ${score}` : ''
+          Number.isFinite(distance) ? ` · distance ${distance.toFixed(2)}` : ''
         }. Downloaded ${downloadedFilename || filename}.`,
         { variant: 'success' }
       );
@@ -502,6 +524,10 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
         resume_online_link:
           resumeSource === 'online' && form.resume_online_link.trim()
             ? form.resume_online_link.trim()
+            : null,
+        resume_distance:
+          resumeSource === 'generated' && Number.isFinite(form.resume_distance)
+            ? form.resume_distance
             : null,
         success_link: form.success_link.trim() ? form.success_link.trim() : null,
         applied: form.applied,
@@ -728,6 +754,15 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
                                 }
                               }}
                             />
+                            {form.resume_distance != null &&
+                            Number.isFinite(Number(form.resume_distance)) ? (
+                              <Chip
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                label={`Distance: ${Number(form.resume_distance).toFixed(2)}`}
+                              />
+                            ) : null}
                             {generatedFilename ? (
                               <Tooltip title="Download PDF">
                                 <span>

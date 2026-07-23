@@ -125,6 +125,19 @@ export function deleteJobApplication(applicationId) {
   });
 }
 
+export function approveJobApplications(applicationIds) {
+  return fetch(`${getApiBase()}/api/job-applications/bulk-approve`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ application_ids: applicationIds })
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+    return response.json();
+  });
+}
+
 function authHeadersWithoutContentType() {
   const token = getStoredAccessToken();
   const headers = {};

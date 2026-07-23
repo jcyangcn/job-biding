@@ -30,11 +30,13 @@ import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import EmailLinkInfo from 'src/components/EmailLinkInfo';
 import EmailIdentityLabel from 'src/components/IdentityLabel';
+import ImportExportPasswordDialog from 'src/components/ImportExportPasswordDialog';
 import TableListFilters, { compactButtonSx } from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
 import { useDetailDialog } from 'src/components/DetailDialog';
 import useServerTable from 'src/hooks/useServerTable';
+import useImportExportPassword from 'src/hooks/useImportExportPassword';
 import ProgressionEmailDetailDialog from './ProgressionEmailDetailDialog';
 import ProgressionEmailEditDialog from './ProgressionEmailEditDialog';
 import ProgressionEmailStatusLabel from './ProgressionEmailStatusLabel';
@@ -83,6 +85,10 @@ function ProgressionEmailsTableView({
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const {
+    requestImportExportConfirmation,
+    importExportPasswordDialogProps
+  } = useImportExportPassword();
   const { open: detailOpen, selected: selectedEmail, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
 
@@ -342,7 +348,9 @@ function ProgressionEmailsTableView({
             variant="outlined"
             size={singleLine ? 'small' : 'medium'}
             startIcon={<FileUploadTwoToneIcon />}
-            onClick={handleImportClick}
+            onClick={() =>
+              requestImportExportConfirmation('Import', handleImportClick)
+            }
             disabled={loading || importing}
             sx={singleLine ? compactButtonSx : undefined}
           >
@@ -352,7 +360,9 @@ function ProgressionEmailsTableView({
             variant="outlined"
             size={singleLine ? 'small' : 'medium'}
             startIcon={<FileDownloadTwoToneIcon />}
-            onClick={handleExportCsv}
+            onClick={() =>
+              requestImportExportConfirmation('Export', handleExportCsv)
+            }
             disabled={loading || exporting}
             sx={singleLine ? compactButtonSx : undefined}
           >
@@ -585,6 +595,8 @@ function ProgressionEmailsTableView({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ImportExportPasswordDialog {...importExportPasswordDialogProps} />
     </>
   );
 

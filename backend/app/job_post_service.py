@@ -1,4 +1,4 @@
-from sqlalchemy import String, cast, delete, func, or_, select
+from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,7 @@ from app.db_models import (
     JobProfile,
     ResumeGeneration,
 )
-from app.job_vector import build_job_vector_weighted
+from app.job_vector import build_job_vector
 from app.models import JobPostCreateRequest, JobPostUpdateRequest
 from app.pagination import (
     normalize_page_params,
@@ -18,6 +18,7 @@ from app.pagination import (
     resolve_sort,
 )
 from app.skill_service import list_skill_vector_entries
+from app.text_sanitizer import strip_html_tags
 
 
 def job_post_to_response(
@@ -86,7 +87,10 @@ def _resolve_job_vector(
 ) -> list[float]:
     role_text = (role or "").strip()
     entries = list_skill_vector_entries(db, role=role_text or None)
-    return build_job_vector_weighted(job_description, entries)
+    return build_job_vector(
+        job_description,
+        [keyword for keyword, _weight in entries],
+    )
 
 
 def list_job_posts_page(
@@ -134,17 +138,71 @@ def get_job_post(db: Session, post_id: int) -> JobPost | None:
     return db.get(JobPost, post_id)
 
 
+def _duplicate_key(company: str, role: str, url: str) -> tuple[str, str, str]:
+    return (
+        (company or "").strip().lower(),
+        (role or "").strip().lower(),
+        (url or "").strip().lower(),
+    )
+
+
+def find_duplicate_job_post(
+    db: Session,
+    *,
+    company: str,
+    role: str,
+    url: str,
+) -> JobPost | None:
+    company_key, role_key, url_key = _duplicate_key(company, role, url)
+    matches = list(
+        db.scalars(
+            select(JobPost)
+            .where(func.lower(func.trim(JobPost.company)) == company_key)
+            .where(func.lower(func.trim(JobPost.role)) == role_key)
+            .where(func.lower(func.trim(JobPost.url)) == url_key)
+            .order_by(JobPost.id.asc())
+        ).all()
+    )
+    if not matches:
+        return None
+
+    match_ids = [post.id for post in matches]
+    applied_post_ids = set(
+        db.scalars(
+            select(JobApplication.post_id)
+            .where(JobApplication.post_id.in_(match_ids))
+            .where(JobApplication.applied.is_(True))
+        ).all()
+    )
+    return next(
+        (post for post in matches if post.id in applied_post_ids),
+        matches[0],
+    )
+
+
 def create_job_post(db: Session, data: JobPostCreateRequest) -> JobPost:
-    job_description = (data.job_description or "").strip()
+    company = strip_html_tags(data.company)
+    role = strip_html_tags(data.role)
+    url = strip_html_tags(data.url)
+    job_description = strip_html_tags(data.job_description)
+    existing = find_duplicate_job_post(
+        db,
+        company=company,
+        role=role,
+        url=url,
+    )
+    if existing:
+        return existing
+
     record = JobPost(
-        company=(data.company or "").strip(),
-        role=(data.role or "").strip(),
-        url=(data.url or "").strip(),
+        company=company,
+        role=role,
+        url=url,
         job_description=job_description,
         job_vector=_resolve_job_vector(
             db,
             job_description=job_description,
-            role=data.role,
+            role=role,
         ),
     )
     db.add(record)
@@ -158,13 +216,13 @@ def update_job_post(db: Session, record: JobPost, data: JobPostUpdateRequest) ->
     updates.pop("job_vector", None)
 
     if "company" in updates and updates["company"] is not None:
-        record.company = str(updates["company"]).strip()
+        record.company = strip_html_tags(str(updates["company"]))
     if "role" in updates and updates["role"] is not None:
-        record.role = str(updates["role"]).strip()
+        record.role = strip_html_tags(str(updates["role"]))
     if "url" in updates and updates["url"] is not None:
-        record.url = str(updates["url"]).strip()
+        record.url = strip_html_tags(str(updates["url"]))
     if "job_description" in updates and updates["job_description"] is not None:
-        record.job_description = str(updates["job_description"]).strip()
+        record.job_description = strip_html_tags(str(updates["job_description"]))
 
     record.job_vector = _resolve_job_vector(
         db,
@@ -213,6 +271,99 @@ def delete_job_post(db: Session, record: JobPost) -> None:
 
 def _is_blank(value: str | None) -> bool:
     return not (value or "").strip()
+
+
+def deduplicate_job_posts(db: Session) -> dict:
+    """Merge exact company/role/URL duplicates while preserving applied posts."""
+    posts = list(db.scalars(select(JobPost).order_by(JobPost.id.asc())).all())
+    applications = list(db.scalars(select(JobApplication)).all())
+    generations = list(db.scalars(select(ResumeGeneration)).all())
+
+    applications_by_post: dict[int, list[JobApplication]] = {}
+    for application in applications:
+        applications_by_post.setdefault(application.post_id, []).append(application)
+
+    generations_by_post: dict[int, list[ResumeGeneration]] = {}
+    for generation in generations:
+        generations_by_post.setdefault(generation.post_id, []).append(generation)
+
+    groups: dict[tuple[str, str, str], list[JobPost]] = {}
+    for post in posts:
+        groups.setdefault(
+            _duplicate_key(post.company, post.role, post.url),
+            [],
+        ).append(post)
+
+    duplicate_groups = 0
+    deleted = 0
+    preserved_applied = 0
+    reassigned_applications = 0
+    reassigned_resumes = 0
+
+    try:
+        for group in groups.values():
+            if len(group) <= 1:
+                continue
+            duplicate_groups += 1
+
+            applied_posts = [
+                post
+                for post in group
+                if any(
+                    application.applied
+                    for application in applications_by_post.get(post.id, [])
+                )
+            ]
+            preserved_applied += len(applied_posts)
+
+            if applied_posts:
+                keeper = min(applied_posts, key=lambda post: post.id)
+                losers = [post for post in group if post not in applied_posts]
+            else:
+                def score(post: JobPost) -> tuple[int, int, int, int]:
+                    return (
+                        len(applications_by_post.get(post.id, [])),
+                        len(generations_by_post.get(post.id, [])),
+                        1 if (post.job_description or "").strip() else 0,
+                        -post.id,
+                    )
+
+                keeper = max(group, key=score)
+                losers = [post for post in group if post.id != keeper.id]
+
+            for loser in losers:
+                app_count = len(applications_by_post.get(loser.id, []))
+                resume_count = len(generations_by_post.get(loser.id, []))
+                if app_count:
+                    db.execute(
+                        update(JobApplication)
+                        .where(JobApplication.post_id == loser.id)
+                        .values(post_id=keeper.id)
+                    )
+                    reassigned_applications += app_count
+                if resume_count:
+                    db.execute(
+                        update(ResumeGeneration)
+                        .where(ResumeGeneration.post_id == loser.id)
+                        .values(post_id=keeper.id)
+                    )
+                    reassigned_resumes += resume_count
+                db.delete(loser)
+                deleted += 1
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "duplicate_groups": duplicate_groups,
+        "deleted": deleted,
+        "preserved_applied": preserved_applied,
+        "reassigned_applications": reassigned_applications,
+        "reassigned_resumes": reassigned_resumes,
+        "remaining": db.scalar(select(func.count()).select_from(JobPost)) or 0,
+    }
 
 
 def cleanup_job_posts(db: Session) -> dict:

@@ -64,8 +64,7 @@ put <hr/>
 - Follow heading hierarchy and section order precisely.
 - Do not ask clarifying questions unless information is missing.
 - The Professional Summary must be fewer than 520 characters (including spaces) and must be internally length-checked before output.
-- Every bullet can contain at least one purposeful bolded phrase. Bolded text may include impactful actions, outcomes, architectural ownership, scale, core technologies, systems, or critical skills, and must always convey substantive signal rather than decorative emphasis.
-- Bold text must never introduce artificial metrics or JD-specific phrasing.
+- Keep every bullet as plain text without HTML, Markdown emphasis, or bold tags.
 
 ---
 

@@ -135,7 +135,12 @@ export async function fetchResumePdfBlob(
 ) {
   const safeName = sanitizePdfFilename(filename);
   const url = buildResumeDownloadUrl(safeName, { inline, applicationId });
-  const response = await fetch(url, { headers: authHeaders() });
+  const separator = url.includes('?') ? '&' : '?';
+  const freshUrl = `${url}${separator}_=${Date.now()}`;
+  const response = await fetch(freshUrl, {
+    headers: authHeaders(),
+    cache: 'no-store'
+  });
   if (!response.ok) {
     throw new Error(await readErrorDetail(response));
   }
@@ -333,13 +338,22 @@ export async function generateResumePdf(body) {
   };
 }
 
-export async function matchBestResume({ profileId, jobVector, downloadFilename }) {
+export async function matchBestResume({
+  profileId,
+  jobVector,
+  applicationId,
+  downloadFilename
+}) {
   const res = await fetch(`${getApiBase()}/api/resumes/match-best`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       profile_id: Number(profileId),
-      job_vector: Array.isArray(jobVector) ? jobVector : []
+      job_vector: Array.isArray(jobVector) ? jobVector : [],
+      application_id:
+        applicationId !== undefined && applicationId !== null
+          ? Number(applicationId)
+          : null
     })
   });
 
@@ -348,7 +362,7 @@ export async function matchBestResume({ profileId, jobVector, downloadFilename }
   }
 
   const generationIdHeader = res.headers.get('X-Generation-Id');
-  const scoreHeader = res.headers.get('X-Match-Score');
+  const distanceHeader = res.headers.get('X-Match-Distance');
   const profileIdHeader = res.headers.get('X-Profile-Id');
   const filename =
     sanitizePdfFilename(
@@ -369,7 +383,10 @@ export async function matchBestResume({ profileId, jobVector, downloadFilename }
       generationIdHeader != null && generationIdHeader !== ''
         ? Number(generationIdHeader)
         : null,
-    score: scoreHeader != null && scoreHeader !== '' ? Number(scoreHeader) : null,
+    distance:
+      distanceHeader != null && distanceHeader !== ''
+        ? Number(distanceHeader)
+        : null,
     profileId:
       profileIdHeader != null && profileIdHeader !== ''
         ? Number(profileIdHeader)

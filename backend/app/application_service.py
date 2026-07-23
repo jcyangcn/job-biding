@@ -13,8 +13,8 @@ from app.models import (
     JobApplicationCreateRequest,
     JobApplicationUpdateRequest,
 )
-from app.job_vector import build_job_vector_weighted
-from app.job_post_service import get_job_post
+from app.job_vector import build_job_vector
+from app.job_post_service import find_duplicate_job_post, get_job_post
 from app.pagination import parse_optional_date
 from app.profile_service import (
     _format_identity_label,
@@ -23,6 +23,7 @@ from app.profile_service import (
     user_can_access_profile,
 )
 from app.skill_service import list_skill_vector_entries
+from app.text_sanitizer import strip_html_tags
 from app.user_roles import UserRole
 
 _APPLICATION_SCREENSHOT_STORAGE_PREFIX = "/storage/uploads/application screenshot/"
@@ -219,7 +220,9 @@ def application_to_response(
         "resume_pdf_filename": resume_pdf_filename,
         "resume_online_link": record.resume_online_link,
         "resume_generation_status": record.resume_generation_status,
+        "resume_distance": record.resume_distance,
         "applied": record.applied,
+        "approved": record.approved,
         "applied_at": record.applied_at,
         "success_link": record.success_link,
         "applied_screenshot": screenshot.model_dump(mode="json") if screenshot else None,
@@ -242,6 +245,27 @@ def _validate_resume_source(data: JobApplicationCreateRequest) -> None:
 
 def get_application(db: Session, application_id: int) -> JobApplication | None:
     return db.get(JobApplication, application_id)
+
+
+def approve_applications(db: Session, application_ids: list[int]) -> dict:
+    unique_ids = list(dict.fromkeys(application_ids))
+    records = list(
+        db.scalars(
+            select(JobApplication).where(JobApplication.id.in_(unique_ids))
+        ).all()
+    )
+    found_ids = {record.id for record in records}
+    missing_ids = [application_id for application_id in unique_ids if application_id not in found_ids]
+    if missing_ids:
+        raise ValueError(
+            f"Application(s) not found: {', '.join(str(value) for value in missing_ids)}"
+        )
+
+    for record in records:
+        record.approved = True
+        db.add(record)
+    db.commit()
+    return {"approved_ids": unique_ids, "approved_count": len(unique_ids)}
 
 
 def next_application_number_for_profile(db: Session, profile_id: int) -> int:
@@ -295,7 +319,34 @@ def _resolve_job_vector(
     entries = list_skill_vector_entries(db, role=role)
     if provided is not None and len(provided) == len(entries):
         return [float(value) for value in provided]
-    return build_job_vector_weighted(job_description, entries)
+    return build_job_vector(
+        job_description,
+        [keyword for keyword, _weight in entries],
+    )
+
+
+def _calculate_resume_distance(
+    db: Session,
+    *,
+    profile: JobProfile,
+    post: JobPost,
+    generation_id: int,
+) -> float | None:
+    from app.history import weighted_vector_distance
+
+    generation = db.get(ResumeGeneration, generation_id)
+    if not generation:
+        return None
+    entries = list_skill_vector_entries(
+        db,
+        role=(profile.roles or "").strip() or None,
+    )
+    weights = [weight for _keyword, weight in entries]
+    return weighted_vector_distance(
+        list(post.job_vector or []),
+        list(generation.resume_vector or []),
+        weights,
+    )
 
 
 def _sync_job_post(
@@ -309,28 +360,40 @@ def _sync_job_post(
     skill_role: str,
     provided_vector: list[float] | None,
 ) -> JobPost:
+    clean_company = strip_html_tags(company)
+    clean_role = strip_html_tags(role)
+    clean_link = strip_html_tags(link)
+    clean_job_description = strip_html_tags(job_description)
+    clean_skill_role = strip_html_tags(skill_role)
     job_vector = _resolve_job_vector(
         db,
-        job_description=job_description,
-        role=skill_role,
+        job_description=clean_job_description,
+        role=clean_skill_role,
         provided=provided_vector,
     )
     if post is None:
+        post = find_duplicate_job_post(
+            db,
+            company=clean_company,
+            role=clean_role,
+            url=clean_link,
+        )
+    if post is None:
         post = JobPost(
-            company=company.strip(),
-            role=role.strip(),
-            url=link.strip(),
-            job_description=job_description.strip(),
+            company=clean_company,
+            role=clean_role,
+            url=clean_link,
+            job_description=clean_job_description,
             job_vector=job_vector,
         )
         db.add(post)
         db.flush()
         return post
 
-    post.company = company.strip()
-    post.role = role.strip()
-    post.url = link.strip()
-    post.job_description = job_description.strip()
+    post.company = clean_company
+    post.role = clean_role
+    post.url = clean_link
+    post.job_description = clean_job_description
     post.job_vector = job_vector
     return post
 
@@ -373,6 +436,14 @@ def create_application(
         success_link=success_link,
         has_screenshot=False,
     )
+    resume_distance = data.resume_distance
+    if applied and data.resume_generated_id is not None:
+        resume_distance = _calculate_resume_distance(
+            db,
+            profile=profile,
+            post=post,
+            generation_id=data.resume_generated_id,
+        )
 
     record = JobApplication(
         profile_id=data.profile_id,
@@ -381,6 +452,7 @@ def create_application(
         resume_online_link=(
             data.resume_online_link.strip() if data.resume_online_link else None
         ),
+        resume_distance=resume_distance,
         success_link=success_link,
         applied=applied,
         applied_at=applied_at,
@@ -457,7 +529,7 @@ def update_application(
     if not record:
         raise ValueError("Application not found")
 
-    _ensure_application_access(db, record, user)
+    profile = _ensure_application_access(db, record, user)
     _validate_resume_source_fields(data.resume_generated_id, data.resume_online_link)
 
     if data.resume_generated_id is not None:
@@ -482,6 +554,7 @@ def update_application(
     record.resume_online_link = (
         data.resume_online_link.strip() if data.resume_online_link else None
     )
+    record.resume_distance = data.resume_distance
     record.success_link = data.success_link.strip() if data.success_link else None
 
     has_screenshot = _parse_application_screenshot(record.applied_screenshot) is not None
@@ -495,6 +568,13 @@ def update_application(
     )
     record.applied = applied
     record.applied_at = applied_at
+    if applied and record.resume_generated_id is not None:
+        record.resume_distance = _calculate_resume_distance(
+            db,
+            profile=profile,
+            post=post,
+            generation_id=record.resume_generated_id,
+        )
 
     # The bidder is only attributed once an application is actually applied.
     # Editing a non-applied application must never stamp the editor as bidder.
@@ -554,6 +634,7 @@ def attach_generated_resume_to_application(
 
     record.resume_generated_id = generation_id
     record.resume_online_link = None
+    record.resume_distance = None
     record.resume_generation_status = "generated"
     if job_description is not None:
         post = _load_job_post(db, record)
@@ -870,7 +951,10 @@ def batch_select_resumes_for_posts(
         job_vector = list(post.job_vector or [])
         if not job_vector and (post.job_description or "").strip():
             entries = list_skill_vector_entries(db, role=(post.role or "").strip() or None)
-            job_vector = build_job_vector_weighted(post.job_description or "", entries)
+            job_vector = build_job_vector(
+                post.job_description or "",
+                [keyword for keyword, _weight in entries],
+            )
             post.job_vector = job_vector
 
         generation_id: int | None = None
@@ -878,7 +962,7 @@ def batch_select_resumes_for_posts(
         attach_error = ""
 
         try:
-            best_row, _best_score, _scores = match_best_resume_for_profile(
+            best_row, best_distance, _scores = match_best_resume_for_profile(
                 db,
                 profile_id=profile_id,
                 job_vector=job_vector,
@@ -890,12 +974,15 @@ def batch_select_resumes_for_posts(
                 user,
             )
             generation_id = best_row.id
+            application.resume_distance = best_distance
+            db.commit()
         except ValueError as exc:
             attach_error = str(exc)
             if default_resume_ref:
                 application.resume_generated_id = None
                 application.resume_online_link = default_resume_ref
                 application.resume_generation_status = None
+                application.resume_distance = None
                 db.commit()
                 resume_online_link = default_resume_ref
             else:

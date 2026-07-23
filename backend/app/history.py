@@ -1,4 +1,5 @@
 from pathlib import Path
+from math import sqrt
 
 from sqlalchemy import String, cast, func, or_, select, update
 from sqlalchemy.orm import Session
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.application_service import get_application
 from app.db_models import JobIdentity, JobPost, JobProfile, ResumeGeneration
 from app.job_post_service import create_job_post, get_job_post
-from app.job_vector import build_job_vector_weighted
+from app.job_vector import build_job_vector
 from app.models import JobPostCreateRequest, ResumeContent
 from app.pagination import (
     normalize_page_params,
@@ -16,17 +17,18 @@ from app.pagination import (
     resolve_sort,
 )
 from app.skill_service import list_skill_vector_entries
+from app.text_sanitizer import sanitize_nested_text
 
 
 def build_resume_content_payload(content: ResumeContent) -> dict:
     """Persist all editable content needed to rebuild the generated PDF."""
-    return {
+    return sanitize_nested_text({
         "title": content.title,
         "summary": content.summary,
         "skills": [skill.model_dump(mode="json") for skill in content.skills],
         "experience": [job.model_dump(mode="json") for job in content.experience],
         "projects": [project.model_dump(mode="json") for project in content.projects],
-    }
+    })
 
 
 def resume_content_to_match_text(resume_content: dict | None) -> str:
@@ -84,20 +86,29 @@ def build_resume_vector(
     role: str | None = None,
 ) -> list[float]:
     entries = list_skill_vector_entries(db, role=role)
-    return build_job_vector_weighted(resume_content_to_match_text(resume_content), entries)
+    return build_job_vector(
+        resume_content_to_match_text(resume_content),
+        [keyword for keyword, _weight in entries],
+    )
 
 
-def vector_dot_product(job_vector: list[float], resume_vector: list[float]) -> float:
-    """Dot product: a1*b1 + a2*b2 + ... (missing dimensions treated as 0)."""
+def weighted_vector_distance(
+    job_vector: list[float],
+    resume_vector: list[float],
+    weights: list[float],
+) -> float:
+    """Weighted Euclidean distance; missing dimensions and weights use 0 and 1."""
     left = list(job_vector or [])
     right = list(resume_vector or [])
-    length = max(len(left), len(right))
+    vector_weights = list(weights or [])
+    length = max(len(left), len(right), len(vector_weights))
     total = 0.0
     for index in range(length):
         a = float(left[index]) if index < len(left) else 0.0
         b = float(right[index]) if index < len(right) else 0.0
-        total += a * b
-    return total
+        weight = float(vector_weights[index]) if index < len(vector_weights) else 1.0
+        total += max(weight, 0.0) * ((a - b) ** 2)
+    return sqrt(total)
 
 
 def match_best_resume_for_profile(
@@ -107,8 +118,8 @@ def match_best_resume_for_profile(
     job_vector: list[float],
 ) -> tuple[ResumeGeneration, float, list[dict]]:
     """
-    Score all resume generations for a profile against job_vector (dot product)
-    and return the highest-scoring generation.
+    Calculate weighted Euclidean distance for each resume and return the
+    generation with the smallest distance.
     """
     rows = db.scalars(
         select(ResumeGeneration)
@@ -119,9 +130,14 @@ def match_best_resume_for_profile(
     if not rows:
         raise ValueError("No resume generations found for this profile")
 
+    profile = db.get(JobProfile, profile_id)
+    role = (profile.roles or "").strip() if profile else None
+    entries = list_skill_vector_entries(db, role=role or None)
+    weights = [weight for _keyword, weight in entries]
+
     scored: list[dict] = []
     best_row: ResumeGeneration | None = None
-    best_score = float("-inf")
+    best_distance = float("inf")
 
     print("=" * 72)
     print(f"[resume-match] profile_id={profile_id}")
@@ -130,33 +146,33 @@ def match_best_resume_for_profile(
 
     for row in rows:
         resume_vector = list(row.resume_vector or [])
-        score = vector_dot_product(job_vector, resume_vector)
+        distance = weighted_vector_distance(job_vector, resume_vector, weights)
         entry = {
             "generation_id": row.id,
-            "score": score,
+            "distance": distance,
             "pdf_path": row.pdf_path,
             "resume_vector": resume_vector,
         }
         scored.append(entry)
         print(
             f"[resume-match] generation_id={row.id} "
-            f"score={score} resume_vector={resume_vector} pdf={row.pdf_path}"
+            f"distance={distance} resume_vector={resume_vector} pdf={row.pdf_path}"
         )
         if (
             best_row is None
-            or score > best_score
-            or (score == best_score and row.id > best_row.id)
+            or distance < best_distance
+            or (distance == best_distance and row.id > best_row.id)
         ):
-            best_score = score
+            best_distance = distance
             best_row = row
 
     print(
         f"[resume-match] BEST generation_id={best_row.id} "
-        f"score={best_score} pdf={best_row.pdf_path}"
+        f"distance={best_distance} pdf={best_row.pdf_path}"
     )
     print("=" * 72)
 
-    return best_row, best_score, scored
+    return best_row, best_distance, scored
 
 
 def find_or_create_job_post_by_description(
@@ -215,6 +231,7 @@ def resolve_resume_generation_post(
 
 def resume_generation_to_response(db: Session, row: ResumeGeneration) -> dict:
     profile_label = ""
+    profile = None
     if row.profile_id is not None:
         profile = db.get(JobProfile, row.profile_id)
         if profile:
@@ -226,6 +243,26 @@ def resume_generation_to_response(db: Session, row: ResumeGeneration) -> dict:
                 profile_label = profile.email or f"Profile #{profile.id}"
 
     post = row.job_post or db.get(JobPost, row.post_id)
+    entries = list_skill_vector_entries(
+        db,
+        role=(profile.roles or "").strip() or None if profile else None,
+    )
+    vector = list(row.resume_vector or [])
+    skill_scores: dict[str, dict] = {}
+    for index, (keyword, _weight) in enumerate(entries):
+        if index >= len(vector):
+            continue
+        mentions = float(vector[index])
+        if mentions <= 0:
+            continue
+        key = keyword.strip().lower()
+        existing = skill_scores.get(key)
+        if existing is None or mentions > existing["mentions"]:
+            skill_scores[key] = {"name": keyword, "mentions": mentions}
+    ranked_skills = sorted(
+        skill_scores.values(),
+        key=lambda skill: (-skill["mentions"], skill["name"].lower()),
+    )
 
     return {
         "id": row.id,
@@ -237,7 +274,8 @@ def resume_generation_to_response(db: Session, row: ResumeGeneration) -> dict:
         "profile_id": row.profile_id,
         "profile_label": profile_label,
         "resume_content": row.resume_content or {},
-        "resume_vector": list(row.resume_vector or []),
+        "resume_vector": vector,
+        "top_skills": ranked_skills[:5],
         "pdf_path": row.pdf_path,
         "created_at": row.created_at,
     }

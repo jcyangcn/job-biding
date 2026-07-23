@@ -28,6 +28,7 @@ import CitizenImagePreviewOverlay from 'src/content/applications/CitizenManageme
 import ApplicationScreenshotThumb from './ApplicationScreenshotThumb';
 import { getJobApplication } from 'src/services/jobApplicationApi';
 import { parseProfileDefaultResumeRef } from 'src/utils/profileDefaultResumeRef';
+import externalUrl from 'src/utils/externalUrl';
 
 function ApplicationDetailDialog({ open, application, onClose }) {
   const theme = useTheme();
@@ -130,7 +131,7 @@ function ApplicationDetailDialog({ open, application, onClose }) {
               <Typography variant="body1">{defaultResumeRef.filename}</Typography>
             ) : hasResumeLink ? (
               <Link
-                href={view.resume_online_link}
+                href={externalUrl(view.resume_online_link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 underline="hover"
@@ -145,7 +146,7 @@ function ApplicationDetailDialog({ open, application, onClose }) {
           <DetailField label="Job link" icon={LinkTwoToneIcon} xs={12} sm={12}>
             {hasJobLink ? (
               <Link
-                href={view.link}
+                href={externalUrl(view.link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 underline="hover"
@@ -160,7 +161,7 @@ function ApplicationDetailDialog({ open, application, onClose }) {
           <DetailField label="Success link" icon={CheckCircleTwoToneIcon} xs={12} sm={12}>
             {hasSuccessLink ? (
               <Link
-                href={view.success_link}
+                href={externalUrl(view.success_link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 underline="hover"

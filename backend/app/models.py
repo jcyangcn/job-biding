@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 UserRoleLiteral = Literal["admin", "bidder", "caller"]
 CitizenStatusLiteral = Literal["Good", "Bad", "None"]
 CitizenReviewStatusLiteral = CitizenStatusLiteral
+CitizenGenderLiteral = Literal["Male", "Female"]
 
 
 class ProfileJob(BaseModel):
@@ -101,13 +102,19 @@ class GenerateResumeResponse(BaseModel):
 class MatchBestResumeRequest(BaseModel):
     profile_id: int
     job_vector: list[float] = Field(default_factory=list)
+    application_id: int | None = None
 
 
 class MatchBestResumeResponse(BaseModel):
     generation_id: int
     filename: str
-    score: float
+    distance: float
     profile_id: int
+
+
+class ResumeTopSkill(BaseModel):
+    name: str
+    mentions: float
 
 
 class ResumeGenerationRecord(BaseModel):
@@ -121,8 +128,13 @@ class ResumeGenerationRecord(BaseModel):
     profile_label: str = ""
     resume_content: dict = Field(default_factory=dict)
     resume_vector: list[float] = Field(default_factory=list)
+    top_skills: list[ResumeTopSkill] = Field(default_factory=list)
     pdf_path: str
     created_at: datetime
+
+
+class ImportExportPasswordRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=255)
 
 
 class LoginRequest(BaseModel):
@@ -400,6 +412,7 @@ class JobApplicationCreateRequest(BaseModel):
     job_vector: list[float] = Field(default_factory=list)
     resume_generated_id: int | None = None
     resume_online_link: str | None = Field(default=None, max_length=1000)
+    resume_distance: float | None = Field(default=None, ge=0)
     applied: bool = False
     applied_at: datetime | None = None
     success_link: str | None = Field(default=None, max_length=1000)
@@ -413,6 +426,7 @@ class JobApplicationUpdateRequest(BaseModel):
     job_vector: list[float] | None = None
     resume_generated_id: int | None = None
     resume_online_link: str | None = Field(default=None, max_length=1000)
+    resume_distance: float | None = Field(default=None, ge=0)
     applied: bool | None = None
     applied_at: datetime | None = None
     success_link: str | None = Field(default=None, max_length=1000)
@@ -440,6 +454,15 @@ class JobApplicationPostIdsResponse(BaseModel):
     post_ids: list[int]
     post_count: int
     matched_application_count: int
+
+
+class JobApplicationBulkApproveRequest(BaseModel):
+    application_ids: list[int] = Field(min_length=1)
+
+
+class JobApplicationBulkApproveResponse(BaseModel):
+    approved_ids: list[int]
+    approved_count: int
 
 
 class BatchSelectResumesRequest(BaseModel):
@@ -478,7 +501,9 @@ class JobApplicationResponse(BaseModel):
     resume_pdf_filename: str | None = None
     resume_online_link: str | None = None
     resume_generation_status: str | None = None
+    resume_distance: float | None = None
     applied: bool
+    approved: bool
     applied_at: datetime | None = None
     success_link: str | None = None
     applied_screenshot: CitizenImageInfo | None = None
@@ -533,6 +558,8 @@ class CitizenImageInfo(BaseModel):
 class CitizenCreateRequest(BaseModel):
     country: str = Field(min_length=1, max_length=100)
     name: str = Field(min_length=1, max_length=255)
+    gender: CitizenGenderLiteral = "Male"
+    found_citizen: bool = False
     linkedin: str | None = Field(default=None, max_length=500)
     details: str = ""
     review_status: CitizenReviewStatusLiteral = "None"
@@ -544,6 +571,8 @@ class CitizenCreateRequest(BaseModel):
 class CitizenUpdateRequest(BaseModel):
     country: str | None = Field(default=None, min_length=1, max_length=100)
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    gender: CitizenGenderLiteral | None = None
+    found_citizen: bool | None = None
     linkedin: str | None = Field(default=None, max_length=500)
     details: str | None = None
     review_status: CitizenReviewStatusLiteral | None = None
@@ -556,6 +585,8 @@ class CitizenResponse(BaseModel):
     id: int
     country: str
     name: str
+    gender: CitizenGenderLiteral
+    found_citizen: bool
     linkedin: str | None = None
     details: str
     review_status: CitizenReviewStatusLiteral

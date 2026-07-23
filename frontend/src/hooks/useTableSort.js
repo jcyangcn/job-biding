@@ -53,7 +53,9 @@ function useTableSort(rows, { defaultSort = null } = {}) {
         setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
         return;
       }
-      setSortField(field);
+      // A sort accessor can itself be a function. Wrap it so React stores the
+      // function instead of executing it as a state updater.
+      setSortField(() => field);
       setSortDirection('asc');
     },
     [sortField]

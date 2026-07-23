@@ -214,6 +214,27 @@ def migrate_job_application_columns() -> None:
                 )
             )
 
+        approved_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'approved'
+                """
+            )
+        ).scalar()
+        if not approved_exists:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN approved BOOLEAN NOT NULL DEFAULT FALSE
+                    """
+                )
+            )
+
         applied_at_nullable = conn.execute(
             text(
                 """
@@ -307,6 +328,27 @@ def migrate_job_application_columns() -> None:
                     UPDATE job_application
                     SET resume_generation_status = 'generated'
                     WHERE resume_generated_id IS NOT NULL
+                    """
+                )
+            )
+
+        resume_distance_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'job_application'
+                  AND column_name = 'resume_distance'
+                """
+            )
+        ).scalar()
+        if not resume_distance_exists:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE job_application
+                    ADD COLUMN resume_distance DOUBLE PRECISION
                     """
                 )
             )
@@ -728,6 +770,50 @@ def migrate_citizen_columns() -> None:
         ).scalar()
         if not table_exists:
             return
+
+        gender_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'citizen'
+                  AND column_name = 'gender'
+                """
+            )
+        ).scalar()
+        if not gender_exists:
+            conn.execute(
+                text(
+                    "ALTER TABLE citizen ADD COLUMN gender VARCHAR(10) "
+                    "NOT NULL DEFAULT 'Male'"
+                )
+            )
+        else:
+            conn.execute(text("UPDATE citizen SET gender = 'Male' WHERE gender IS NULL"))
+            conn.execute(
+                text("ALTER TABLE citizen ALTER COLUMN gender SET DEFAULT 'Male'")
+            )
+            conn.execute(text("ALTER TABLE citizen ALTER COLUMN gender SET NOT NULL"))
+
+        found_citizen_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'citizen'
+                  AND column_name = 'found_citizen'
+                """
+            )
+        ).scalar()
+        if not found_citizen_exists:
+            conn.execute(
+                text(
+                    "ALTER TABLE citizen "
+                    "ADD COLUMN found_citizen BOOLEAN NOT NULL DEFAULT FALSE"
+                )
+            )
 
         linkedin_exists = conn.execute(
             text(

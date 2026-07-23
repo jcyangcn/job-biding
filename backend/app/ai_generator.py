@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from app.config import settings
 from app.models import Profile, ResumeContent
 from app.prompts import build_generation_prompt
+from app.text_sanitizer import sanitize_resume_content
 
 logger = logging.getLogger(__name__)
 _RETRYABLE_CURSOR_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
@@ -34,7 +35,7 @@ def generate_resume_content(
             try:
                 raw = _generate_with_cursor(prompt)
                 data = _extract_json(raw)
-                return ResumeContent.model_validate(data)
+                return sanitize_resume_content(ResumeContent.model_validate(data))
             except CursorAPIError as exc:
                 if not exc.retryable or attempt == attempts:
                     raise
@@ -51,7 +52,7 @@ def generate_resume_content(
         raise ValueError(f"Unknown AI provider: {resolved}")
 
     data = _extract_json(raw)
-    return ResumeContent.model_validate(data)
+    return sanitize_resume_content(ResumeContent.model_validate(data))
 
 
 def _generate_with_cursor(prompt: str) -> str:

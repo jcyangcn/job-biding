@@ -10,6 +10,7 @@ from app.db_models import ResumeGeneration
 from app.history import build_resume_content_payload, build_resume_vector
 from app.models import Profile, ResumeContent
 from app.pdf_renderer import render_resume_pdf
+from app.text_sanitizer import sanitize_resume_content
 
 
 def get_resume_generation(db: Session, generation_id: int) -> ResumeGeneration | None:
@@ -38,6 +39,7 @@ def rebuild_resume_generation(
     role: str | None = None,
 ) -> ResumeGeneration:
     """Atomically replace the PDF and update the existing generation record."""
+    content = sanitize_resume_content(content)
     target = resolve_resume_generation_pdf(row)
     target.parent.mkdir(parents=True, exist_ok=True)
     token = uuid4().hex

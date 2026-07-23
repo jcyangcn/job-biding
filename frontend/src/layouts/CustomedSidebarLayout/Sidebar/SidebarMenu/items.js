@@ -50,16 +50,16 @@ const menuItems = [
             link: '/applications/skill-management'
           },
           {
+            name: 'Resume Management',
+            link: '/applications/resume-management'
+          },
+          {
             name: 'Job Posts Management',
             link: '/applications/post-management'
           },
           {
             name: 'Application Management',
             link: '/applications/application-management'
-          },
-          {
-            name: 'Resume Management',
-            link: '/applications/resume-management'
           },
           {
             name: 'Email Management',

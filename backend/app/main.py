@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+import secrets
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,6 +72,7 @@ from app.linkedin_service import (
 )
 from app.application_service import (
     application_to_response,
+    approve_applications,
     assign_posts_to_profile,
     attach_generated_resume_to_application,
     batch_select_resumes_for_posts,
@@ -114,6 +116,7 @@ from app.progression_email_service import (
 from app.models import (
     GenerateResumeRequest,
     GenerateResumeResponse,
+    ImportExportPasswordRequest,
     MatchBestResumeRequest,
     LoginRequest,
     LoginResponse,
@@ -141,6 +144,8 @@ from app.models import (
     JobApplicationPostIdsResponse,
     BatchSelectResumesRequest,
     BatchSelectResumesResponse,
+    JobApplicationBulkApproveRequest,
+    JobApplicationBulkApproveResponse,
     JobApplicationCreateRequest,
     JobApplicationResponse,
     JobApplicationUpdateRequest,
@@ -281,7 +286,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Generation-Id", "X-Match-Score", "X-Profile-Id", "Content-Disposition"],
+    expose_headers=[
+        "X-Generation-Id",
+        "X-Match-Distance",
+        "X-Profile-Id",
+        "Content-Disposition",
+    ],
 )
 
 if FRONTEND_BUILD_DIR.is_dir():
@@ -328,6 +338,19 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 @app.get("/api/auth/me", response_model=UserResponse)
 def get_me(user: UserResponse = Depends(get_current_user_response)):
     return user
+
+
+@app.post("/api/import-export/verify-password")
+def verify_import_export_password(
+    request: ImportExportPasswordRequest,
+    _: User = Depends(get_current_user),
+):
+    if not secrets.compare_digest(
+        request.password,
+        settings.import_export_password,
+    ):
+        raise HTTPException(status_code=403, detail="Incorrect password")
+    return {"valid": True}
 
 
 @app.get("/api/users", response_model=list[UserResponse])
@@ -810,6 +833,21 @@ def list_job_application_post_ids_endpoint(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/job-applications/bulk-approve",
+    response_model=JobApplicationBulkApproveResponse,
+)
+def bulk_approve_job_applications_endpoint(
+    request: JobApplicationBulkApproveRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    try:
+        return approve_applications(db, request.application_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/job-applications/{application_id}", response_model=JobApplicationResponse)
@@ -1753,8 +1791,7 @@ def match_best_resume(
     user: User = Depends(get_current_user),
 ):
     """
-    Find resume generations for profile_id, score each with job_vector · resume_vector,
-    and return the highest-scoring resume PDF file.
+    Find the resume with the smallest weighted Euclidean distance and return it.
     """
     profile = get_profile(db, request.profile_id)
     if not profile:
@@ -1763,13 +1800,32 @@ def match_best_resume(
         raise HTTPException(status_code=403, detail="Not allowed to access this profile")
 
     try:
-        best_row, best_score, _scores = match_best_resume_for_profile(
+        best_row, best_distance, _scores = match_best_resume_for_profile(
             db,
             profile_id=request.profile_id,
             job_vector=list(request.job_vector or []),
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if request.application_id is not None:
+        try:
+            application = get_application_for_user(db, request.application_id, user)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if application.profile_id != request.profile_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Application profile does not match resume profile",
+            )
+        application.resume_generated_id = best_row.id
+        application.resume_online_link = None
+        application.resume_generation_status = "generated"
+        application.resume_distance = best_distance
+        db.add(application)
+        db.commit()
 
     filename = Path(best_row.pdf_path).name
     try:
@@ -1786,7 +1842,7 @@ def match_best_resume(
         filename=filename,
         headers={
             "X-Generation-Id": str(best_row.id),
-            "X-Match-Score": str(best_score),
+            "X-Match-Distance": str(best_distance),
             "X-Profile-Id": str(request.profile_id),
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
@@ -1834,6 +1890,11 @@ def download_resume_pdf(
         media_type="application/pdf",
         filename=download_name,
         content_disposition_type=disposition,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
     )
 
 

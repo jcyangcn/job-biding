@@ -1,5 +1,6 @@
 import PropTypes from 'prop-types';
 import { Alert, Box, Link, Stack, Typography } from '@mui/material';
+import externalUrl from 'src/utils/externalUrl';
 
 /**
  * Shows existing applications that share the same company as the one being
@@ -30,7 +31,7 @@ function DuplicateApplicationWarning({ matches, exact }) {
               <>
                 {' · '}
                 <Link
-                  href={app.link}
+                  href={externalUrl(app.link)}
                   target="_blank"
                   rel="noopener noreferrer"
                   sx={{ wordBreak: 'break-all' }}

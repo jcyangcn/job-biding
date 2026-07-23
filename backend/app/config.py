@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     database_url: str
     jwt_secret: str = "change-me-in-production"
     jwt_expire_hours: int = 48
+    import_export_password: str = "123123"
     generated_resumes_dir: str = Field(default="", validation_alias="GENERATED_RESUMES_DIR")
     uploads_dir_config: str = Field(default="", validation_alias="UPLOADS_DIR")
     cors_origins: str = ""

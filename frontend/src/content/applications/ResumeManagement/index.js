@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Container,
   Dialog,
   DialogActions,
@@ -33,6 +34,7 @@ import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
 import { listAllIdentities } from 'src/services/identityApi';
+import { listJobApplications } from 'src/services/jobApplicationApi';
 import { listAllProfiles } from 'src/services/profileApi';
 import {
   deleteResumeGeneration,
@@ -55,6 +57,10 @@ function jobLabel(row) {
   return parts.length ? parts.join(' · ') : `Post #${row?.post_id}`;
 }
 
+function resumeVectorLength(vector) {
+  return Array.isArray(vector) ? vector.length : 0;
+}
+
 function ResumeManagement() {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
@@ -74,6 +80,7 @@ function ResumeManagement() {
   const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [selectedProfileId, setSelectedProfileId] = useState(ALL_PROFILES);
   const [resumeCounts, setResumeCounts] = useState({ total: 0 });
+  const [usageByGeneration, setUsageByGeneration] = useState({});
   const [previewing, setPreviewing] = useState(null);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -115,10 +122,29 @@ function ResumeManagement() {
     }
   }, [enqueueSnackbar]);
 
+  const loadApplicationUsage = useCallback(async () => {
+    try {
+      const applications = await listJobApplications();
+      const usage = {};
+      (applications || []).forEach((application) => {
+        if (application.resume_generated_id != null) {
+          usage[application.resume_generated_id] =
+            (usage[application.resume_generated_id] || 0) + 1;
+        }
+      });
+      setUsageByGeneration(usage);
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to load resume usage', {
+        variant: 'error'
+      });
+    }
+  }, [enqueueSnackbar]);
+
   useEffect(() => {
     loadProfiles();
     loadCounts();
-  }, [loadCounts, loadProfiles]);
+    loadApplicationUsage();
+  }, [loadApplicationUsage, loadCounts, loadProfiles]);
 
   const fetchGenerations = useCallback(
     (options) =>
@@ -167,12 +193,14 @@ function ResumeManagement() {
   const handleRefresh = () => {
     refresh();
     loadCounts();
+    loadApplicationUsage();
   };
 
   const handleRebuilt = (generation) => {
     setEditing(null);
     refresh();
     loadCounts();
+    loadApplicationUsage();
     enqueueSnackbar(
       `Rebuilt ${filenameFromPath(generation.pdf_path)} with the same filename`,
       { variant: 'success' }
@@ -190,6 +218,7 @@ function ResumeManagement() {
       setDeleting(null);
       refresh();
       loadCounts();
+      loadApplicationUsage();
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to delete resume', { variant: 'error' });
     } finally {
@@ -298,6 +327,7 @@ function ResumeManagement() {
                           sortDirection={sortDirection}
                           onSort={handleSort}
                         />
+                        <TableCell>Skills</TableCell>
                         <SortableTableCell
                           label="Created"
                           sortKey="created_at"
@@ -305,6 +335,8 @@ function ResumeManagement() {
                           sortDirection={sortDirection}
                           onSort={handleSort}
                         />
+                        <TableCell align="center">Resume vector</TableCell>
+                        <TableCell align="center">Used in applications</TableCell>
                         <TableCell align="right">Actions</TableCell>
                       </TableRow>
                     </TableHead>
@@ -312,7 +344,7 @@ function ResumeManagement() {
                       {loading && rows.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={selectedProfileId === ALL_PROFILES ? 6 : 5}
+                            colSpan={selectedProfileId === ALL_PROFILES ? 9 : 8}
                           >
                             Loading…
                           </TableCell>
@@ -320,7 +352,7 @@ function ResumeManagement() {
                       ) : error ? (
                         <TableRow>
                           <TableCell
-                            colSpan={selectedProfileId === ALL_PROFILES ? 6 : 5}
+                            colSpan={selectedProfileId === ALL_PROFILES ? 9 : 8}
                           >
                             <Typography color="error">
                               {error.message || 'Failed to load resumes'}
@@ -330,7 +362,7 @@ function ResumeManagement() {
                       ) : rows.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={selectedProfileId === ALL_PROFILES ? 6 : 5}
+                            colSpan={selectedProfileId === ALL_PROFILES ? 9 : 8}
                           >
                             {hasActiveFilters
                               ? 'No resumes match your filters.'
@@ -370,7 +402,49 @@ function ResumeManagement() {
                                 </Typography>
                               </Button>
                             </TableCell>
+                            <TableCell sx={{ minWidth: 220, maxWidth: 300 }}>
+                              {Array.isArray(row.top_skills) && row.top_skills.length ? (
+                                <Box display="flex" gap={0.5} flexWrap="wrap">
+                                  {row.top_skills.map((skill) => (
+                                    <Tooltip
+                                      key={skill.name}
+                                      title={`Mention score: ${skill.mentions}`}
+                                    >
+                                      <Chip
+                                        size="small"
+                                        color="primary"
+                                        variant="outlined"
+                                        label={skill.name}
+                                      />
+                                    </Tooltip>
+                                  ))}
+                                </Box>
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">
+                                  —
+                                </Typography>
+                              )}
+                            </TableCell>
                             <TableCell>{formatDateTime(row.created_at)}</TableCell>
+                            <TableCell
+                              align="center"
+                              title={JSON.stringify(row.resume_vector || [])}
+                            >
+                              <Box display="flex" justifyContent="center">
+                                {resumeVectorLength(row.resume_vector)
+                                  ? `[${resumeVectorLength(row.resume_vector)}]`
+                                  : '[]'}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Box display="flex" justifyContent="center">
+                                <Chip
+                                  size="small"
+                                  color={usageByGeneration[row.id] ? 'primary' : 'default'}
+                                  label={usageByGeneration[row.id] || 0}
+                                />
+                              </Box>
+                            </TableCell>
                             <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                               <Tooltip title="Edit and rebuild">
                                 <IconButton

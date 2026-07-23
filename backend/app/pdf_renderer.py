@@ -1,4 +1,5 @@
 from pathlib import Path
+from html import escape
 import re
 import secrets
 import string
@@ -31,7 +32,7 @@ def _styles() -> dict:
             alignment=TA_CENTER, spaceAfter=2,
         ),
         "title": ParagraphStyle(
-            "Title", fontName=BASE_FONT, fontSize=11.5, leading=14,
+            "Title", fontName=BOLD_FONT, fontSize=11.5, leading=14,
             alignment=TA_CENTER, spaceAfter=6,
         ),
         "contact": ParagraphStyle(
@@ -49,6 +50,10 @@ def _styles() -> dict:
         ),
         "role_left": ParagraphStyle(
             "RoleLeft", fontName=BASE_FONT, fontSize=10.2, leading=13,
+            alignment=TA_LEFT,
+        ),
+        "role_left_bold": ParagraphStyle(
+            "RoleLeftBold", fontName=BOLD_FONT, fontSize=10.2, leading=13,
             alignment=TA_LEFT,
         ),
         "role_right_bold": ParagraphStyle(
@@ -95,6 +100,41 @@ def _section_header(text: str, story: list, h2_style):
     story.append(_hr())
 
 
+def _pdf_text(value: object) -> str:
+    """Escape stored plain text before adding renderer-owned formatting."""
+    return escape(str(value or ""), quote=False)
+
+
+def _skill_terms(content: ResumeContent) -> list[str]:
+    terms: set[str] = set()
+    for skill in content.skills:
+        for value in str(skill.value or "").split(","):
+            term = value.strip()
+            if len(term) >= 2:
+                terms.add(term)
+    return sorted(terms, key=len, reverse=True)
+
+
+def _emphasize_skill_terms(value: object, terms: list[str]) -> str:
+    """Bold skill phrases while keeping the persisted content plain text."""
+    text = str(value or "")
+    if not text or not terms:
+        return _pdf_text(text)
+
+    pattern = re.compile(
+        rf"(?<!\w)({'|'.join(re.escape(term) for term in terms)})(?!\w)",
+        re.IGNORECASE,
+    )
+    parts: list[str] = []
+    cursor = 0
+    for match in pattern.finditer(text):
+        parts.append(_pdf_text(text[cursor:match.start()]))
+        parts.append(f"<b>{_pdf_text(match.group(0))}</b>")
+        cursor = match.end()
+    parts.append(_pdf_text(text[cursor:]))
+    return "".join(parts)
+
+
 def render_resume_pdf(
     profile: Profile,
     content: ResumeContent,
@@ -102,8 +142,9 @@ def render_resume_pdf(
 ) -> Path:
     s = _styles()
     story: list = []
+    skill_terms = _skill_terms(content)
 
-    title = content.title.replace("&", "&amp;")
+    title = _pdf_text(content.title)
     contact_parts = [
         profile.phone,
         profile.email,
@@ -112,58 +153,60 @@ def render_resume_pdf(
         profile.location,
     ]
     contact_line = " &nbsp;&nbsp;&middot;&nbsp;&nbsp; ".join(
-        part for part in contact_parts if part
+        _pdf_text(part) for part in contact_parts if part
     )
 
-    story.append(Paragraph(profile.name, s["name"]))
+    story.append(Paragraph(_pdf_text(profile.name), s["name"]))
     story.append(Paragraph(title, s["title"]))
     if contact_line:
         story.append(Paragraph(contact_line, s["contact"]))
 
     _section_header("Professional Summary", story, s["h2"])
-    story.append(Paragraph(content.summary, s["summary"]))
+    story.append(
+        Paragraph(_emphasize_skill_terms(content.summary, skill_terms), s["summary"])
+    )
 
     _section_header("Work Experience", story, s["h2"])
     for job in content.experience:
-        role_left = Paragraph(f"<b>{job.role}</b>", s["role_left"])
-        period_right = Paragraph(f"<b>{job.period}</b>", s["role_right_bold"])
-        company_left = Paragraph(f"<b>{job.company}</b>", s["role_left"])
+        role_left = Paragraph(_pdf_text(job.role), s["role_left_bold"])
+        period_right = Paragraph(_pdf_text(job.period), s["role_right_bold"])
+        company_left = Paragraph(_pdf_text(job.company), s["role_left_bold"])
         company_right = Paragraph(
-            f"<i>{job.mode} | {job.city}</i>", s["role_right"],
+            f"<i>{_pdf_text(job.mode)} | {_pdf_text(job.city)}</i>", s["role_right"],
         )
         story.append(KeepTogether([
             _two_col(role_left, period_right),
             _two_col(company_left, company_right, bottom_pad=2),
         ]))
         for bullet in job.bullets:
-            b = bullet.replace("&", "&amp;")
+            b = _emphasize_skill_terms(bullet, skill_terms)
             story.append(Paragraph(f"&bull;&nbsp;&nbsp;{b}", s["bullet"]))
         story.append(Spacer(1, 4))
 
     _section_header("Education", story, s["h2"])
-    story.append(Paragraph(f"<b>{profile.education.school}</b>", s["role_left"]))
-    edu_left = Paragraph(f"<i>{profile.education.degree}</i>", s["role_left"])
-    edu_right = Paragraph(f"<b>{profile.education.period}</b>", s["role_right_bold"])
+    story.append(Paragraph(_pdf_text(profile.education.school), s["role_left_bold"]))
+    edu_left = Paragraph(f"<i>{_pdf_text(profile.education.degree)}</i>", s["role_left"])
+    edu_right = Paragraph(_pdf_text(profile.education.period), s["role_right_bold"])
     story.append(_two_col(edu_left, edu_right))
 
     _section_header("Skills", story, s["h2"])
     for skill in content.skills:
-        label = skill.label.replace("&", "&amp;")
-        value = skill.value.replace("&", "&amp;")
+        label = _pdf_text(skill.label)
+        value = _pdf_text(skill.value)
         story.append(Paragraph(f"<b>{label}:</b> {value}", s["skill"]))
 
     if profile.certifications:
         _section_header("Certifications", story, s["h2"])
         for cert in profile.certifications:
-            story.append(Paragraph(f"&bull;&nbsp;&nbsp;{cert}", s["bullet"]))
+            story.append(Paragraph(f"&bull;&nbsp;&nbsp;{_pdf_text(cert)}", s["bullet"]))
 
     if content.projects:
         _section_header("Projects", story, s["h2"])
         for i, project in enumerate(content.projects):
-            name = project.name.replace("&", "&amp;")
-            story.append(Paragraph(f"<b>{name}</b>", s["role_left"]))
+            name = _pdf_text(project.name)
+            story.append(Paragraph(name, s["role_left_bold"]))
             for bullet in project.bullets:
-                b = bullet.replace("&", "&amp;")
+                b = _emphasize_skill_terms(bullet, skill_terms)
                 story.append(Paragraph(f"&bull;&nbsp;&nbsp;{b}", s["bullet"]))
             if i < len(content.projects) - 1:
                 story.append(Spacer(1, 4))

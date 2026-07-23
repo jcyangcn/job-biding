@@ -3,6 +3,8 @@ import PropTypes from 'prop-types';
 import { useSnackbar } from 'notistack';
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import CancelTwoToneIcon from '@mui/icons-material/CancelTwoTone';
+import CheckCircleTwoToneIcon from '@mui/icons-material/CheckCircleTwoTone';
+import ContentCopyTwoToneIcon from '@mui/icons-material/ContentCopyTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import FileDownloadTwoToneIcon from '@mui/icons-material/FileDownloadTwoTone';
 import FileUploadTwoToneIcon from '@mui/icons-material/FileUploadTwoTone';
@@ -10,12 +12,16 @@ import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import VisibilityTwoToneIcon from '@mui/icons-material/VisibilityTwoTone';
+import WarningAmberTwoToneIcon from '@mui/icons-material/WarningAmberTwoTone';
 import {
   alpha,
   Box,
   Button,
+  ButtonGroup,
   Card,
   CardContent,
+  Checkbox,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -23,6 +29,7 @@ import {
   FormControlLabel,
   IconButton,
   Link,
+  Paper,
   Stack,
   Switch,
   Table,
@@ -41,6 +48,7 @@ import ApplicationEditDialog from './ApplicationEditDialog';
 import ApplicationResumeCell from './ApplicationResumeCell';
 import ApplicationScreenshotThumb from './ApplicationScreenshotThumb';
 import TableListFilters from 'src/components/TableListFilters';
+import ImportExportPasswordDialog from 'src/components/ImportExportPasswordDialog';
 import ApplicationIdentityLabel from 'src/components/IdentityLabel';
 import { parseProfileDefaultResumeRef } from 'src/utils/profileDefaultResumeRef';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
@@ -49,16 +57,23 @@ import { useDetailDialog } from 'src/components/DetailDialog';
 import useTableListFilters from 'src/hooks/useTableListFilters';
 import useTablePagination from 'src/hooks/useTablePagination';
 import useTableSort from 'src/hooks/useTableSort';
+import useImportExportPassword from 'src/hooks/useImportExportPassword';
 import { formatIdentityLabel, parseIdentityLabel } from 'src/data/countryCodes';
 import { importJobApplicationsSequentially, parseApplicationCsv } from 'src/utils/applicationCsvImport';
 import {
   APPLICATION_CSV_HEADERS,
   buildApplicationExportRows
 } from 'src/utils/applicationCsvExport';
-import { createJobApplication, deleteJobApplication, listJobApplications } from 'src/services/jobApplicationApi';
+import {
+  approveJobApplications,
+  createJobApplication,
+  deleteJobApplication,
+  listJobApplications
+} from 'src/services/jobApplicationApi';
 import { buildApplicationResumeFilename } from 'src/services/resumeApi';
 import { formatDateTime } from 'src/utils/dateFormat';
 import { downloadCsv, sanitizeCsvFilename } from 'src/utils/exportCsv';
+import externalUrl from 'src/utils/externalUrl';
 
 function formatResumeSource(row) {
   if (row.resume_generation_status === 'generating') {
@@ -94,6 +109,28 @@ function formatBidderLabel(row) {
   return row.bidder_name || row.bidder_username || '';
 }
 
+function formatRoleCompanySortValue(row) {
+  return `${row.role || ''} ${row.company || ''}`;
+}
+
+function formatAppliedSortValue(row) {
+  return row.applied_at || '';
+}
+
+function formatApprovedSortValue(row) {
+  return Number(Boolean(row.approved));
+}
+
+function formatResumeDistance(row) {
+  const distance = Number(row.resume_distance);
+  return Number.isFinite(distance) ? distance.toFixed(2) : '—';
+}
+
+function formatAppliedStatus(row) {
+  if (!row.applied) return 'Not applied';
+  return row.applied_at ? formatDateTime(row.applied_at) : 'Applied';
+}
+
 function formatLinkPreview(link, maxLength = 42) {
   const value = String(link || '').trim();
   if (!value) return '';
@@ -104,31 +141,80 @@ function formatLinkPreview(link, maxLength = 42) {
   return `${withoutProtocol.slice(0, maxLength)}…`;
 }
 
+function normalizeDuplicateValue(value) {
+  return String(value || '').trim().toLocaleLowerCase();
+}
+
+function exactDuplicateKey(row) {
+  return JSON.stringify([
+    normalizeDuplicateValue(row.company),
+    normalizeDuplicateValue(row.role),
+    normalizeDuplicateValue(row.link)
+  ]);
+}
+
 /** Percent widths for table-layout: fixed (without Profile column). */
 const COLUMN_WIDTHS = {
+  select: '4%',
   no: '4%',
-  profile: '9%',
   bidder: '8%',
-  roleCompany: '18%',
-  link: '13%',
-  resume: '20%',
+  roleCompany: '14%',
+  link: '11%',
+  resume: '13%',
+  distance: '8%',
   applied: '9%',
-  applyProof: '16%',
-  actions: '13%'
+  approved: '8%',
+  applyProof: '11%',
+  actions: '10%'
 };
 
 /** When Profile is shown, slightly shrink neighboring columns. */
 const COLUMN_WIDTHS_WITH_PROFILE = {
+  select: '4%',
   no: '4%',
   profile: '8%',
+  bidder: '7%',
+  roleCompany: '12%',
+  link: '10%',
+  resume: '11%',
+  distance: '8%',
+  applied: '9%',
+  approved: '8%',
+  applyProof: '9%',
+  actions: '10%'
+};
+
+const STANDARD_COLUMN_WIDTHS = {
+  no: '4%',
   bidder: '8%',
   roleCompany: '16%',
-  link: '11%',
+  link: '12%',
   resume: '17%',
+  distance: '8%',
   applied: '9%',
   applyProof: '14%',
   actions: '13%'
 };
+
+const STANDARD_COLUMN_WIDTHS_WITH_PROFILE = {
+  no: '4%',
+  profile: '8%',
+  bidder: '8%',
+  roleCompany: '14%',
+  link: '10%',
+  resume: '14%',
+  distance: '8%',
+  applied: '9%',
+  applyProof: '12%',
+  actions: '13%'
+};
+
+function getColumnWidths(showProfileColumn, enableApproval) {
+  if (enableApproval) {
+    return showProfileColumn ? COLUMN_WIDTHS_WITH_PROFILE : COLUMN_WIDTHS;
+  }
+  return showProfileColumn ? STANDARD_COLUMN_WIDTHS_WITH_PROFILE : STANDARD_COLUMN_WIDTHS;
+}
 
 function colSx(width) {
   return {
@@ -154,6 +240,7 @@ const BASE_SEARCH_FIELDS = [
   'company',
   'link',
   'success_link',
+  'resume_distance',
   (row) => formatResumeSource(row)
 ];
 
@@ -161,6 +248,11 @@ const APPLICATION_SELECT_FILTERS = [
   {
     id: 'bidder_username',
     getValue: formatBidderLabel,
+    emptyValue: ''
+  },
+  {
+    id: 'approved',
+    getValue: (row) => (row.approved ? 'approved' : 'pending'),
     emptyValue: ''
   }
 ];
@@ -174,6 +266,7 @@ function ApplicationsTableView({
   profiles = [],
   identities = [],
   showProfileColumn = false,
+  enableApproval = false,
   tableCardHeight,
   renderLayout
 }) {
@@ -189,7 +282,15 @@ function ApplicationsTableView({
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const {
+    requestImportExportConfirmation,
+    importExportPasswordDialogProps
+  } = useImportExportPassword();
   const [showNotAppliedOnly, setShowNotAppliedOnly] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [approving, setApproving] = useState(false);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const [deletingDuplicateId, setDeletingDuplicateId] = useState(null);
   const { open: detailOpen, selected: selectedApplication, openDetail, closeDetail, stopPropagation } =
     useDetailDialog();
 
@@ -246,8 +347,8 @@ function ApplicationsTableView({
       }));
   }, [rows]);
 
-  const filterSelects = useMemo(
-    () => [
+  const filterSelects = useMemo(() => {
+    const filters = [
       {
         id: 'bidder_username',
         label: 'Bidder',
@@ -255,14 +356,64 @@ function ApplicationsTableView({
         onChange: (value) => setSelectValue('bidder_username', value),
         options: bidderOptions
       }
-    ],
-    [bidderOptions, selectValues.bidder_username, setSelectValue]
-  );
+    ];
+    if (enableApproval) {
+      filters.push({
+        id: 'approved',
+        label: 'Approval',
+        value: selectValues.approved,
+        onChange: (value) => setSelectValue('approved', value),
+        options: [
+          { value: 'approved', label: 'Approved' },
+          { value: 'pending', label: 'Pending' }
+        ]
+      });
+    }
+    return filters;
+  }, [
+    bidderOptions,
+    enableApproval,
+    selectValues.approved,
+    selectValues.bidder_username,
+    setSelectValue
+  ]);
 
   const visibleRows = useMemo(
     () => (showNotAppliedOnly ? filteredRows.filter((row) => !row.applied) : filteredRows),
     [filteredRows, showNotAppliedOnly]
   );
+
+  const duplicateCompanyGroups = useMemo(() => {
+    const groups = new Map();
+    visibleRows.forEach((row) => {
+      const company = String(row.company || '').trim();
+      if (!company) return;
+      const key = company.toLocaleLowerCase();
+      const group = groups.get(key) || [];
+      group.push(row);
+      groups.set(key, group);
+    });
+    return Array.from(groups.values())
+      .filter((group) => group.length > 1)
+      .sort((left, right) =>
+        String(left[0]?.company || '').localeCompare(String(right[0]?.company || ''))
+      );
+  }, [visibleRows]);
+
+  const exactDuplicateIds = useMemo(() => {
+    const groups = new Map();
+    visibleRows.forEach((row) => {
+      const key = exactDuplicateKey(row);
+      const group = groups.get(key) || [];
+      group.push(row.id);
+      groups.set(key, group);
+    });
+    return new Set(
+      Array.from(groups.values())
+        .filter((ids) => ids.length > 1)
+        .flat()
+    );
+  }, [visibleRows]);
 
   const handleClearFilters = () => {
     clearFilters();
@@ -280,6 +431,25 @@ function ApplicationsTableView({
     rowsPerPageOptions,
     rowOffset
   } = useTablePagination(sortedRows);
+
+  useEffect(() => {
+    const selectableIds = new Set(
+      rows.filter((row) => !row.approved).map((row) => row.id)
+    );
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => selectableIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [rows]);
+
+  const pageSelectableIds = useMemo(
+    () => paginatedRows.filter((row) => !row.approved).map((row) => row.id),
+    [paginatedRows]
+  );
+  const selectedPageCount = pageSelectableIds.filter((id) => selectedIds.has(id)).length;
+  const allPageSelected =
+    pageSelectableIds.length > 0 && selectedPageCount === pageSelectableIds.length;
+  const somePageSelected = selectedPageCount > 0 && !allPageSelected;
 
   const profileLookup = useMemo(
     () => new Map(profiles.map((item) => [item.id, item])),
@@ -329,6 +499,78 @@ function ApplicationsTableView({
     setDeleteOpen(true);
   };
 
+  const toggleSelected = (applicationId) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(applicationId)) {
+        next.delete(applicationId);
+      } else {
+        next.add(applicationId);
+      }
+      return next;
+    });
+  };
+
+  const toggleCurrentPage = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allPageSelected) {
+        pageSelectableIds.forEach((id) => next.delete(id));
+      } else {
+        pageSelectableIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const selectCurrentPage = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      pageSelectableIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const selectAllApplications = () => {
+    const applicationIds = rows
+      .filter((row) => !row.approved)
+      .map((row) => row.id);
+    setSelectedIds(new Set(applicationIds));
+    enqueueSnackbar(`Selected ${applicationIds.length} application(s)`, {
+      variant: 'info'
+    });
+  };
+
+  const selectFilteredApplications = () => {
+    const applicationIds = visibleRows
+      .filter((row) => !row.approved)
+      .map((row) => row.id);
+    setSelectedIds(new Set(applicationIds));
+    enqueueSnackbar(`Selected ${applicationIds.length} filtered application(s)`, {
+      variant: 'info'
+    });
+  };
+
+  const handleApproveSelected = async () => {
+    const applicationIds = [...selectedIds];
+    if (!applicationIds.length) return;
+
+    setApproving(true);
+    try {
+      const result = await approveJobApplications(applicationIds);
+      enqueueSnackbar(
+        `${result.approved_count} application(s) approved`,
+        { variant: 'success' }
+      );
+      setSelectedIds(new Set());
+      await onRefresh();
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Approval failed', { variant: 'error' });
+    } finally {
+      setApproving(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deletingRecord) return;
     setSaving(true);
@@ -342,6 +584,19 @@ function ApplicationsTableView({
       enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteDuplicate = async (row) => {
+    setDeletingDuplicateId(row.id);
+    try {
+      await deleteJobApplication(row.id);
+      enqueueSnackbar(`Application #${row.id} deleted`, { variant: 'success' });
+      await onRefresh();
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
+    } finally {
+      setDeletingDuplicateId(null);
     }
   };
 
@@ -425,9 +680,10 @@ function ApplicationsTableView({
     }
   };
 
-  const columnCount = showProfileColumn ? 9 : 8;
+  const baseColumnCount = showProfileColumn ? 10 : 9;
+  const columnCount = baseColumnCount + (enableApproval ? 2 : 0);
   const fixedTableCard = Boolean(tableCardHeight);
-  const widths = showProfileColumn ? COLUMN_WIDTHS_WITH_PROFILE : COLUMN_WIDTHS;
+  const widths = getColumnWidths(showProfileColumn, enableApproval);
 
   const toolbar = (
     <TableListFilters
@@ -482,7 +738,7 @@ function ApplicationsTableView({
             variant="outlined"
             startIcon={<RefreshTwoToneIcon />}
             onClick={onRefresh}
-            disabled={loading}
+            disabled={loading || approving}
           >
             Refresh
           </Button>
@@ -504,7 +760,71 @@ function ApplicationsTableView({
   );
 
   const table = (
-    <Card
+    <>
+      {enableApproval ? (
+        <Box
+          sx={{
+            mb: 2,
+            p: 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            flexWrap: 'wrap',
+            border: (currentTheme) => `1px solid ${currentTheme.palette.divider}`,
+            borderRadius: 1,
+            bgcolor: 'background.paper'
+          }}
+        >
+          <Typography variant="body2" fontWeight="bold" color="text.secondary">
+            Select:
+          </Typography>
+          <ButtonGroup size="small" variant="outlined" disabled={loading || approving}>
+            <Button
+              onClick={selectCurrentPage}
+              disabled={loading || approving || !pageSelectableIds.length}
+            >
+              Current Page
+            </Button>
+            <Button
+              onClick={selectAllApplications}
+              disabled={loading || approving || !rows.some((row) => !row.approved)}
+            >
+              All Applications
+            </Button>
+            <Button
+              onClick={selectFilteredApplications}
+              disabled={loading || approving || !visibleRows.some((row) => !row.approved)}
+            >
+              Filtered Applications
+            </Button>
+          </ButtonGroup>
+          <Chip
+            size="small"
+            color={selectedIds.size ? 'primary' : 'default'}
+            label={`${selectedIds.size} selected`}
+            onDelete={selectedIds.size ? () => setSelectedIds(new Set()) : undefined}
+          />
+          <Box sx={{ flex: 1 }} />
+          <Button
+            variant="outlined"
+            startIcon={<ContentCopyTwoToneIcon />}
+            onClick={() => setDuplicatesOpen(true)}
+            disabled={loading || approving || !visibleRows.length}
+          >
+            Duplicates
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<CheckCircleTwoToneIcon />}
+            onClick={handleApproveSelected}
+            disabled={!selectedIds.size || loading || approving}
+          >
+            {approving ? 'Approving…' : 'Approve'}
+          </Button>
+        </Box>
+      ) : null}
+      <Card
       sx={
         fixedTableCard
           ? {
@@ -534,6 +854,17 @@ function ApplicationsTableView({
           <Table stickyHeader={fixedTableCard} sx={{ tableLayout: 'fixed', width: '100%' }}>
               <TableHead>
                 <TableRow>
+                  {enableApproval ? (
+                    <TableCell padding="checkbox" sx={colSx(widths.select)}>
+                      <Checkbox
+                        checked={allPageSelected}
+                        indeterminate={somePageSelected}
+                        onChange={toggleCurrentPage}
+                        disabled={!pageSelectableIds.length || approving}
+                        inputProps={{ 'aria-label': 'Select applications on this page' }}
+                      />
+                    </TableCell>
+                  ) : null}
                   <TableCell sx={colSx(widths.no)}>No</TableCell>
                   {showProfileColumn ? (
                     <SortableTableCell
@@ -547,7 +878,7 @@ function ApplicationsTableView({
                   ) : null}
                   <SortableTableCell
                     label="Bidder"
-                    sortKey={(row) => formatBidderLabel(row)}
+                    sortKey={formatBidderLabel}
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
@@ -555,7 +886,7 @@ function ApplicationsTableView({
                   />
                   <SortableTableCell
                     label="Role / Company"
-                    sortKey={(row) => `${row.role || ''} ${row.company || ''}`}
+                    sortKey={formatRoleCompanySortValue}
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
@@ -571,21 +902,39 @@ function ApplicationsTableView({
                   />
                   <SortableTableCell
                     label="Resume"
-                    sortKey={(row) => formatResumeSource(row)}
+                    sortKey={formatResumeSource}
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
                     sx={colSx(widths.resume)}
                   />
                   <SortableTableCell
+                    label="Distance"
+                    sortKey="resume_distance"
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                    sx={colSx(widths.distance)}
+                  />
+                  <SortableTableCell
                     label="Applied"
-                    sortKey={(row) => row.applied_at || ''}
+                    sortKey={formatAppliedSortValue}
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
                     sx={colSx(widths.applied)}
                   />
                   <TableCell sx={colSx(widths.applyProof)}>Apply Proof</TableCell>
+                  {enableApproval ? (
+                    <SortableTableCell
+                      label="Approved"
+                      sortKey={formatApprovedSortValue}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                      sx={colSx(widths.approved)}
+                    />
+                  ) : null}
                   <TableCell align="right" sx={colSx(widths.actions)} />
                 </TableRow>
               </TableHead>
@@ -607,9 +956,24 @@ function ApplicationsTableView({
                     <TableRow
                       key={row.id}
                       hover
+                      selected={enableApproval && selectedIds.has(row.id)}
                       onClick={() => openEditDialog(row)}
                       sx={{ cursor: 'pointer' }}
                     >
+                      {enableApproval ? (
+                        <TableCell
+                          padding="checkbox"
+                          sx={colSx(widths.select)}
+                          onClick={stopPropagation}
+                        >
+                          <Checkbox
+                            checked={selectedIds.has(row.id)}
+                            onChange={() => toggleSelected(row.id)}
+                            disabled={row.approved || approving}
+                            inputProps={{ 'aria-label': `Select application ${row.id}` }}
+                          />
+                        </TableCell>
+                      ) : null}
                       <TableCell sx={colSx(widths.no)}>{rowOffset + index + 1}</TableCell>
                       {showProfileColumn ? (
                         <TableCell sx={colSx(widths.profile)}>
@@ -645,7 +1009,7 @@ function ApplicationsTableView({
                         {row.link ? (
                           <Tooltip title={row.link}>
                             <Link
-                              href={row.link}
+                              href={externalUrl(row.link)}
                               target="_blank"
                               rel="noopener noreferrer"
                               underline="hover"
@@ -660,6 +1024,19 @@ function ApplicationsTableView({
                       </TableCell>
                       <TableCell sx={colSx(widths.resume)} onClick={stopPropagation}>
                         <ApplicationResumeCell row={row} />
+                      </TableCell>
+                      <TableCell sx={colSx(widths.distance)}>
+                        <Tooltip
+                          title={
+                            row.resume_distance == null
+                              ? 'No matched-resume distance'
+                              : `Weighted distance: ${row.resume_distance}`
+                          }
+                        >
+                          <Typography variant="body2" fontWeight={600}>
+                            {formatResumeDistance(row)}
+                          </Typography>
+                        </Tooltip>
                       </TableCell>
                       <TableCell sx={colSx(widths.applied)}>
                         {row.applied ? (
@@ -707,7 +1084,7 @@ function ApplicationsTableView({
                           ) : row.success_link ? (
                             <Tooltip title={row.success_link}>
                               <Link
-                                href={row.success_link}
+                                href={externalUrl(row.success_link)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 underline="hover"
@@ -729,6 +1106,15 @@ function ApplicationsTableView({
                           )}
                         </Stack>
                       </TableCell>
+                      {enableApproval ? (
+                        <TableCell sx={colSx(widths.approved)}>
+                          <Chip
+                            size="small"
+                            color={row.approved ? 'success' : 'default'}
+                            label={row.approved ? 'Approved' : 'Pending'}
+                          />
+                        </TableCell>
+                      ) : null}
                       <TableCell align="right" sx={colSx(widths.actions)} onClick={stopPropagation}>
                         <Tooltip title="View details">
                           <IconButton
@@ -784,7 +1170,9 @@ function ApplicationsTableView({
               size="small"
               variant="outlined"
               startIcon={<FileUploadTwoToneIcon />}
-              onClick={handleImportClick}
+              onClick={() =>
+                requestImportExportConfirmation('Import', handleImportClick)
+              }
               disabled={loading || importing}
             >
               {importing ? 'Importing…' : 'Import'}
@@ -793,7 +1181,9 @@ function ApplicationsTableView({
               size="small"
               variant="outlined"
               startIcon={<FileDownloadTwoToneIcon />}
-              onClick={handleExportCsv}
+              onClick={() =>
+                requestImportExportConfirmation('Export', handleExportCsv)
+              }
               disabled={loading || exporting}
             >
               {exporting ? 'Exporting…' : 'Export'}
@@ -810,6 +1200,7 @@ function ApplicationsTableView({
           </Box>
         </CardContent>
       </Card>
+    </>
   );
 
   const dialogs = (
@@ -856,6 +1247,200 @@ function ApplicationsTableView({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {enableApproval ? (
+        <Dialog
+          open={duplicatesOpen}
+          onClose={() => !deletingDuplicateId && setDuplicatesOpen(false)}
+          fullWidth
+          maxWidth="lg"
+        >
+          <DialogTitle
+            sx={{
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              background: `linear-gradient(135deg, ${alpha(
+                theme.palette.primary.main,
+                0.1
+              )}, ${alpha(theme.palette.background.paper, 0.95)})`
+            }}
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <ContentCopyTwoToneIcon color="primary" />
+              <Box>
+                <Typography variant="h4">Duplicate companies</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Review repeated companies in the current filtered applications.
+                </Typography>
+              </Box>
+            </Stack>
+          </DialogTitle>
+          <DialogContent
+            dividers
+            sx={{
+              p: 2,
+              bgcolor: alpha(theme.palette.primary.main, 0.025)
+            }}
+          >
+            {duplicateCompanyGroups.length ? (
+              <Stack spacing={2}>
+                {duplicateCompanyGroups.map((group) => {
+                  const groupHasExactDuplicates = group.some((row) =>
+                    exactDuplicateIds.has(row.id)
+                  );
+                  return (
+                    <Paper
+                      key={normalizeDuplicateValue(group[0]?.company)}
+                      variant="outlined"
+                      sx={{
+                        overflow: 'hidden',
+                        borderColor: groupHasExactDuplicates ? 'error.light' : 'divider',
+                        boxShadow: groupHasExactDuplicates
+                          ? `0 4px 16px ${alpha(theme.palette.error.main, 0.12)}`
+                          : `0 3px 12px ${alpha(theme.palette.common.black, 0.06)}`
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          px: 2,
+                          py: 1.25,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          flexWrap: 'wrap',
+                          bgcolor: groupHasExactDuplicates
+                            ? alpha(theme.palette.error.main, 0.08)
+                            : alpha(theme.palette.primary.main, 0.06)
+                        }}
+                      >
+                        <Typography variant="h5">{group[0]?.company || '—'}</Typography>
+                        <Chip
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          label={`${group.length} applications`}
+                        />
+                        {groupHasExactDuplicates ? (
+                          <Chip
+                            size="small"
+                            color="error"
+                            icon={<WarningAmberTwoToneIcon />}
+                            label="Exact duplicates found"
+                          />
+                        ) : null}
+                      </Box>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Role</TableCell>
+                              <TableCell>URL</TableCell>
+                              <TableCell>Bidder</TableCell>
+                              <TableCell>Applied Time</TableCell>
+                              <TableCell>Status</TableCell>
+                              <TableCell align="right">Action</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {group.map((row) => {
+                              const isExactDuplicate = exactDuplicateIds.has(row.id);
+                              const isDeleting = deletingDuplicateId === row.id;
+                              return (
+                                <TableRow
+                                  key={row.id}
+                                  sx={{
+                                    bgcolor: isExactDuplicate
+                                      ? alpha(theme.palette.error.main, 0.045)
+                                      : 'transparent'
+                                  }}
+                                >
+                                  <TableCell>
+                                    <Typography variant="body2" fontWeight={600}>
+                                      {row.role || '—'}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    {row.link ? (
+                                      <Tooltip title={row.link}>
+                                        <Link
+                                          href={externalUrl(row.link)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          underline="hover"
+                                        >
+                                          {formatLinkPreview(row.link, 38)}
+                                        </Link>
+                                      </Tooltip>
+                                    ) : (
+                                      '—'
+                                    )}
+                                  </TableCell>
+                                  <TableCell>{formatBidderLabel(row) || '—'}</TableCell>
+                                  <TableCell>{formatAppliedStatus(row)}</TableCell>
+                                  <TableCell>
+                                    {isExactDuplicate ? (
+                                      <Chip
+                                        size="small"
+                                        color="error"
+                                        icon={<WarningAmberTwoToneIcon />}
+                                        label="Exact duplicate"
+                                      />
+                                    ) : (
+                                      <Chip size="small" label="Same company" />
+                                    )}
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Button
+                                      size="small"
+                                      color="error"
+                                      startIcon={<DeleteTwoToneIcon />}
+                                      onClick={() => handleDeleteDuplicate(row)}
+                                      disabled={deletingDuplicateId !== null}
+                                    >
+                                      {isDeleting ? 'Deleting…' : 'Delete'}
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Paper>
+                  );
+                })}
+              </Stack>
+            ) : (
+              <Paper
+                variant="outlined"
+                sx={{ p: 4, textAlign: 'center', bgcolor: 'background.paper' }}
+              >
+                <ContentCopyTwoToneIcon
+                  sx={{ fontSize: 42, color: 'text.disabled', mb: 1 }}
+                />
+                <Typography variant="h5">No duplicate companies</Typography>
+                <Typography color="text.secondary" mt={0.5}>
+                  No repeated company names were found in the current filtered applications.
+                </Typography>
+              </Paper>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ px: 2, py: 1.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
+              Red rows have matching company, role, and URL.
+            </Typography>
+            <Button
+              variant="contained"
+              onClick={() => setDuplicatesOpen(false)}
+              disabled={deletingDuplicateId !== null}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
+
+      <ImportExportPasswordDialog {...importExportPasswordDialogProps} />
     </>
   );
 
@@ -881,6 +1466,7 @@ ApplicationsTableView.propTypes = {
   profiles: PropTypes.array,
   identities: PropTypes.array,
   showProfileColumn: PropTypes.bool,
+  enableApproval: PropTypes.bool,
   tableCardHeight: PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.object]),
   renderLayout: PropTypes.func
 };

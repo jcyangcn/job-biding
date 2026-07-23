@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Container,
   Dialog,
   DialogActions,
@@ -14,7 +15,10 @@ import {
   DialogTitle,
   Grid,
   IconButton,
+  FormControlLabel,
+  MenuItem,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -81,6 +85,8 @@ function createEmptyForm() {
   return {
     country: DEFAULT_COUNTRY,
     name: '',
+    gender: 'Male',
+    found_citizen: false,
     linkedin: '',
     details: '',
     review_status: DEFAULT_CITIZEN_REVIEW_STATUS,
@@ -143,7 +149,8 @@ function CitizenManagement() {
     paginatedRows
   } = useServerTable({
     fetcher: fetchCitizens,
-    selectIds: ['review_status']
+    selectIds: ['review_status'],
+    defaultSort: { field: 'created_at', direction: 'desc' }
   });
 
   const filterSelects = useMemo(
@@ -262,6 +269,8 @@ function CitizenManagement() {
     setForm({
       country: record.country || '',
       name: record.name || '',
+      gender: record.gender || 'Male',
+      found_citizen: Boolean(record.found_citizen),
       linkedin: record.linkedin || '',
       details: record.details || '',
       review_status: record.review_status || DEFAULT_CITIZEN_REVIEW_STATUS,
@@ -326,8 +335,8 @@ function CitizenManagement() {
   };
 
   const handleSave = async () => {
-    if (!form.country.trim() || !form.name.trim()) {
-      enqueueSnackbar('Country and name are required', { variant: 'warning' });
+    if (!form.country.trim() || !form.name.trim() || !form.gender) {
+      enqueueSnackbar('Country, name, and gender are required', { variant: 'warning' });
       return;
     }
 
@@ -336,6 +345,8 @@ function CitizenManagement() {
       const payload = {
         country: form.country.trim(),
         name: form.name.trim(),
+        gender: form.gender,
+        found_citizen: form.found_citizen,
         linkedin: form.linkedin.trim() || null,
         details: form.details,
         review_status: form.review_status,
@@ -530,6 +541,20 @@ function CitizenManagement() {
                       onSort={handleSort}
                     />
                     <SortableTableCell
+                      label="Gender"
+                      sortKey="gender"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
+                      label="Found citizen"
+                      sortKey="found_citizen"
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                    <SortableTableCell
                       label="LinkedIn"
                       sortKey="linkedin"
                       sortField={sortField}
@@ -577,11 +602,11 @@ function CitizenManagement() {
                 <TableBody>
                   {loading && rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8}>Loading…</TableCell>
+                      <TableCell colSpan={10}>Loading…</TableCell>
                     </TableRow>
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={10}>
                         {hasActiveFilters
                           ? 'No citizens match your filters.'
                           : 'No citizens yet.'}
@@ -602,6 +627,14 @@ function CitizenManagement() {
                               {row.name}
                             </Typography>
                           </Stack>
+                        </TableCell>
+                        <TableCell>{row.gender || 'Male'}</TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            color={row.found_citizen ? 'success' : 'default'}
+                            label={row.found_citizen ? 'Found' : 'Not found'}
+                          />
                         </TableCell>
                         <TableCell sx={{ maxWidth: 220 }}>
                           <CitizenLinkedInCell url={row.linkedin} />
@@ -745,6 +778,48 @@ function CitizenManagement() {
                   onChange={handleFormChange('name')}
                   margin="none"
                 />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  select
+                  fullWidth
+                  required
+                  label="Gender"
+                  value={form.gender}
+                  onChange={handleFormChange('gender')}
+                  margin="none"
+                >
+                  <MenuItem value="Male">Male</MenuItem>
+                  <MenuItem value="Female">Female</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Box
+                  sx={{
+                    minHeight: 56,
+                    px: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1
+                  }}
+                >
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={form.found_citizen}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            found_citizen: event.target.checked
+                          }))
+                        }
+                      />
+                    }
+                    label="Found citizen"
+                  />
+                </Box>
               </Grid>
               <Grid item xs={12}>
                 <TextField
