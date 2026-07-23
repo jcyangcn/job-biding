@@ -25,6 +25,15 @@ Phone · Email · Linkedin · Address(H4)
 Professional Summary (H2)
 put <hr/>
 
+Skills (H2)
+put <hr/>
+- Frontend:
+- Backend:
+- Databases:
+- Cloud & DevOps:
+- Monitoring & Tools:
+- Workflow & PM:
+
 Work Experience (H2) (this should be latest first to old ones)
 put <hr/>
 
@@ -41,16 +50,6 @@ Education (H2)
 put <hr/>
 - University (Strong)
     Degree (major : align-left) and period(align-right)
-    
-
-Skills (H2)
-put <hr/>
-- Frontend:
-- Backend:
-- Databases:
-- Cloud & DevOps:
-- Monitoring & Tools:
-- Workflow & PM:
 
 Certifications (H2)
 put <hr/>

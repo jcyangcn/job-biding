@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import AssignmentTwoToneIcon from '@mui/icons-material/AssignmentTwoTone';
 import EventAvailableTwoToneIcon from '@mui/icons-material/EventAvailableTwoTone';
+import MoreHorizTwoToneIcon from '@mui/icons-material/MoreHorizTwoTone';
 import QuizTwoToneIcon from '@mui/icons-material/QuizTwoTone';
 import RecordVoiceOverTwoToneIcon from '@mui/icons-material/RecordVoiceOverTwoTone';
 import Label from 'src/components/Label';
@@ -13,7 +14,8 @@ const TYPE_ICONS = {
   human_interview: RecordVoiceOverTwoToneIcon,
   technical_assignment: AssignmentTwoToneIcon,
   test_task: QuizTwoToneIcon,
-  submit_availability: EventAvailableTwoToneIcon
+  submit_availability: EventAvailableTwoToneIcon,
+  other: MoreHorizTwoToneIcon
 };
 
 function ProgressionEmailTypeLabel({ type }) {

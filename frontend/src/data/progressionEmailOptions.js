@@ -2,7 +2,8 @@ export const PROGRESSION_EMAIL_TYPES = [
   { value: 'human_interview', label: 'Human interview' },
   { value: 'technical_assignment', label: 'Technical assignment' },
   { value: 'test_task', label: 'Test Task' },
-  { value: 'submit_availability', label: 'Submit Availability' }
+  { value: 'submit_availability', label: 'Submit Availability' },
+  { value: 'other', label: 'Other' }
 ];
 
 export const PROGRESSION_EMAIL_STATUSES = [
@@ -32,6 +33,8 @@ export function getProgressionEmailTypeColor(value) {
       return 'warning';
     case 'submit_availability':
       return 'info';
+    case 'other':
+      return 'secondary';
     default:
       return 'secondary';
   }

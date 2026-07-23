@@ -6,6 +6,7 @@ class ProgressionEmailType(str, enum.Enum):
     technical_assignment = "technical_assignment"
     test_task = "test_task"
     submit_availability = "submit_availability"
+    other = "other"
 
 
 class ProgressionEmailStatus(str, enum.Enum):

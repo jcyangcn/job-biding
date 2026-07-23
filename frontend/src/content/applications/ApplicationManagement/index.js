@@ -15,10 +15,10 @@ function ApplicationManagement() {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const tableHeight = {
-    xs: 320,
+    xs: '55vh',
     md: `calc(100vh - ${theme.header.height} - ${theme.spacing(14)})`
   };
-  const profileSidebarHeight = { xs: 260, md: 480 };
+  const profileSidebarHeight = tableHeight;
   useSetPageHeader(
     'Application Management',
     'View and manage job applications by profile'
@@ -45,7 +45,12 @@ function ApplicationManagement() {
   const applicationCounts = useMemo(() => {
     const counts = { total: allApplications.length };
     allApplications.forEach((row) => {
-      counts[row.profile_id] = (counts[row.profile_id] || 0) + 1;
+      if (row.profile_id == null) {
+        return;
+      }
+      const key = row.profile_id;
+      counts[key] = (counts[key] || 0) + 1;
+      counts[String(key)] = counts[key];
     });
     return counts;
   }, [allApplications]);
@@ -57,8 +62,8 @@ function ApplicationManagement() {
         listAllProfiles(),
         listAllIdentities()
       ]);
-      setProfiles(Array.isArray(profileRows) ? profileRows : []);
-      setIdentities(Array.isArray(identityRows) ? identityRows : []);
+      setProfiles(Array.isArray(profileRows) ? profileRows : profileRows?.items || []);
+      setIdentities(Array.isArray(identityRows) ? identityRows : identityRows?.items || []);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load profiles', { variant: 'error' });
     } finally {

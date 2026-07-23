@@ -8,15 +8,16 @@ import ProgressionEmailsTableView from '../ProgressionEmails/ProgressionEmailsTa
 import { useSetPageHeader } from 'src/contexts/PageHeaderContext';
 import { listAllIdentities } from 'src/services/identityApi';
 import { listAllProfiles } from 'src/services/profileApi';
+import { listAllProgressionEmails } from 'src/services/progressionEmailApi';
 
 function EmailManagement() {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const tableHeight = {
-    xs: 320,
+    xs: '55vh',
     md: `calc(100vh - ${theme.header.height} - ${theme.spacing(14)})`
   };
-  const profileSidebarHeight = { xs: 260, md: 480 };
+  const profileSidebarHeight = tableHeight;
   useSetPageHeader(
     'Email Management',
     'View and manage progression emails by profile'
@@ -43,7 +44,7 @@ function EmailManagement() {
         ? profileResult
         : profileResult?.items || [];
       setProfiles(profileRows);
-      setIdentities(identityRows);
+      setIdentities(Array.isArray(identityRows) ? identityRows : identityRows?.items || []);
     } catch (err) {
       enqueueSnackbar(err.message || 'Failed to load profiles', { variant: 'error' });
     } finally {
@@ -51,13 +52,32 @@ function EmailManagement() {
     }
   }, [enqueueSnackbar]);
 
+  const loadEmailCounts = useCallback(async () => {
+    try {
+      const rows = await listAllProgressionEmails();
+      const emailRows = Array.isArray(rows) ? rows : [];
+      const counts = { total: emailRows.length };
+      emailRows.forEach((row) => {
+        if (row.profile_id == null) {
+          return;
+        }
+        const key = row.profile_id;
+        counts[key] = (counts[key] || 0) + 1;
+        counts[String(key)] = counts[key];
+      });
+      setEmailCounts(counts);
+    } catch (err) {
+      enqueueSnackbar(err.message || 'Failed to load email counts', { variant: 'error' });
+    }
+  }, [enqueueSnackbar]);
+
   useEffect(() => {
     loadProfiles();
   }, [loadProfiles]);
 
-  const handleTotalChange = useCallback((total) => {
-    setEmailCounts({ total });
-  }, []);
+  useEffect(() => {
+    loadEmailCounts();
+  }, [loadEmailCounts]);
 
   return (
     <>
@@ -67,7 +87,7 @@ function EmailManagement() {
       <Container maxWidth="lg" sx={{ pt: 3 }}>
         <ProgressionEmailsTableView
           listProfileId={selectedProfileId === ALL_PROFILES ? null : selectedProfileId}
-          onTotalChange={handleTotalChange}
+          onRefresh={loadEmailCounts}
           profile={selectedProfileId === ALL_PROFILES ? null : selectedProfile}
           profiles={profiles}
           identities={identities}

@@ -237,7 +237,10 @@ function ProfileSidebar({
                   </Box>
                 ) : (
                   filteredProfiles.map((profile) => {
-                    const appCount = itemCounts[profile.id] || 0;
+                    const appCount =
+                      itemCounts[profile.id] ??
+                      itemCounts[String(profile.id)] ??
+                      0;
                     const { country, name: displayName } = resolveIdentityDisplay({
                       identityId: profile.identity_id,
                       identityName: profile.identity_name,

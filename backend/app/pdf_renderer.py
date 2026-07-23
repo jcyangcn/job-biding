@@ -166,6 +166,12 @@ def render_resume_pdf(
         Paragraph(_emphasize_skill_terms(content.summary, skill_terms), s["summary"])
     )
 
+    _section_header("Skills", story, s["h2"])
+    for skill in content.skills:
+        label = _pdf_text(skill.label)
+        value = _pdf_text(skill.value)
+        story.append(Paragraph(f"<b>{label}:</b> {value}", s["skill"]))
+
     _section_header("Work Experience", story, s["h2"])
     for job in content.experience:
         role_left = Paragraph(_pdf_text(job.role), s["role_left_bold"])
@@ -188,12 +194,6 @@ def render_resume_pdf(
     edu_left = Paragraph(f"<i>{_pdf_text(profile.education.degree)}</i>", s["role_left"])
     edu_right = Paragraph(_pdf_text(profile.education.period), s["role_right_bold"])
     story.append(_two_col(edu_left, edu_right))
-
-    _section_header("Skills", story, s["h2"])
-    for skill in content.skills:
-        label = _pdf_text(skill.label)
-        value = _pdf_text(skill.value)
-        story.append(Paragraph(f"<b>{label}:</b> {value}", s["skill"]))
 
     if profile.certifications:
         _section_header("Certifications", story, s["h2"])
