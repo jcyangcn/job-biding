@@ -1,6 +1,7 @@
 export const PROGRESSION_EMAIL_TYPES = [
   { value: 'human_interview', label: 'Human interview' },
-  { value: 'technical_assignment', label: 'Technical assignment' },
+  { value: 'technical_assignment', label: 'Technical Assessment' },
+  { value: 'questionnaire', label: 'Questionnaire' },
   { value: 'test_task', label: 'Test Task' },
   { value: 'submit_availability', label: 'Submit Availability' },
   { value: 'other', label: 'Other' }
@@ -29,6 +30,8 @@ export function getProgressionEmailTypeColor(value) {
       return 'success';
     case 'technical_assignment':
       return 'primary';
+    case 'questionnaire':
+      return 'warning';
     case 'test_task':
       return 'warning';
     case 'submit_availability':

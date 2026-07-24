@@ -368,17 +368,21 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
       if (generateTokenRef.current !== generateToken) return;
       onSavedRef.current?.({ silent: true });
 
-      // The backend reads the job description and profile from these IDs.
-      const { filename, downloadedFilename, generationId } = await generateResumePdf({
+      // The backend reads the job description and profile from these IDs,
+      // then calculates and stores weighted resume distance on the application.
+      const { filename, downloadedFilename, generationId, distance } = await generateResumePdf({
         profile_id: profile.id,
         application_id: application.id
       });
       if (generateTokenRef.current !== generateToken) return;
+      const resolvedDistance = Number.isFinite(distance) ? distance : null;
 
       notify(
         `Resume PDF finished and saved to the application${
           generationId ? ` (#${generationId})` : ''
-        }. Downloaded ${downloadedFilename || filename}.`,
+        }. Downloaded ${downloadedFilename || filename}.${
+          resolvedDistance != null ? ` · distance ${resolvedDistance.toFixed(2)}` : ''
+        }`,
         { variant: 'success' }
       );
       onSavedRef.current?.({ silent: true });
@@ -398,7 +402,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
           setForm((current) => ({
             ...current,
             resume_generated_id: selectedId,
-            resume_distance: null
+            resume_distance: resolvedDistance
           }));
           setResumeSource('generated');
         }
@@ -407,7 +411,7 @@ function ApplicationEditDialog({ open, application, onClose, onSaved }) {
           setForm((current) => ({
             ...current,
             resume_generated_id: generationId,
-            resume_distance: null
+            resume_distance: resolvedDistance
           }));
           setResumeSource('generated');
         }

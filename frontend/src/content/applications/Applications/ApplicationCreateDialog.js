@@ -351,16 +351,20 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
     }
 
     try {
-      // The backend reads the job description and profile from these IDs.
-      const { filename, downloadedFilename, generationId } = await generateResumePdf({
+      // The backend reads the job description and profile from these IDs,
+      // then calculates and stores weighted resume distance on the application.
+      const { filename, downloadedFilename, generationId, distance } = await generateResumePdf({
         profile_id: profile.id,
         application_id: applicationId
       });
+      const resolvedDistance = Number.isFinite(distance) ? distance : null;
 
       notifyFn(
         `Resume PDF finished and saved to the application${
           generationId ? ` (#${generationId})` : ''
-        }. Downloaded ${downloadedFilename || filename}.`,
+        }. Downloaded ${downloadedFilename || filename}.${
+          resolvedDistance != null ? ` · distance ${resolvedDistance.toFixed(2)}` : ''
+        }`,
         { variant: 'success' }
       );
       onSaved?.({ silent: true });
@@ -374,12 +378,20 @@ function ApplicationCreateDialog({ open, profile, onClose, onSaved }) {
         setResumeGenerations(generationRows);
         const selectedId = generationId || generationRows[0]?.id || '';
         if (selectedId) {
-          setForm((current) => ({ ...current, resume_generated_id: selectedId }));
+          setForm((current) => ({
+            ...current,
+            resume_generated_id: selectedId,
+            resume_distance: resolvedDistance
+          }));
           setResumeSource('generated');
         }
       } catch {
         if (generationId && mountedRef.current) {
-          setForm((current) => ({ ...current, resume_generated_id: generationId }));
+          setForm((current) => ({
+            ...current,
+            resume_generated_id: generationId,
+            resume_distance: resolvedDistance
+          }));
           setResumeSource('generated');
         }
       }

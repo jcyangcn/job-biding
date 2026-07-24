@@ -1751,9 +1751,10 @@ def _create_resume_response(
         ) from exc
 
     attached_application_id = None
+    resume_distance = None
     if request.application_id is not None:
         try:
-            attach_generated_resume_to_application(
+            attached = attach_generated_resume_to_application(
                 db,
                 request.application_id,
                 generation_id,
@@ -1761,6 +1762,7 @@ def _create_resume_response(
                 job_description=job_description,
             )
             attached_application_id = request.application_id
+            resume_distance = attached.resume_distance
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
@@ -1772,6 +1774,7 @@ def _create_resume_response(
         provider=provider,
         generation_id=generation_id,
         application_id=attached_application_id,
+        resume_distance=resume_distance,
     )
 
 

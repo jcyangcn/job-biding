@@ -304,6 +304,14 @@ async function postResumeRequest(body) {
   return res.json();
 }
 
+function parseResumeDistance(meta) {
+  const value =
+    meta?.resume_distance != null && meta.resume_distance !== ''
+      ? Number(meta.resume_distance)
+      : null;
+  return Number.isFinite(value) ? value : null;
+}
+
 export async function generateResumeForPost(body) {
   const meta = await postResumeRequest(body);
   const generationId =
@@ -315,7 +323,8 @@ export async function generateResumeForPost(body) {
     filename: sanitizePdfFilename(meta.filename),
     generationId,
     summaryChars: meta.summary_chars,
-    provider: meta.provider
+    provider: meta.provider,
+    distance: parseResumeDistance(meta)
   };
 }
 
@@ -329,11 +338,13 @@ export async function generateResumePdf(body) {
     meta.generation_id != null && meta.generation_id !== ''
       ? Number(meta.generation_id)
       : null;
+  const distance = parseResumeDistance(meta);
 
   return {
     filename,
     downloadedFilename,
     generationId,
+    distance,
     download: () => downloadResumePdf(filename, downloadOptions)
   };
 }

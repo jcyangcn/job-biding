@@ -626,19 +626,25 @@ def attach_generated_resume_to_application(
     record = get_application(db, application_id)
     if not record:
         raise ValueError("Application not found")
-    _ensure_application_access(db, record, user)
+    profile = _ensure_application_access(db, record, user)
 
     generation = db.get(ResumeGeneration, generation_id)
     if not generation:
         raise ValueError("Resume generation not found")
 
+    post = _load_job_post(db, record)
+    if job_description is not None:
+        post.job_description = job_description.strip()
+
     record.resume_generated_id = generation_id
     record.resume_online_link = None
-    record.resume_distance = None
     record.resume_generation_status = "generated"
-    if job_description is not None:
-        post = _load_job_post(db, record)
-        post.job_description = job_description.strip()
+    record.resume_distance = _calculate_resume_distance(
+        db,
+        profile=profile,
+        post=post,
+        generation_id=generation_id,
+    )
 
     db.commit()
     db.refresh(record)

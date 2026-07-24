@@ -65,10 +65,10 @@ function ResumeManagement() {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const tableHeight = {
-    xs: 420,
+    xs: '55vh',
     md: `calc(100vh - ${theme.header.height} - ${theme.spacing(14)})`
   };
-  const profileSidebarHeight = { xs: 260, md: 480 };
+  const profileSidebarHeight = tableHeight;
 
   useSetPageHeader(
     'Resume Management',

@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import AssignmentTwoToneIcon from '@mui/icons-material/AssignmentTwoTone';
 import EventAvailableTwoToneIcon from '@mui/icons-material/EventAvailableTwoTone';
+import FactCheckTwoToneIcon from '@mui/icons-material/FactCheckTwoTone';
 import MoreHorizTwoToneIcon from '@mui/icons-material/MoreHorizTwoTone';
 import QuizTwoToneIcon from '@mui/icons-material/QuizTwoTone';
 import RecordVoiceOverTwoToneIcon from '@mui/icons-material/RecordVoiceOverTwoTone';
@@ -13,6 +14,7 @@ import {
 const TYPE_ICONS = {
   human_interview: RecordVoiceOverTwoToneIcon,
   technical_assignment: AssignmentTwoToneIcon,
+  questionnaire: FactCheckTwoToneIcon,
   test_task: QuizTwoToneIcon,
   submit_availability: EventAvailableTwoToneIcon,
   other: MoreHorizTwoToneIcon

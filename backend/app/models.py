@@ -97,6 +97,7 @@ class GenerateResumeResponse(BaseModel):
     provider: str
     generation_id: int | None = None
     application_id: int | None = None
+    resume_distance: float | None = None
 
 
 class MatchBestResumeRequest(BaseModel):

@@ -4,6 +4,7 @@ import enum
 class ProgressionEmailType(str, enum.Enum):
     human_interview = "human_interview"
     technical_assignment = "technical_assignment"
+    questionnaire = "questionnaire"
     test_task = "test_task"
     submit_availability = "submit_availability"
     other = "other"
