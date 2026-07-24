@@ -26,9 +26,11 @@ import {
 import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
+import QueryStatsTwoToneIcon from '@mui/icons-material/QueryStatsTwoTone';
 import RefreshTwoToneIcon from '@mui/icons-material/RefreshTwoTone';
 import { PROJECT_NAME } from 'src/config/app';
 import UserDetailDialog from './UserDetailDialog';
+import UserUsageAnalyticsDialog from './UserUsageAnalyticsDialog';
 import TableListFilters from 'src/components/TableListFilters';
 import TablePaginationFooter from 'src/components/TablePaginationFooter';
 import SortableTableCell from 'src/components/SortableTableCell';
@@ -61,8 +63,10 @@ function UserManagement() {
   useSetPageHeader('User Management', 'Add, edit, and delete users');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
+  const [usageUser, setUsageUser] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const { open: detailOpen, selected: selectedUser, openDetail, closeDetail, stopPropagation } =
@@ -173,6 +177,11 @@ function UserManagement() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const openUsageDialog = (user) => {
+    setUsageUser(user);
+    setUsageOpen(true);
   };
 
   const confirmDelete = (user) => {
@@ -319,6 +328,15 @@ function UserManagement() {
                           </Typography>
                         </TableCell>
                         <TableCell align="right" onClick={stopPropagation}>
+                          <Tooltip title="Usage analytics">
+                            <IconButton
+                              color="info"
+                              onClick={() => openUsageDialog(row)}
+                              disabled={saving}
+                            >
+                              <QueryStatsTwoToneIcon />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Edit">
                             <IconButton
                               color="primary"
@@ -436,6 +454,15 @@ function UserManagement() {
         open={detailOpen}
         user={selectedUser}
         onClose={closeDetail}
+      />
+
+      <UserUsageAnalyticsDialog
+        open={usageOpen}
+        user={usageUser}
+        onClose={() => {
+          setUsageOpen(false);
+          setUsageUser(null);
+        }}
       />
     </>
   );

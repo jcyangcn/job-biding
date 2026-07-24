@@ -20,6 +20,7 @@ from app.auth import authenticate_user, create_access_token, user_to_response
 from app.dependencies import get_current_user, get_current_user_response, require_admin
 from app.db_models import DesktopScreenshot, JobApplication, JobProfile, ResumeGeneration, User
 from app.desktop_usage_service import (
+    get_user_usage_analytics,
     resolve_desktop_screenshot_path,
     save_desktop_screenshot,
     screenshot_to_response,
@@ -170,6 +171,7 @@ from app.models import (
     DesktopUsageSessionUpsertRequest,
     DesktopUsageSessionResponse,
     DesktopScreenshotResponse,
+    DesktopUsageUserAnalyticsResponse,
 )
 from app.pdf_renderer import build_resume_path, render_resume_pdf
 from app.profile_parser import load_default_profile, parse_profile_markdown
@@ -423,6 +425,22 @@ def download_desktop_screenshot_endpoint(
         media_type="image/png",
         filename=record.original_filename,
     )
+
+
+@app.get(
+    "/api/desktop-usage/users/{user_id}/analytics",
+    response_model=DesktopUsageUserAnalyticsResponse,
+)
+def get_desktop_usage_user_analytics_endpoint(
+    user_id: int,
+    days: int = Query(default=14, ge=1, le=90),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    return get_user_usage_analytics(db, target, days=days)
 
 
 @app.post("/api/import-export/verify-password")

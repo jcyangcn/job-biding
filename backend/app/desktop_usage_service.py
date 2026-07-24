@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import DESKTOP_USAGE_SCREENSHOT_DIR
@@ -171,3 +171,82 @@ def save_desktop_screenshot(
 
 def resolve_desktop_screenshot_path(record: DesktopScreenshot) -> Path:
     return DESKTOP_USAGE_SCREENSHOT_DIR / str(record.user_id) / record.stored_filename
+
+
+def get_user_usage_analytics(
+    db: Session,
+    user: User,
+    *,
+    days: int = 14,
+) -> DesktopUsageUserAnalyticsResponse:
+    days = max(1, min(int(days or 14), 90))
+    sessions = list(
+        db.scalars(
+            select(DesktopUsageSession)
+            .where(DesktopUsageSession.user_id == user.id)
+            .order_by(DesktopUsageSession.started_at.desc())
+        ).all()
+    )
+    screenshots = list(
+        db.scalars(
+            select(DesktopScreenshot)
+            .where(DesktopScreenshot.user_id == user.id)
+            .order_by(DesktopScreenshot.uploaded_at.desc())
+            .limit(24)
+        ).all()
+    )
+
+    total_active = sum(int(item.active_ms or 0) for item in sessions)
+    total_focused = sum(int(item.focused_ms or 0) for item in sessions)
+    last_seen = None
+    for item in sessions:
+        candidate = item.client_updated_at or item.ended_at or item.updated_at or item.started_at
+        if candidate and (last_seen is None or candidate > last_seen):
+            last_seen = candidate
+
+    # Build last N days buckets (including empty days).
+    now = datetime.now(timezone.utc)
+    day_keys: list[str] = []
+    buckets: dict[str, DesktopUsageDailyPoint] = {}
+    for offset in range(days - 1, -1, -1):
+        day = (now - timedelta(days=offset)).date()
+        key = day.isoformat()
+        day_keys.append(key)
+        buckets[key] = DesktopUsageDailyPoint(
+            date=key, active_ms=0, focused_ms=0, sessions=0
+        )
+
+    for item in sessions:
+        started = _as_utc(item.started_at)
+        if not started:
+            continue
+        key = started.date().isoformat()
+        if key not in buckets:
+            continue
+        buckets[key].active_ms += int(item.active_ms or 0)
+        buckets[key].focused_ms += int(item.focused_ms or 0)
+        buckets[key].sessions += 1
+
+    screenshot_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(DesktopScreenshot)
+            .where(DesktopScreenshot.user_id == user.id)
+        )
+        or 0
+    )
+
+    return DesktopUsageUserAnalyticsResponse(
+        user_id=user.id,
+        full_name=user.full_name,
+        username=user.username,
+        role=str(user.role.value if hasattr(user.role, "value") else user.role),
+        total_active_ms=total_active,
+        total_focused_ms=total_focused,
+        session_count=len(sessions),
+        screenshot_count=screenshot_count,
+        last_seen_at=last_seen,
+        daily=[buckets[key] for key in day_keys],
+        recent_sessions=[usage_session_to_response(item) for item in sessions[:12]],
+        recent_screenshots=[screenshot_to_response(item) for item in screenshots],
+    )
