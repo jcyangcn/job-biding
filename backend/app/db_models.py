@@ -274,6 +274,60 @@ class JobSkill(Base):
     weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default=text("1"))
 
 
+class DesktopUsageSession(Base):
+    __tablename__ = "desktop_usage_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    client_session_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    app_name: Mapped[str] = mapped_column(String(100), nullable=False, default="HuntFlow")
+    edition: Mapped[str] = mapped_column(String(50), nullable=False, default="bidder")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    client_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    active_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    focused_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class DesktopScreenshot(Base):
+    __tablename__ = "desktop_screenshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    client_file_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    client_session_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    reason: Mapped[str] = mapped_column(String(50), nullable=False, default="interval")
+    screen_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    screen_name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    stored_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    relative_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class JobPost(Base):
     __tablename__ = "job_posts"
 

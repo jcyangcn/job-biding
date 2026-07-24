@@ -103,6 +103,7 @@ LINKEDIN_IMAGE_DIR = UPLOADS_DIR / "linkedin image"
 CITIZEN_IMAGE_DIR = UPLOADS_DIR / "citizen image"
 CITIZEN_REVIEW_DIR = UPLOADS_DIR / "citizen review files"
 APPLICATION_SCREENSHOT_DIR = UPLOADS_DIR / "application screenshot"
+DESKTOP_USAGE_SCREENSHOT_DIR = UPLOADS_DIR / "desktop usage screenshots"
 
 
 def ensure_storage_dirs() -> None:
@@ -114,5 +115,6 @@ def ensure_storage_dirs() -> None:
         CITIZEN_IMAGE_DIR,
         CITIZEN_REVIEW_DIR,
         APPLICATION_SCREENSHOT_DIR,
+        DESKTOP_USAGE_SCREENSHOT_DIR,
     ):
         path.mkdir(parents=True, exist_ok=True)

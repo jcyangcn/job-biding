@@ -18,7 +18,14 @@ from app.config import GENERATED_DIR, INSTRUCTION_DIR, REPO_ROOT, settings
 from app.database import get_db, init_db
 from app.auth import authenticate_user, create_access_token, user_to_response
 from app.dependencies import get_current_user, get_current_user_response, require_admin
-from app.db_models import JobApplication, JobProfile, ResumeGeneration, User
+from app.db_models import DesktopScreenshot, JobApplication, JobProfile, ResumeGeneration, User
+from app.desktop_usage_service import (
+    resolve_desktop_screenshot_path,
+    save_desktop_screenshot,
+    screenshot_to_response,
+    upsert_usage_session,
+    usage_session_to_response,
+)
 from app.history import (
     build_resume_content_payload,
     build_resume_vector,
@@ -160,6 +167,9 @@ from app.models import (
     LinkedInAccountImportResponse,
     LinkedInAccountResponse,
     LinkedInAccountUpdateRequest,
+    DesktopUsageSessionUpsertRequest,
+    DesktopUsageSessionResponse,
+    DesktopScreenshotResponse,
 )
 from app.pdf_renderer import build_resume_path, render_resume_pdf
 from app.profile_parser import load_default_profile, parse_profile_markdown
@@ -338,6 +348,81 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 @app.get("/api/auth/me", response_model=UserResponse)
 def get_me(user: UserResponse = Depends(get_current_user_response)):
     return user
+
+
+@app.post("/api/desktop-usage/sessions", response_model=DesktopUsageSessionResponse)
+def upsert_desktop_usage_session_endpoint(
+    request: DesktopUsageSessionUpsertRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    record = upsert_usage_session(db, user, request)
+    return usage_session_to_response(record)
+
+
+@app.post("/api/desktop-usage/screenshots", response_model=DesktopScreenshotResponse)
+async def upload_desktop_screenshot_endpoint(
+    file: UploadFile = File(...),
+    client_file_id: str = Form(...),
+    client_session_id: str | None = Form(default=None),
+    reason: str = Form(default="interval"),
+    screen_index: int = Form(default=1),
+    screen_name: str = Form(default=""),
+    captured_at: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty screenshot file")
+
+    captured_dt = None
+    if captured_at:
+        try:
+            captured_dt = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid captured_at") from exc
+
+    try:
+        record = save_desktop_screenshot(
+            db,
+            user,
+            content=content,
+            original_filename=file.filename or "screenshot.png",
+            client_file_id=client_file_id,
+            client_session_id=client_session_id,
+            reason=reason,
+            screen_index=screen_index,
+            screen_name=screen_name,
+            captured_at=captured_dt,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return screenshot_to_response(record)
+
+
+@app.get("/api/desktop-usage/screenshots/{screenshot_id}")
+def download_desktop_screenshot_endpoint(
+    screenshot_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    record = db.get(DesktopScreenshot, screenshot_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+    if record.user_id != user.id and user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    path = resolve_desktop_screenshot_path(record)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Screenshot file missing")
+
+    return FileResponse(
+        path,
+        media_type="image/png",
+        filename=record.original_filename,
+    )
 
 
 @app.post("/api/import-export/verify-password")

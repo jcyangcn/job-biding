@@ -704,3 +704,64 @@ class LinkedInAccountImportResponse(BaseModel):
     updated: int
     failed: int
     errors: list[str] = []
+
+
+class DesktopUsageSessionUpsertRequest(BaseModel):
+    client_session_id: str = Field(min_length=1, max_length=100)
+    app_name: str = Field(default="HuntFlow", max_length=100)
+    edition: str = Field(default="bidder", max_length=50)
+    started_at: datetime
+    ended_at: datetime | None = None
+    updated_at: datetime | None = None
+    active_ms: int = Field(default=0, ge=0)
+    focused_ms: int = Field(default=0, ge=0)
+
+
+class DesktopUsageSessionResponse(BaseModel):
+    id: int
+    client_session_id: str
+    app_name: str
+    edition: str
+    started_at: datetime
+    ended_at: datetime | None
+    client_updated_at: datetime | None
+    active_ms: int
+    focused_ms: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class DesktopScreenshotResponse(BaseModel):
+    id: int
+    client_file_id: str
+    client_session_id: str | None
+    reason: str
+    screen_index: int
+    screen_name: str
+    original_filename: str
+    relative_path: str
+    file_size: int
+    captured_at: datetime | None
+    uploaded_at: datetime
+
+
+class DesktopUsageDailyPoint(BaseModel):
+    date: str
+    active_ms: int
+    focused_ms: int
+    sessions: int
+
+
+class DesktopUsageUserAnalyticsResponse(BaseModel):
+    user_id: int
+    full_name: str
+    username: str
+    role: str
+    total_active_ms: int
+    total_focused_ms: int
+    session_count: int
+    screenshot_count: int
+    last_seen_at: datetime | None
+    daily: list[DesktopUsageDailyPoint] = Field(default_factory=list)
+    recent_sessions: list[DesktopUsageSessionResponse] = Field(default_factory=list)
+    recent_screenshots: list[DesktopScreenshotResponse] = Field(default_factory=list)
